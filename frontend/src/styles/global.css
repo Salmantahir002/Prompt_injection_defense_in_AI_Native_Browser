@@ -31,15 +31,18 @@ html,
 body,
 #root {
   width: 100%;
-  min-width: 100%;
-  min-height: 100%;
+  height: 100vh;
+  max-height: 100vh;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   overflow: hidden;
 }
+
 
 button,
 input,

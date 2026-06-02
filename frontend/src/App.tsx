@@ -6,6 +6,7 @@ import { PromptAnalysisDetailsPanel } from './components/PromptAnalysisDetailsPa
 import { extractPageContent } from './services/pageContentExtractor'
 import { checkWebpage } from './services/backendApiClient'
 import type { AnalysisDetails } from './types/analysisDetailsTypes'
+import type { SecurityEvent } from './types/securityTypes'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com'
@@ -23,9 +24,15 @@ function BrandMark() {
   )
 }
 
-function StartupScreen({ onStart }: { onStart: () => void }) {
+function StartupScreen({
+  onStart,
+  isTransitioning,
+}: {
+  onStart: () => void
+  isTransitioning: boolean
+}) {
   return (
-    <main className="startup-screen">
+    <main className={`startup-screen ${isTransitioning ? 'startup-screen--transitioning' : ''}`}>
       <div className="grain-layer" />
       <div className="aurora-layer" />
 
@@ -37,16 +44,33 @@ function StartupScreen({ onStart }: { onStart: () => void }) {
       </header>
 
       <section className="welcome-stage" aria-labelledby="welcome-title">
-        <h1 id="welcome-title">Welcome to Prompt Defense</h1>
+        <h1 id="welcome-title" className="welcome-title">
+          Welcome to Prompt Defense
+        </h1>
         <div className="orb-wrap" aria-hidden="true">
           <div className="defense-orb">
             <span className="orb-shade orb-shade--top" />
             <span className="orb-shade orb-shade--belt" />
             <span className="orb-shade orb-shade--glow" />
           </div>
+
+          {/* Solar System Orbits */}
+          <div className="solar-system">
+            <div className="orbit orbit--1">
+              <div className="planet planet--1" />
+            </div>
+            <div className="orbit orbit--2">
+              <div className="planet planet--2" />
+            </div>
+            <div className="orbit orbit--3">
+              <div className="planet planet--3" />
+            </div>
+          </div>
         </div>
         <button className="start-button" type="button" onClick={onStart}>
-          <span className="start-button__circle" aria-hidden="true">→</span>
+          <span className="start-button__circle" aria-hidden="true">
+            →
+          </span>
           <span>Get started</span>
         </button>
       </section>
@@ -68,6 +92,17 @@ function BrowserShell() {
   // Analysis drawer state (Phase 4)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeDetails, setActiveDetails] = useState<AnalysisDetails | null>(null)
+
+  // Toast notifications state
+  const [toasts, setToasts] = useState<(SecurityEvent & { id: string })[]>([])
+
+  const addToast = useCallback((event: SecurityEvent) => {
+    const id = `${Date.now()}-${Math.random()}`
+    setToasts((prev) => [...prev, { ...event, id }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 4500)
+  }, [])
 
   const handleNavigate = useCallback((url: string) => {
     setCurrentUrl(url)
@@ -91,10 +126,19 @@ function BrowserShell() {
       // Show result in the analysis drawer
       setActiveDetails(result.analysis_details)
       setDrawerOpen(true)
+
+      // Add a security toast
+      addToast({
+        allowed: result.allowed,
+        label: result.label,
+        source: result.source,
+        summary_reason: result.summary_reason,
+        timestamp: result.timestamp,
+      })
     } catch (error) {
       console.error('[ScanPage] Failed:', error)
     }
-  }, [])
+  }, [addToast])
 
   const handleViewDetails = useCallback((details: AnalysisDetails) => {
     setActiveDetails(details)
@@ -142,9 +186,40 @@ function BrowserShell() {
             onNavigate={handleWebViewNavigate}
           />
           {assistantOpen ? (
-            <AiAssistantSidebar onViewDetails={handleViewDetails} />
+            <AiAssistantSidebar onViewDetails={handleViewDetails} onSecurityEvent={addToast} />
           ) : null}
         </div>
+      </div>
+
+      {/* Toast Notifications System */}
+      <div className="toast-container" aria-live="polite">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast-notification ${
+              toast.allowed ? 'toast-notification--safe' : 'toast-notification--blocked'
+            }`}
+          >
+            <div className="toast-header">
+              <span className="toast-title">
+                {toast.allowed ? '🛡️ Safe Check' : '🚨 Blocked'}
+              </span>
+              <time className="toast-time">
+                {(() => {
+                  try {
+                    const date = new Date(toast.timestamp)
+                    return isNaN(date.getTime())
+                      ? new Date().toLocaleTimeString()
+                      : date.toLocaleTimeString()
+                  } catch {
+                    return new Date().toLocaleTimeString()
+                  }
+                })()}
+              </time>
+            </div>
+            <p className="toast-body">{toast.summary_reason}</p>
+          </div>
+        ))}
       </div>
 
       {/* Analysis Details Drawer (Phase 4) */}
@@ -158,13 +233,29 @@ function BrowserShell() {
 }
 
 function App() {
-  const [started, setStarted] = useState(false)
+  const [transitionState, setTransitionState] = useState<'welcome' | 'animating' | 'blown'>('welcome')
 
-  if (started) {
-    return <BrowserShell />
+  const handleStart = () => {
+    setTransitionState('animating')
+    setTimeout(() => {
+      setTransitionState('blown')
+    }, 2000)
   }
 
-  return <StartupScreen onStart={() => setStarted(true)} />
+  if (transitionState === 'blown') {
+    return (
+      <div className="blown-shell-wrapper">
+        <BrowserShell />
+      </div>
+    )
+  }
+
+  return (
+    <StartupScreen
+      onStart={handleStart}
+      isTransitioning={transitionState === 'animating'}
+    />
+  )
 }
 
 export default App

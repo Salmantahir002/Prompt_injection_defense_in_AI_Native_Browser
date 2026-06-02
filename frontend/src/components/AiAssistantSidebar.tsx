@@ -3,7 +3,6 @@ import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
 import type { LlmResponse, SecurityCheckResponse, SecurityEvent } from '../types/securityTypes'
 import { PromptInputBox } from './PromptInputBox'
-import { SecurityEventList } from './SecurityEventList'
 
 type ChatMessage = {
   id: string
@@ -17,6 +16,7 @@ type ChatMessage = {
 
 type AiAssistantSidebarProps = {
   onViewDetails?: (details: AnalysisDetails) => void
+  onSecurityEvent?: (event: SecurityEvent) => void
 }
 
 function ShieldCheckIcon() {
@@ -46,9 +46,8 @@ function AssistantLogoSvg({ size = 28 }: { size?: number }) {
   )
 }
 
-export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssistantSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [events, setEvents] = useState<SecurityEvent[]>([])
   const [isChecking, setIsChecking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -72,19 +71,14 @@ export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
     try {
       const result = await checkPrompt(prompt)
 
-      // Record security event
-      setEvents((currentEvents) =>
-        [
-          {
-            allowed: result.allowed,
-            label: result.label,
-            source: result.source,
-            summary_reason: result.summary_reason,
-            timestamp: result.timestamp,
-          },
-          ...currentEvents,
-        ].slice(0, 8),
-      )
+      // Trigger security event callback
+      onSecurityEvent?.({
+        allowed: result.allowed,
+        label: result.label,
+        source: result.source,
+        summary_reason: result.summary_reason,
+        timestamp: result.timestamp,
+      })
 
       let llmResp: LlmResponse | undefined
       if (result.allowed) {
@@ -210,9 +204,6 @@ export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
           <div ref={messagesEndRef} />
         </div>
       )}
-
-      {/* Security Events (collapsible mini-list) */}
-      {events.length > 0 ? <SecurityEventList events={events} /> : null}
 
       {/* Input Area */}
       <div className="chat-input-area">

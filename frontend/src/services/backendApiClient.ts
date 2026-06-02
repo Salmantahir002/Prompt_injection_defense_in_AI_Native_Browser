@@ -57,10 +57,9 @@ export function getHealth(): Promise<HealthResponse> {
   return requestJson<HealthResponse>('/health')
 }
 
-export async function chatWithLlm(prompt: string): Promise<LlmResponse> {
-  return {
-    response: `Security check passed. LLM proxy placeholder received: ${prompt}`,
-    model: 'phase_3_placeholder',
-    usage: { prompt_tokens: prompt.split(/\s+/).filter(Boolean).length, completion_tokens: 0 },
-  }
+export function chatWithLlm(prompt: string): Promise<LlmResponse> {
+  return requestJson<LlmResponse>('/llm/chat', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  })
 }

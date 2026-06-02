@@ -256,11 +256,13 @@
    ──────────────────────────────────────────────────── */
 
 .browser-shell {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   background: #1a1d1f;
   color: var(--text);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Tab Strip */
@@ -1541,3 +1543,281 @@
     width: 100vw;
   }
 }
+
+/* ────────────────────────────────────────────────────
+   Toast Notifications System
+   ──────────────────────────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  top: 64px; /* Below toolbar */
+  left: 20px; /* Left side of the screen */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-notification {
+  pointer-events: auto;
+  min-width: 320px;
+  max-width: 400px;
+  background: rgba(17, 19, 21, 0.85);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.3s ease;
+}
+
+.toast-notification--safe {
+  border-left: 4px solid #34d399;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(52, 211, 153, 0.05);
+}
+
+.toast-notification--blocked {
+  border-left: 4px solid #f87171;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(248, 113, 113, 0.05);
+}
+
+.toast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toast-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toast-notification--safe .toast-title {
+  color: #34d399;
+}
+
+.toast-notification--blocked .toast-title {
+  color: #f87171;
+}
+
+.toast-time {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.toast-body {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.45;
+  margin: 0;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ────────────────────────────────────────────────────
+   Solar System Transitional Animation (Optimized)
+   ──────────────────────────────────────────────────── */
+
+.solar-system {
+  position: absolute;
+  inset: -100px;
+  pointer-events: none;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  will-change: opacity;
+}
+
+/* Make solar system visible during transitioning */
+.startup-screen--transitioning .solar-system {
+  opacity: 1;
+}
+
+.orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  transform: translate(-50%, -50%);
+  transition: border-color 0.3s ease;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.orbit--1 {
+  width: 140%;
+  height: 140%;
+  transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) translateZ(0);
+  animation: spinOrbit1 6s linear infinite;
+}
+
+.orbit--2 {
+  width: 180%;
+  height: 180%;
+  transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) translateZ(0);
+  animation: spinOrbit2 9s linear infinite;
+}
+
+.orbit--3 {
+  width: 220%;
+  height: 220%;
+  transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) translateZ(0);
+  animation: spinOrbit3 12s linear infinite;
+}
+
+/* Planet nodes orbiting */
+.planet {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transform-style: preserve-3d;
+  box-shadow: 0 0 15px currentColor;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.planet--1 {
+  top: 0;
+  left: 50%;
+  color: #34d399; /* Green security particle */
+  background: radial-gradient(circle, #52a9ff, #34d399);
+}
+
+.planet--2 {
+  bottom: 50%;
+  right: 0;
+  color: #8ab4f8; /* Blue ML particle */
+  background: radial-gradient(circle, #a5b4fc, #8ab4f8);
+}
+
+.planet--3 {
+  top: 50%;
+  left: 0;
+  color: #fbbf24; /* Amber gateway particle */
+  background: radial-gradient(circle, #fca5a5, #fbbf24);
+}
+
+/* Hyper-acceleration animations during transition */
+.startup-screen--transitioning .orbit--1 {
+  border-color: rgba(52, 211, 153, 0.5);
+  animation: spinOrbit1 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.startup-screen--transitioning .orbit--2 {
+  border-color: rgba(138, 180, 248, 0.5);
+  animation: spinOrbit2 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.startup-screen--transitioning .orbit--3 {
+  border-color: rgba(251, 191, 36, 0.5);
+  animation: spinOrbit3 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.startup-screen--transitioning .planet {
+  width: 24px;
+  height: 24px;
+  box-shadow: 0 0 20px currentColor;
+}
+
+/* Base spins */
+@keyframes spinOrbit1 {
+  from { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(0deg) translateZ(0); }
+  to { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(360deg) translateZ(0); }
+}
+@keyframes spinOrbit2 {
+  from { transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(360deg) translateZ(0); }
+  to { transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(0deg) translateZ(0); }
+}
+@keyframes spinOrbit3 {
+  from { transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(0deg) translateZ(0); }
+  to { transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(360deg) translateZ(0); }
+}
+
+/* ────────────────────────────────────────────────────
+   Transition Fading and Explosions
+   ──────────────────────────────────────────────────── */
+
+/* Fade out other elements explicitly */
+.startup-screen--transitioning .welcome-title,
+.startup-screen--transitioning .start-button,
+.startup-screen--transitioning .terms-copy,
+.startup-screen--transitioning .startup-header {
+  opacity: 0 !important;
+  transform: translate3d(0, -20px, 0) scale(0.95);
+  pointer-events: none;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease;
+  will-change: transform, opacity;
+}
+
+.startup-screen--transitioning .start-button {
+  transform: translate3d(-50%, 50%, 0) scale(0.8);
+}
+
+/* Explosion of the Orb */
+.startup-screen--transitioning .defense-orb {
+  animation: orbExplode 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+@keyframes orbExplode {
+  0% {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(5) translate3d(0, 0, 0);
+    opacity: 0;
+  }
+}
+
+/* ────────────────────────────────────────────────────
+   Blown Shell Grow-In Transition
+   ──────────────────────────────────────────────────── */
+
+.blown-shell-wrapper {
+  animation: shellBlownIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+@keyframes shellBlownIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+
