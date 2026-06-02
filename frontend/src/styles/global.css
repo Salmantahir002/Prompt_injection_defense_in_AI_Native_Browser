@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@500;600;700&display=swap');
+
+:root {
+  --bg: #050706;
+  --bg-raised: #111513;
+  --line: rgba(255, 255, 255, 0.13);
+  --line-strong: rgba(255, 255, 255, 0.24);
+  --text: rgba(255, 255, 255, 0.9);
+  --muted: rgba(255, 255, 255, 0.58);
+  --quiet: rgba(255, 255, 255, 0.34);
+  --accent: #f5efe8;
+  --orb-red: #7b1d20;
+  --orb-ember: #a84d18;
+  --orb-shadow: #1b0d0b;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-ui: 'Manrope', 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+::selection {
+  color: #111;
+  background: #f5efe8;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border: 3px solid var(--bg);
+  border-radius: 999px;
+}

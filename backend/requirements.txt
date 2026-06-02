@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+pydantic-settings
+beautifulsoup4
+scikit-learn
+joblib
+playwright
+httpx
+pytest
