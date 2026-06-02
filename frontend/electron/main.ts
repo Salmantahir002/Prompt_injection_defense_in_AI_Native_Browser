@@ -7,6 +7,10 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const isDevelopment = process.env.PROMPT_DEFENSE_DEV === 'true'
 
+if (isDevelopment) {
+  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+}
+
 app.setPath('userData', path.join(app.getPath('temp'), 'prompt-defense-browser-user-data'))
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disk-cache-size', '0')

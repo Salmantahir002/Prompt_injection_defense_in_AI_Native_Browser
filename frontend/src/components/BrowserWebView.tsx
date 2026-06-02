@@ -124,7 +124,11 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         setErrorMessage('')
         setActiveUrl(url)
         if (webviewRef.current) {
-          webviewRef.current.src = url
+          webviewRef.current.loadURL(url).catch((err: any) => {
+            if (err && err.code !== 'ERR_ABORTED' && err.errno !== -3) {
+              console.error('[webview] loadURL failed:', err)
+            }
+          })
         }
       },
       reload: () => {
@@ -186,8 +190,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         <webview
           ref={setWebviewRef}
           className="browser-webview"
-          src={activeUrl}
-          allowpopups={false}
+          src={initialUrl}
         />
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>
