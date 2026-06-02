@@ -5,7 +5,11 @@ import { applyElectronSecurityConfig } from './electronSecurityConfig.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const isDevelopment = process.env.NODE_ENV !== 'production'
+const isDevelopment = process.env.PROMPT_DEFENSE_DEV === 'true'
+
+app.setPath('userData', path.join(app.getPath('temp'), 'prompt-defense-browser-user-data'))
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+app.commandLine.appendSwitch('disk-cache-size', '0')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -31,16 +35,24 @@ async function createWindow() {
 
   applyElectronSecurityConfig(session.defaultSession, mainWindow, isDevelopment)
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+    console.error(`[renderer-load-failed] ${errorCode} ${errorDescription} ${validatedUrl}`)
+  })
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
   })
 
   if (isDevelopment) {
-    await mainWindow.loadURL('http://127.0.0.1:5173')
+    await mainWindow.loadURL('http://localhost:5173').catch((err) => {
+      console.warn(`[electron-main] loadURL failed: ${err}`)
+    })
     return
   }
 
-  await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+  await mainWindow.loadFile(path.join(__dirname, '../dist/index.html')).catch((err) => {
+    console.error(`[electron-main] loadFile failed: ${err}`)
+  })
 }
 
 ipcMain.handle('app:get-version', () => app.getVersion())

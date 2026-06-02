@@ -5,10 +5,12 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "electron:dev": "concurrently -k -n VITE,ELECTRON_TS,ELECTRON \"npm run dev\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on http://127.0.0.1:5173 dist-electron/main.js && electronmon .\"",
+    "backend": "cd ..\\backend && .venv\\Scripts\\python.exe run_backend.py",
+    "vite:dev": "vite --host localhost",
+    "dev": "cross-env PROMPT_DEFENSE_DEV=true concurrently -k -n BACKEND,VITE,ELECTRON_TS,ELECTRON \"npm run backend\" \"npm run vite:dev\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on http://localhost:5173 http-get://127.0.0.1:8000/api/v1/health dist-electron/main.js && electronmon .\"",
+    "electron:dev": "npm run dev",
     "electron:build": "tsc -p electron/tsconfig.json",
-    "electron:start": "npm run electron:build && electron .",
+    "electron:start": "npm run build && concurrently -k -n BACKEND,ELECTRON \"npm run backend\" \"wait-on http-get://127.0.0.1:8000/api/v1/health && electron .\"",
     "build": "tsc -b && npm run electron:build && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -24,6 +26,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
     "electron": "^42.3.2",
     "electron-builder": "^26.8.1",
     "electronmon": "^2.0.4",

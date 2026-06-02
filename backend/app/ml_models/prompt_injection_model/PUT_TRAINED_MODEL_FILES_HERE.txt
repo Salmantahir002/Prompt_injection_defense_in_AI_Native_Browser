@@ -1,0 +1,5 @@
+Place your trained model .joblib files in this directory.
+See README_MODEL_PLACEMENT.md for details.
+
+The backend will automatically detect and load them on startup.
+If no model files are found, the rule-based fallback detector is used.

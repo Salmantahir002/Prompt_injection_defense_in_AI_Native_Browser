@@ -65,6 +65,7 @@ SYSTEM_PROMPT_REVEAL = [
 
 DATA_EXFILTRATION = [
     "export all data",
+    "export all user data",
     "send to external",
     "extract user",
     "exfiltrate",

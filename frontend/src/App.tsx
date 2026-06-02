@@ -1,6 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
+import { AiAssistantSidebar } from './components/AiAssistantSidebar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
+import { PromptAnalysisDetailsPanel } from './components/PromptAnalysisDetailsPanel'
+import { extractPageContent } from './services/pageContentExtractor'
+import { checkWebpage } from './services/backendApiClient'
+import type { AnalysisDetails } from './types/analysisDetailsTypes'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com'
@@ -41,7 +46,7 @@ function StartupScreen({ onStart }: { onStart: () => void }) {
           </div>
         </div>
         <button className="start-button" type="button" onClick={onStart}>
-          <span className="start-button__circle" aria-hidden="true">-&gt;</span>
+          <span className="start-button__circle" aria-hidden="true">→</span>
           <span>Get started</span>
         </button>
       </section>
@@ -58,10 +63,13 @@ function BrowserShell() {
   const [currentUrl, setCurrentUrl] = useState(DEFAULT_BROWSER_URL)
   const [addressValue, setAddressValue] = useState(DEFAULT_BROWSER_URL)
   const [isLoading, setIsLoading] = useState(false)
-  const [scanMessage, setScanMessage] = useState('Page scanning arrives in Frontend Phase 4')
+  const [assistantOpen, setAssistantOpen] = useState(false)
+
+  // Analysis drawer state (Phase 4)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [activeDetails, setActiveDetails] = useState<AnalysisDetails | null>(null)
 
   const handleNavigate = useCallback((url: string) => {
-    setScanMessage('Page scanning arrives in Frontend Phase 4')
     setCurrentUrl(url)
     setAddressValue(url)
     webviewRef.current?.loadURL(url)
@@ -72,46 +80,79 @@ function BrowserShell() {
     setAddressValue(url)
   }, [])
 
-  const handleScanPage = useCallback(() => {
-    setScanMessage('Scan Page control is wired; extraction backend arrives in later phases')
+  const handleScanPage = useCallback(async () => {
+    const content = await extractPageContent(webviewRef.current)
+    if (!content) {
+      return
+    }
+
+    try {
+      const result = await checkWebpage(content)
+      // Show result in the analysis drawer
+      setActiveDetails(result.analysis_details)
+      setDrawerOpen(true)
+    } catch (error) {
+      console.error('[ScanPage] Failed:', error)
+    }
+  }, [])
+
+  const handleViewDetails = useCallback((details: AnalysisDetails) => {
+    setActiveDetails(details)
+    setDrawerOpen(true)
+  }, [])
+
+  const handleCloseDrawer = useCallback(() => {
+    setDrawerOpen(false)
   }, [])
 
   return (
     <main className="browser-shell">
+      {/* Tab Strip */}
       <div className="tab-strip">
         <div className="tab active-tab">
           <span className="tab-dot" />
-          Prompt Defense
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Prompt Defense
+          </span>
+          <button className="tab-close-btn" type="button" aria-label="Close tab">✕</button>
         </div>
-        <button className="chrome-icon-button" type="button" aria-label="New tab">+</button>
+        <button className="new-tab-btn" type="button" aria-label="New tab">+</button>
       </div>
+
+      {/* Browser Frame */}
       <div className="browser-frame">
         <BrowserToolbar
           addressValue={addressValue}
+          assistantOpen={assistantOpen}
           currentUrl={currentUrl}
           isLoading={isLoading}
           onAddressChange={setAddressValue}
+          onAssistantToggle={() => setAssistantOpen((isOpen) => !isOpen)}
           onBack={() => webviewRef.current?.goBack()}
           onForward={() => webviewRef.current?.goForward()}
           onNavigate={handleNavigate}
           onReload={() => webviewRef.current?.reload()}
           onScanPage={handleScanPage}
         />
-        <div className="content-grid">
+        <div className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''}`}>
           <BrowserWebView
             ref={webviewRef}
             initialUrl={DEFAULT_BROWSER_URL}
             onLoadingChange={setIsLoading}
             onNavigate={handleWebViewNavigate}
           />
-          <aside className="assistant-panel" aria-label="Assistant panel">
-            <div className="assistant-logo" />
-            <h2>Assistant</h2>
-            <p className="assistant-copy">{scanMessage}</p>
-            <div className="assistant-input">Ask anything...</div>
-          </aside>
+          {assistantOpen ? (
+            <AiAssistantSidebar onViewDetails={handleViewDetails} />
+          ) : null}
         </div>
       </div>
+
+      {/* Analysis Details Drawer (Phase 4) */}
+      <PromptAnalysisDetailsPanel
+        details={activeDetails}
+        isOpen={drawerOpen}
+        onClose={handleCloseDrawer}
+      />
     </main>
   )
 }

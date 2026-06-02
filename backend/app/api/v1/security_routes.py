@@ -11,10 +11,11 @@ from app.schemas.analysis_details_schemas import (
     FeatureEvidence,
     PreprocessingSummary,
 )
-from app.schemas.security_schemas import PromptCheckRequest, SecurityCheckResponse
+from app.schemas.security_schemas import PromptCheckRequest, SecurityCheckResponse, WebpageCheckRequest
 from app.services.feature_explanation_service import feature_explanation_service
 from app.services.prompt_preprocessing_service import preprocessing_service
-from app.services.rule_based_detector_service import rule_based_detector
+from app.services.prompt_classifier_service import prompt_classifier
+from app.services.security_event_store import security_event_store
 from app.services.text_chunking_service import chunking_service
 
 router = APIRouter()
@@ -39,13 +40,8 @@ def chunk_reason(label: str, matched_patterns: List[str]) -> str:
     return "Chunk does not contain suspicious override, reveal, hidden instruction, or exfiltration intent."
 
 
-@router.post("/security/check-prompt", response_model=SecurityCheckResponse)
-def check_prompt(request: PromptCheckRequest):
-    raw_prompt = request.prompt
-    if not raw_prompt.strip():
-        raise HTTPException(status_code=400, detail="Prompt content cannot be empty.")
-
-    normalized_prompt, preprocessing_data = preprocessing_service.preprocess(raw_prompt)
+def analyze_text(raw_text: str, source: str) -> SecurityCheckResponse:
+    normalized_prompt, preprocessing_data = preprocessing_service.preprocess(raw_text)
     preprocessing = PreprocessingSummary(**preprocessing_data)
 
     chunk_size = settings.DEFAULT_CHUNK_SIZE
@@ -56,10 +52,11 @@ def check_prompt(request: PromptCheckRequest):
     aggregated_evidence: Dict[str, List[str]] = {}
 
     for chunk in chunks:
-        detector_result = rule_based_detector.detect(chunk["text"])
+        detector_result = prompt_classifier.classify(chunk["text"])
         label = "malicious" if detector_result["is_malicious"] else "benign"
         confidence = detector_result["confidence"] if label == "malicious" else 0.94
         matched_patterns = detector_result["matched_patterns"]
+        chunk_classifier_mode = detector_result.get("classifier_mode", "rule_based_fallback")
 
         for category, keywords in detector_result["pattern_evidence"].items():
             aggregated_evidence.setdefault(category, [])
@@ -91,17 +88,15 @@ def check_prompt(request: PromptCheckRequest):
         summary_reason = "No suspicious instruction override or data exfiltration pattern detected."
         final_rationale = "The input is safe because no chunk crossed the malicious threshold."
     else:
-        summary_reason = (
-            f"Prompt injection indicators detected in {len(malicious_chunks)} chunk(s): "
-            f"{', '.join(matched_patterns)}."
-        )
+        detection_type = "Indirect prompt injection" if source == "webpage_content" else "Prompt injection"
+        summary_reason = f"{detection_type} indicators detected in {len(malicious_chunks)} chunk(s): {', '.join(matched_patterns)}."
         final_rationale = (
             "The input is blocked because one or more chunks crossed the malicious threshold "
             "with matched prompt injection indicators."
         )
 
     analysis_details = AnalysisDetails(
-        classifier_mode="rule_based_fallback",
+        classifier_mode=prompt_classifier.classifier_mode,
         threshold_used=settings.CLASSIFIER_THRESHOLD,
         preprocessing=preprocessing,
         chunking=ChunkingInfo(
@@ -117,14 +112,55 @@ def check_prompt(request: PromptCheckRequest):
         final_rationale=final_rationale,
     )
 
-    return SecurityCheckResponse(
+    response = SecurityCheckResponse(
         allowed=allowed,
         label=label,
         confidence=confidence,
         risk_level=risk_level,
         summary_reason=summary_reason,
         matched_patterns=matched_patterns,
-        source="direct_prompt",
+        source=source,
         timestamp=datetime.now(timezone.utc).isoformat(),
         analysis_details=analysis_details,
     )
+
+    security_event_store.add_event(
+        allowed=response.allowed,
+        label=response.label,
+        source=response.source,
+        summary_reason=response.summary_reason,
+    )
+    return response
+
+
+@router.post("/security/check-prompt", response_model=SecurityCheckResponse)
+def check_prompt(request: PromptCheckRequest):
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt content cannot be empty.")
+
+    return analyze_text(request.prompt, "direct_prompt")
+
+
+@router.post("/security/check-webpage", response_model=SecurityCheckResponse)
+def check_webpage(request: WebpageCheckRequest):
+    combined_webpage_content = "\n".join(
+        [
+            f"Title: {request.page_title}",
+            f"URL: {request.url}",
+            f"Visible Content: {request.visible_text}",
+            f"Hidden Elements: {request.hidden_text}",
+            f"HTML Comments: {request.html_comments}",
+            f"Meta Tags: {request.meta_tags}",
+            f"Input Fields: {request.input_values}",
+        ]
+    )
+
+    if not combined_webpage_content.strip():
+        raise HTTPException(status_code=400, detail="Webpage content cannot be empty.")
+
+    return analyze_text(combined_webpage_content, "webpage_content")
+
+
+@router.get("/security/events")
+def get_security_events():
+    return security_event_store.get_events()

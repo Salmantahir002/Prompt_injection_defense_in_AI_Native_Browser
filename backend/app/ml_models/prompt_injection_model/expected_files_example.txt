@@ -1,0 +1,7 @@
+Expected model files for this directory:
+
+1. prompt_injection_pipeline.joblib   (Primary — full sklearn pipeline)
+2. tfidf_vectorizer.joblib            (Optional — separate TF-IDF vectorizer)
+3. stacking_classifier.joblib         (Optional — separate classifier used with vectorizer)
+4. model_metadata.json                (Optional — training metadata and metrics)
+5. embedding_model_config.json        (Optional — embedding model config for future use)

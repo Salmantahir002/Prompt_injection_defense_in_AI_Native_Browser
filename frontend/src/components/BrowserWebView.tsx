@@ -1,13 +1,16 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { WebpageContent } from '../types/securityTypes'
 
 type WebViewDomElement = HTMLElement & {
   canGoBack: () => boolean
   canGoForward: () => boolean
+  executeJavaScript: (code: string) => Promise<unknown>
   getURL: () => string
   goBack: () => void
   goForward: () => void
-  loadURL: (url: string) => void
+  loadURL: (url: string) => Promise<void>
   reload: () => void
+  src: string
 }
 
 type NavigationEvent = Event & {
@@ -17,6 +20,7 @@ type NavigationEvent = Event & {
 }
 
 export type BrowserWebViewHandle = {
+  extractContent: () => Promise<WebpageContent | null>
   getURL: () => string
   goBack: () => void
   goForward: () => void
@@ -30,6 +34,60 @@ type BrowserWebViewProps = {
   onNavigate: (url: string) => void
 }
 
+const EXTRACT_CONTENT_SCRIPT = `
+(function() {
+  function getComments(root) {
+    var comments = [];
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT, null, false);
+    var node;
+    while (node = walker.nextNode()) { comments.push(node.nodeValue || ''); }
+    return comments.join(' ');
+  }
+
+  function getHidden() {
+    var hidden = [];
+    document.querySelectorAll('[hidden],[aria-hidden="true"]').forEach(function(el) {
+      if (el.textContent) hidden.push(el.textContent.trim());
+    });
+    document.querySelectorAll('[style]').forEach(function(el) {
+      var s = el.getAttribute('style') || '';
+      if (s.includes('display:none') || s.includes('display: none') ||
+          s.includes('visibility:hidden') || s.includes('visibility: hidden')) {
+        if (el.textContent) hidden.push(el.textContent.trim());
+      }
+    });
+    return hidden.join(' ');
+  }
+
+  function getMeta() {
+    var metas = [];
+    document.querySelectorAll('meta[content]').forEach(function(m) {
+      metas.push(m.getAttribute('content'));
+    });
+    return metas.join(' ');
+  }
+
+  function getInputs() {
+    var inputs = [];
+    document.querySelectorAll('input,textarea').forEach(function(el) {
+      var v = el.value || el.textContent || '';
+      if (v.trim()) inputs.push(v.trim());
+    });
+    return inputs.join(' ');
+  }
+
+  return {
+    visible_text: document.body ? document.body.innerText.substring(0, 50000) : '',
+    hidden_text: getHidden().substring(0, 10000),
+    html_comments: getComments(document).substring(0, 10000),
+    meta_tags: getMeta().substring(0, 5000),
+    input_values: getInputs().substring(0, 5000),
+    page_title: document.title || '',
+    url: location.href || ''
+  };
+})()
+`
+
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
   function BrowserWebView({ initialUrl, onLoadingChange, onNavigate }, ref) {
     const webviewRef = useRef<WebViewDomElement | null>(null)
@@ -37,7 +95,20 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
     const [errorMessage, setErrorMessage] = useState('')
     const isElectronRuntime = Boolean(window.electronAPI)
 
+    const setWebviewRef = useCallback((element: HTMLElement | null) => {
+      webviewRef.current = element as WebViewDomElement | null
+    }, [])
+
     useImperativeHandle(ref, () => ({
+      extractContent: async () => {
+        if (!webviewRef.current) return null
+        try {
+          const result = await webviewRef.current.executeJavaScript(EXTRACT_CONTENT_SCRIPT)
+          return result as WebpageContent
+        } catch {
+          return null
+        }
+      },
       getURL: () => webviewRef.current?.getURL() ?? activeUrl,
       goBack: () => {
         if (webviewRef.current?.canGoBack()) {
@@ -52,7 +123,9 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
       loadURL: (url: string) => {
         setErrorMessage('')
         setActiveUrl(url)
-        webviewRef.current?.loadURL(url)
+        if (webviewRef.current) {
+          webviewRef.current.src = url
+        }
       },
       reload: () => {
         webviewRef.current?.reload()
@@ -110,7 +183,12 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
 
     return (
       <section className="webview-stage" aria-label="Browser web view">
-        <webview ref={webviewRef} className="browser-webview" src={activeUrl} allowpopups={false} />
+        <webview
+          ref={setWebviewRef}
+          className="browser-webview"
+          src={activeUrl}
+          allowpopups={false}
+        />
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>
     )
