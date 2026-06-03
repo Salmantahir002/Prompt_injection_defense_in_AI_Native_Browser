@@ -13,7 +13,10 @@
     "electron:start": "npm run build && concurrently -k -n BACKEND,ELECTRON \"npm run backend\" \"wait-on http-get://127.0.0.1:8000/api/v1/health && electron .\"",
     "build": "tsc -b && npm run electron:build && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test": "npm run build && npm run test:e2e"
   },
   "dependencies": {
     "react": "^19.2.6",
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^24.12.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
