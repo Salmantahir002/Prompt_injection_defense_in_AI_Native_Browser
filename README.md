@@ -2,7 +2,6 @@
 
 PromptGuard is an AI-native secure desktop browser environment designed to detect and block both **direct** (user-entered) and **indirect** (webpage-embedded) prompt injection attacks in real time. Before natural language instructions or scraped webpage contents reach downstream Large Language Models (LLMs), they pass through a multi-stage security pipeline.
 
-Built as a Final Year Project (FYP), the application simulates a secure browser workspace with visual feedback, automated scanning, and detailed decision explainability.
 
 ---
 
