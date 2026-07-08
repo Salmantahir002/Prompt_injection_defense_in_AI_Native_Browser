@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AiAssistantSidebar } from './components/AiAssistantSidebar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
@@ -21,6 +21,144 @@ function BrandMark() {
       </span>
       <span>prompt defense</span>
     </div>
+  )
+}
+
+function SlideStartButton({ onStart }: { onStart: () => void }) {
+  const containerRef = useRef<HTMLButtonElement>(null)
+  const handleRef = useRef<HTMLSpanElement>(null)
+
+  const [dragOffset, setDragOffset] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const startXRef = useRef(0)
+  const maxOffsetRef = useRef(0)
+
+  // Track global drag events to ensure smooth dragging outside the button boundaries
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startXRef.current
+      const newOffset = Math.max(0, Math.min(maxOffsetRef.current, deltaX))
+      setDragOffset(newOffset)
+
+      if (newOffset >= maxOffsetRef.current * 0.95) {
+        setIsDragging(false)
+        setDragOffset(maxOffsetRef.current)
+        onStart()
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return
+      const deltaX = e.touches[0].clientX - startXRef.current
+      const newOffset = Math.max(0, Math.min(maxOffsetRef.current, deltaX))
+      setDragOffset(newOffset)
+
+      if (newOffset >= maxOffsetRef.current * 0.95) {
+        setIsDragging(false)
+        setDragOffset(maxOffsetRef.current)
+        onStart()
+      }
+    }
+
+    const handleDragEnd = () => {
+      setIsDragging(false)
+      setDragOffset(0)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleDragEnd)
+    window.addEventListener('touchmove', handleTouchMove)
+    window.addEventListener('touchend', handleDragEnd)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleDragEnd)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleDragEnd)
+    }
+  }, [isDragging, onStart])
+
+  const handleStartDrag = (clientX: number) => {
+    if (!containerRef.current || !handleRef.current) return
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const handleRect = handleRef.current.getBoundingClientRect()
+
+    // 14px accounts for padding around the circle inside the button border
+    maxOffsetRef.current = containerRect.width - handleRect.width - 14
+    startXRef.current = clientX
+    setIsDragging(true)
+  }
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return // Left click only
+    handleStartDrag(e.clientX)
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) return
+    handleStartDrag(e.touches[0].clientX)
+  }
+
+  const handleButtonClick = () => {
+    // If they just clicked without dragging, slide and trigger transition
+    if (!isDragging && dragOffset === 0) {
+      if (containerRef.current && handleRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect()
+        const handleRect = handleRef.current.getBoundingClientRect()
+        const target = containerRect.width - handleRect.width - 14
+        setDragOffset(target)
+      }
+      setTimeout(() => {
+        onStart()
+      }, 250)
+    }
+  }
+
+  const handleStyle: React.CSSProperties = {
+    transform: `translateX(${dragOffset}px)`,
+    transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+    cursor: isDragging ? 'grabbing' : 'grab',
+  }
+
+  let textOpacity = 1
+  if (maxOffsetRef.current > 0) {
+    textOpacity = Math.max(0, 1 - dragOffset / (maxOffsetRef.current * 0.7))
+  }
+
+  return (
+    <button
+      ref={containerRef}
+      className="start-button"
+      type="button"
+      onClick={handleButtonClick}
+      style={{
+        position: 'absolute',
+        zIndex: 2,
+        userSelect: 'none',
+      }}
+    >
+      <span
+        ref={handleRef}
+        className="start-button__circle"
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        style={handleStyle}
+        aria-hidden="true"
+      >
+        →
+      </span>
+      <span
+        style={{
+          opacity: textOpacity,
+          transition: isDragging ? 'none' : 'opacity 0.2s ease',
+          pointerEvents: 'none',
+        }}
+      >
+        Get started
+      </span>
+    </button>
   )
 }
 
@@ -67,12 +205,7 @@ function StartupScreen({
             </div>
           </div>
         </div>
-        <button className="start-button" type="button" onClick={onStart}>
-          <span className="start-button__circle" aria-hidden="true">
-            →
-          </span>
-          <span>Get started</span>
-        </button>
+        <SlideStartButton onStart={onStart} />
       </section>
 
       <p className="terms-copy">
