@@ -51,8 +51,19 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
   const [isChecking, setIsChecking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
+  const prevMsgCountRef = useRef<number>(0)
+  const [clearSignal, setClearSignal] = useState(0)
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const nextCount = messages.length
+    const prevCount = prevMsgCountRef.current
+    prevMsgCountRef.current = nextCount
+
+    // Only keep the view pinned when a new message is appended.
+    // Avoid smooth scrolling on internal state transitions (checking -> result) which can cause input to jump.
+    if (nextCount > prevCount) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    }
   }, [messages])
 
   async function handlePromptSubmit(prompt: string) {
@@ -67,6 +78,8 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
     ])
 
     setIsChecking(true)
+    // Trigger PromptInputBox clear immediately when submit starts.
+    setClearSignal((v) => v + 1)
 
     try {
       const result = await checkPrompt(prompt)
@@ -98,10 +111,10 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
         prev.map((msg) =>
           msg.id === assistantMsgId
             ? {
-                ...msg,
-                isChecking: false,
-                errorMessage: error instanceof Error ? error.message : 'Security check failed',
-              }
+              ...msg,
+              isChecking: false,
+              errorMessage: error instanceof Error ? error.message : 'Security check failed',
+            }
             : msg,
         ),
       )
@@ -163,9 +176,8 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
 
               {msg.sender === 'assistant' && msg.securityResult ? (
                 <div
-                  className={`security-card ${
-                    msg.securityResult.allowed ? 'security-card--safe' : 'security-card--blocked'
-                  }`}
+                  className={`security-card ${msg.securityResult.allowed ? 'security-card--safe' : 'security-card--blocked'
+                    }`}
                 >
                   <div className="security-card-header">
                     <span className="security-card-label">
@@ -207,7 +219,11 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
 
       {/* Input Area */}
       <div className="chat-input-area">
-        <PromptInputBox disabled={isChecking} onSubmit={handlePromptSubmit} />
+        <PromptInputBox
+          disabled={isChecking}
+          onSubmit={handlePromptSubmit}
+          clearSignal={clearSignal}
+        />
       </div>
     </aside>
   )

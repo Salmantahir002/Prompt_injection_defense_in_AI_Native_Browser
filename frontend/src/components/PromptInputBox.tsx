@@ -1,8 +1,9 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 
 type PromptInputBoxProps = {
   disabled: boolean
   onSubmit: (prompt: string) => Promise<void>
+  clearSignal: number
 }
 
 function SendIcon() {
@@ -13,8 +14,13 @@ function SendIcon() {
   )
 }
 
-export function PromptInputBox({ disabled, onSubmit }: PromptInputBoxProps) {
+export function PromptInputBox({ disabled, onSubmit, clearSignal }: PromptInputBoxProps) {
   const [prompt, setPrompt] = useState('')
+
+  useEffect(() => {
+    // Force-clear textarea on each submit cycle (robust against parent remounts/re-renders).
+    setPrompt('')
+  }, [clearSignal])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,6 +31,7 @@ export function PromptInputBox({ disabled, onSubmit }: PromptInputBoxProps) {
     }
 
     await onSubmit(trimmedPrompt)
+    // Prefer clear via clearSignal effect, but keep this as a fallback.
     setPrompt('')
   }
 

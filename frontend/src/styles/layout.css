@@ -1,3 +1,4 @@
+te
 /* ────────────────────────────────────────────────────
    Startup Screen
    ──────────────────────────────────────────────────── */
@@ -625,13 +626,51 @@
    AI Assistant Sidebar – Professional Chat Design
    ──────────────────────────────────────────────────── */
 
+/* Solar-System themed sidebar */
 .assistant-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #111315;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
   overflow: hidden;
+  background:
+    radial-gradient(ellipse at 30% 15%, rgba(251, 191, 36, 0.22), transparent 38%),
+    radial-gradient(ellipse at 70% 0%, rgba(138, 180, 248, 0.18), transparent 42%),
+    radial-gradient(ellipse at 55% 75%, rgba(52, 211, 153, 0.14), transparent 45%),
+    radial-gradient(circle at 18% 90%, rgba(230, 78, 182, 0.08), transparent 55%),
+    linear-gradient(180deg, #0c0f14 0%, #090b0f 40%, #07090d 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Subtle starfield + orbit rings (no extra assets) */
+.assistant-panel::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.14) 0 1px, transparent 2px),
+    radial-gradient(circle at 70% 22%, rgba(255, 255, 255, 0.12) 0 1px, transparent 2px),
+    radial-gradient(circle at 45% 65%, rgba(255, 255, 255, 0.10) 0 1px, transparent 2px),
+    radial-gradient(circle at 10% 75%, rgba(255, 255, 255, 0.10) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 70%, rgba(255, 255, 255, 0.09) 0 1px, transparent 2px),
+    radial-gradient(circle at 55% 15%, rgba(138, 180, 248, 0.12) 0 2px, transparent 3px),
+    radial-gradient(circle at 30% 85%, rgba(52, 211, 153, 0.10) 0 2px, transparent 3px);
+  opacity: 0.65;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.assistant-panel::after {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 45% 25%, transparent 52%, rgba(138, 180, 248, 0.18) 53%, transparent 56%),
+    radial-gradient(circle at 52% 42%, transparent 64%, rgba(52, 211, 153, 0.16) 65%, transparent 68%),
+    radial-gradient(circle at 40% 52%, transparent 74%, rgba(251, 191, 36, 0.14) 75%, transparent 78%);
+  filter: blur(0.2px);
 }
 
 /* Header Area */
@@ -752,7 +791,7 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 16px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -906,8 +945,9 @@
 
 /* Chat Input Area */
 .chat-input-area {
-  padding: 12px 16px 16px;
+  padding: 10px 16px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(17, 19, 21, 0) 0%, rgba(17, 19, 21, 0.25) 100%);
 }
 
 .chat-input-context {
@@ -1032,14 +1072,46 @@
 
 .llm-placeholder {
   max-width: 90%;
-  padding: 10px 14px;
-  border: 1px solid rgba(52, 211, 153, 0.15);
-  border-radius: 12px;
-  background: rgba(52, 211, 153, 0.05);
-  color: rgba(207, 255, 232, 0.82);
-  font-size: 12px;
-  line-height: 1.5;
+  padding: 12px 14px;
+  border: 1px solid rgba(138, 180, 248, 0.18);
+  border-radius: 14px;
+  background: rgba(18, 23, 35, 0.55);
+  color: rgba(240, 250, 255, 0.9);
+  font-size: 13px;
+  line-height: 1.65;
   margin: 0;
+  white-space: pre-wrap;
+  /* keep newlines/paragraphs from the LLM response */
+  word-break: break-word;
+  letter-spacing: 0.01em;
+
+  /* ChatGPT/Claude-like “soft glass” look */
+  box-shadow:
+    0 0 0 1px rgba(52, 211, 153, 0.04) inset,
+    0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.llm-placeholder strong {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.llm-placeholder ul,
+.llm-placeholder ol {
+  margin: 8px 0 0 18px;
+  padding: 0;
+}
+
+.llm-placeholder li {
+  margin: 4px 0;
+}
+
+.llm-placeholder code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(138, 180, 248, 0.12);
+  border: 1px solid rgba(138, 180, 248, 0.18);
 }
 
 /* ── Dot-pulse animation (loading) ── */
@@ -1411,18 +1483,24 @@
    ──────────────────────────────────────────────────── */
 
 @keyframes orbFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate3d(0, 0, 0) rotate(0.001deg);
   }
+
   50% {
     transform: translate3d(0, -14px, 0) rotate(0.001deg);
   }
 }
 
 @keyframes orbPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.03);
   }
@@ -1437,6 +1515,7 @@
       0 0 100px rgba(196, 69, 35, 0.08),
       0 0 200px rgba(196, 69, 35, 0.04);
   }
+
   100% {
     box-shadow:
       inset -48px -32px 66px rgba(0, 0, 0, 0.55),
@@ -1451,6 +1530,7 @@
   0% {
     transform: translateX(-3%) rotate(-10deg);
   }
+
   100% {
     transform: translateX(3%) rotate(350deg);
   }
@@ -1460,6 +1540,7 @@
   0% {
     opacity: 0.6;
   }
+
   100% {
     opacity: 1;
   }
@@ -1469,6 +1550,7 @@
   0% {
     opacity: 0.5;
   }
+
   100% {
     opacity: 1;
   }
@@ -1478,6 +1560,7 @@
   0% {
     opacity: 0.15;
   }
+
   100% {
     opacity: 0.3;
   }
@@ -1488,6 +1571,7 @@
     transform: scale(1) translateX(-1%);
     opacity: 0.8;
   }
+
   100% {
     transform: scale(1.06) translateX(1%);
     opacity: 1;
@@ -1495,10 +1579,14 @@
 }
 
 @keyframes dotBounce {
-  0%, 80%, 100% {
+
+  0%,
+  80%,
+  100% {
     transform: scale(0.6);
     opacity: 0.4;
   }
+
   40% {
     transform: scale(1);
     opacity: 1;
@@ -1550,8 +1638,10 @@
 
 .toast-container {
   position: fixed;
-  top: 64px; /* Below toolbar */
-  left: 20px; /* Left side of the screen */
+  top: 64px;
+  /* Below toolbar */
+  left: 20px;
+  /* Left side of the screen */
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -1627,6 +1717,7 @@
     opacity: 0;
     transform: translateX(-30px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -1703,21 +1794,24 @@
 .planet--1 {
   top: 0;
   left: 50%;
-  color: #34d399; /* Green security particle */
+  color: #34d399;
+  /* Green security particle */
   background: radial-gradient(circle, #52a9ff, #34d399);
 }
 
 .planet--2 {
   bottom: 50%;
   right: 0;
-  color: #8ab4f8; /* Blue ML particle */
+  color: #8ab4f8;
+  /* Blue ML particle */
   background: radial-gradient(circle, #a5b4fc, #8ab4f8);
 }
 
 .planet--3 {
   top: 50%;
   left: 0;
-  color: #fbbf24; /* Amber gateway particle */
+  color: #fbbf24;
+  /* Amber gateway particle */
   background: radial-gradient(circle, #fca5a5, #fbbf24);
 }
 
@@ -1745,16 +1839,33 @@
 
 /* Base spins */
 @keyframes spinOrbit1 {
-  from { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(0deg) translateZ(0); }
-  to { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(360deg) translateZ(0); }
+  from {
+    transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(0deg) translateZ(0);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(360deg) translateZ(0);
+  }
 }
+
 @keyframes spinOrbit2 {
-  from { transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(360deg) translateZ(0); }
-  to { transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(0deg) translateZ(0); }
+  from {
+    transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(360deg) translateZ(0);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotateX(65deg) rotateY(-25deg) rotateZ(0deg) translateZ(0);
+  }
 }
+
 @keyframes spinOrbit3 {
-  from { transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(0deg) translateZ(0); }
-  to { transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(360deg) translateZ(0); }
+  from {
+    transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(0deg) translateZ(0);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotateX(80deg) rotateY(45deg) rotateZ(360deg) translateZ(0);
+  }
 }
 
 /* ────────────────────────────────────────────────────
@@ -1789,9 +1900,11 @@
     transform: scale(1) translate3d(0, 0, 0);
     opacity: 1;
   }
+
   60% {
     opacity: 1;
   }
+
   100% {
     transform: scale(5) translate3d(0, 0, 0);
     opacity: 0;
@@ -1814,10 +1927,9 @@
     opacity: 0;
     transform: scale(0.9) translate3d(0, 0, 0);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translate3d(0, 0, 0);
   }
 }
-
-
