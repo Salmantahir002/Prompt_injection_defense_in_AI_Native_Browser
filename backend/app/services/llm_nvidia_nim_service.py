@@ -25,6 +25,7 @@ class LlmNvidiaNimService:
         self._api_key = settings.NVIDIA_NIM_API_KEY
         self._base_url = settings.NVIDIA_NIM_BASE_URL
         self._model = settings.NVIDIA_NIM_MODEL
+        self._verify_ssl = settings.NVIDIA_NIM_VERIFY_SSL
 
     @property
     def is_configured(self) -> bool:
@@ -45,7 +46,7 @@ class LlmNvidiaNimService:
             return self._placeholder_response(prompt)
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0, verify=self._verify_ssl) as client:
                 response = await client.post(
                     f"{self._base_url}/chat/completions",
                     headers={
@@ -86,16 +87,16 @@ class LlmNvidiaNimService:
                 }
 
         except httpx.HTTPStatusError as exc:
-            logger.error("NVIDIA NIM API HTTP error: %s — %s", exc.response.status_code, exc.response.text)
+            logger.exception("NVIDIA NIM API HTTP error: %s — %s", exc.response.status_code, exc.response.text)
             return {
-                "response": f"LLM API error: {exc.response.status_code}. Please check your API key and model configuration.",
+                "response": f"LLM API error: {exc.response.status_code} ({exc.response.text}). Please check your API key and model configuration.",
                 "model": self._model,
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0},
             }
         except httpx.RequestError as exc:
-            logger.error("NVIDIA NIM API request failed: %s", exc)
+            logger.exception("NVIDIA NIM API request failed")
             return {
-                "response": "LLM API is unreachable. Please check your network and API configuration.",
+                "response": f"LLM API is unreachable ({type(exc).__name__}: {exc}). Please check your network and API configuration.",
                 "model": self._model,
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0},
             }

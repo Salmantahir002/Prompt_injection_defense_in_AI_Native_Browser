@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     NVIDIA_NIM_API_KEY: str = "replace_with_your_key"
     NVIDIA_NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     NVIDIA_NIM_MODEL: str = "replace_with_selected_model"
+    NVIDIA_NIM_VERIFY_SSL: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
