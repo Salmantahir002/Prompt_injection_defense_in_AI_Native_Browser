@@ -20,12 +20,11 @@ te
 }
 
 .grain-layer {
-  opacity: 0.45;
+  opacity: 0.28; /* Slightly adjusted opacity to blend perfectly without needing the expensive contrast/brightness filters */
   mix-blend-mode: screen;
   background-image:
     repeating-radial-gradient(circle at 17% 22%, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 4px),
     repeating-radial-gradient(circle at 83% 64%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 5px);
-  filter: contrast(170%) brightness(70%);
 }
 
 .aurora-layer {
@@ -120,7 +119,6 @@ te
   aspect-ratio: 1;
   display: grid;
   place-items: center;
-  filter: drop-shadow(32px 50px 50px rgba(0, 0, 0, 0.58));
   perspective: 900px;
 }
 
@@ -139,12 +137,12 @@ te
   box-shadow:
     inset -48px -32px 66px rgba(0, 0, 0, 0.62),
     inset 38px 26px 58px rgba(255, 166, 88, 0.16),
+    32px 50px 50px rgba(0, 0, 0, 0.58),
     0 0 54px rgba(196, 69, 35, 0.18),
     0 0 100px rgba(196, 69, 35, 0.12),
     0 0 200px rgba(196, 69, 35, 0.06);
   animation:
-    orbFloat 6.5s ease-in-out infinite,
-    orbPulse 4s ease-in-out infinite,
+    orbFloatAndPulse 6.5s ease-in-out infinite,
     orbGlow 3.5s ease-in-out infinite alternate;
 }
 
@@ -1573,27 +1571,14 @@ te
    Keyframes & Animations
    ──────────────────────────────────────────────────── */
 
-@keyframes orbFloat {
-
+@keyframes orbFloatAndPulse {
   0%,
   100% {
-    transform: translate3d(0, 0, 0) rotate(0.001deg);
+    transform: translate3d(0, 0, 0) scale(1) rotate(0.001deg);
   }
 
   50% {
-    transform: translate3d(0, -14px, 0) rotate(0.001deg);
-  }
-}
-
-@keyframes orbPulse {
-
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.03);
+    transform: translate3d(0, -14px, 0) scale(1.03) rotate(0.001deg);
   }
 }
 
@@ -1822,17 +1807,18 @@ te
 .solar-system {
   position: absolute;
   inset: -100px;
+  z-index: 3; /* Render on top of the orb (default z-index 0) and under button (z-index 2) */
   pointer-events: none;
   perspective: 1000px;
   transform-style: preserve-3d;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-  will-change: opacity;
+  opacity: 0.85; /* Beautifully visible orbiting backdrop */
+  transform: scale(1) rotateZ(0deg) translateZ(0px);
+  will-change: transform, opacity;
 }
 
-/* Make solar system visible during transitioning */
+/* Make solar system expand, spin rapidly, and fade out during transitioning */
 .startup-screen--transitioning .solar-system {
-  opacity: 1;
+  animation: solarTransition 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .orbit {
@@ -1843,7 +1829,7 @@ te
   border-radius: 50%;
   transform-style: preserve-3d;
   transform: translate(-50%, -50%);
-  transition: border-color 0.3s ease;
+  transition: border-color 2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
   backface-visibility: hidden;
 }
@@ -1878,6 +1864,8 @@ te
   background: #fff;
   transform-style: preserve-3d;
   box-shadow: 0 0 15px currentColor;
+  transform: scale(1) translateZ(0);
+  transition: transform 2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
   backface-visibility: hidden;
 }
@@ -1906,26 +1894,22 @@ te
   background: radial-gradient(circle, #fca5a5, #fbbf24);
 }
 
-/* Hyper-acceleration animations during transition */
+/* Smoothly change border-color and scale up planets, avoiding keyframe resets & reflows */
 .startup-screen--transitioning .orbit--1 {
-  border-color: rgba(52, 211, 153, 0.5);
-  animation: spinOrbit1 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-color: rgba(52, 211, 153, 0.6);
 }
 
 .startup-screen--transitioning .orbit--2 {
-  border-color: rgba(138, 180, 248, 0.5);
-  animation: spinOrbit2 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-color: rgba(138, 180, 248, 0.6);
 }
 
 .startup-screen--transitioning .orbit--3 {
-  border-color: rgba(251, 191, 36, 0.5);
-  animation: spinOrbit3 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-color: rgba(251, 191, 36, 0.6);
 }
 
 .startup-screen--transitioning .planet {
-  width: 24px;
-  height: 24px;
-  box-shadow: 0 0 20px currentColor;
+  transform: scale(2.2) translateZ(0);
+  box-shadow: 0 0 30px currentColor;
 }
 
 /* Base spins */
@@ -1999,6 +1983,23 @@ te
   100% {
     transform: scale(5) translate3d(0, 0, 0);
     opacity: 0;
+  }
+}
+
+@keyframes solarTransition {
+  0% {
+    opacity: 0.85;
+    transform: scale(1) rotateZ(0deg) translateZ(0px);
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.0) rotateZ(360deg) translateZ(180px);
   }
 }
 

@@ -169,6 +169,56 @@ function StartupScreen({
   onStart: () => void
   isTransitioning: boolean
 }) {
+  const solarSystemRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isTransitioning) {
+      if (solarSystemRef.current) {
+        solarSystemRef.current.style.removeProperty('transform')
+      }
+      return
+    }
+
+    let active = true
+    let mouseX = 0
+    let mouseY = 0
+    let currentX = 0
+    let currentY = 0
+    let rafId: number
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const targetX = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2)
+      const targetY = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2)
+      mouseX = targetX * 180 // Prominent 180px follow displacement
+      mouseY = targetY * 180
+    }
+
+    const updatePosition = () => {
+      if (!active) return
+
+      currentX += (mouseX - currentX) * 0.08
+      currentY += (mouseY - currentY) * 0.08
+
+      if (solarSystemRef.current) {
+        solarSystemRef.current.style.transform = `scale(1) translate3d(${currentX}px, ${currentY}px, 0)`
+      }
+
+      rafId = requestAnimationFrame(updatePosition)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    rafId = requestAnimationFrame(updatePosition)
+
+    return () => {
+      active = false
+      window.removeEventListener('mousemove', handleMouseMove)
+      cancelAnimationFrame(rafId)
+      if (solarSystemRef.current) {
+        solarSystemRef.current.style.removeProperty('transform')
+      }
+    }
+  }, [isTransitioning])
+
   return (
     <main className={`startup-screen ${isTransitioning ? 'startup-screen--transitioning' : ''}`}>
       <div className="grain-layer" />
@@ -193,7 +243,7 @@ function StartupScreen({
           </div>
 
           {/* Solar System Orbits */}
-          <div className="solar-system">
+          <div className="solar-system" ref={solarSystemRef}>
             <div className="orbit orbit--1">
               <div className="planet planet--1" />
             </div>
