@@ -40,8 +40,15 @@ export function FeatureEvidenceList({ evidence }: FeatureEvidenceListProps) {
         </div>
 
         {evidence.top_terms.length > 0 ? (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ marginTop: 16 }}>
+            <div style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: 'rgba(251, 191, 36, 0.50)',
+              marginBottom: 10,
+              textTransform: 'uppercase' as const,
+              letterSpacing: '0.06em',
+            }}>
               Top Suspicious Terms
             </div>
             <div className="feature-tags">

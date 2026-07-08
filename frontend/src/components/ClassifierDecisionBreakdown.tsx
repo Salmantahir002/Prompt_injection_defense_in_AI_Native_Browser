@@ -33,41 +33,63 @@ export function ClassifierDecisionBreakdown({
         </div>
 
         {/* Threshold visual bar */}
-        <div style={{ marginTop: 12, marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>
+        <div style={{ marginTop: 16, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
             Decision Threshold
           </div>
-          <div style={{ position: 'relative', width: '100%', height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            height: 6,
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: 99,
+            overflow: 'hidden',
+          }}>
             <div style={{
               position: 'absolute',
               left: 0,
               top: 0,
               height: '100%',
               width: `${thresholdUsed * 100}%`,
-              background: 'linear-gradient(90deg, #34d399, #fbbf24)',
+              background: 'linear-gradient(90deg, #059669, #34d399, #fbbf24)',
               borderRadius: 99,
+              transition: 'width 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
             }} />
             <div style={{
               position: 'absolute',
               left: `${thresholdUsed * 100}%`,
-              top: -4,
+              top: -5,
               width: 2,
               height: 16,
-              background: '#fff',
+              background: 'rgba(255, 255, 255, 0.9)',
               borderRadius: 1,
+              boxShadow: '0 0 6px rgba(251, 191, 36, 0.4)',
             }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 6, fontWeight: 500 }}>
             <span>Safe</span>
             <span>Malicious</span>
           </div>
         </div>
 
-        <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+        <div style={{
+          marginTop: 14,
+          padding: '12px 14px',
+          background: 'rgba(251, 191, 36, 0.02)',
+          borderRadius: 10,
+          border: '1px solid rgba(251, 191, 36, 0.06)',
+        }}>
+          <div style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'rgba(251, 191, 36, 0.50)',
+            textTransform: 'uppercase' as const,
+            letterSpacing: '0.06em',
+            marginBottom: 6,
+          }}>
             Rationale
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>
             {finalRationale}
           </p>
         </div>
