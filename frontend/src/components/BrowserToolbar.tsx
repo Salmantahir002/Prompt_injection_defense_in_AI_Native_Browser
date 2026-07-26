@@ -135,11 +135,12 @@ export function BrowserToolbar({
         <button
           className={`assistant-pill ${assistantOpen ? 'assistant-pill--active' : ''}`}
           type="button"
+          aria-label="Toggle Kimo"
           aria-pressed={assistantOpen}
           onClick={onAssistantToggle}
         >
           <SparklesIcon />
-          Assistant
+          Kimo
         </button>
       </div>
 

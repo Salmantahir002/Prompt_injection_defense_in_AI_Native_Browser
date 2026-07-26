@@ -38,10 +38,54 @@ function ShieldXIcon() {
   )
 }
 
-function AssistantLogoSvg({ size = 28 }: { size?: number }) {
+function KimoMascot({ compact = false }: { compact?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: size, height: size, color: '#8ab4f8' }}>
-      <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z" />
+    <svg className={`kimo-mascot ${compact ? 'kimo-mascot--compact' : ''}`} viewBox="0 0 160 150" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="kimo-case" x1="45" y1="26" x2="115" y2="112" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#a8c8ff" />
+          <stop offset="0.52" stopColor="#628ef4" />
+          <stop offset="1" stopColor="#314aab" />
+        </linearGradient>
+        <linearGradient id="kimo-screen" x1="54" y1="39" x2="106" y2="75" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#182b62" />
+          <stop offset="1" stopColor="#0b1434" />
+        </linearGradient>
+      </defs>
+      {!compact ? (
+        <g className="kimo-mascot__trail">
+          <path d="M31 77l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z" fill="#fcd34d" />
+          <path d="M45 99l2 4.5 4.5 2-4.5 2-2 4.5-2-4.5-4.5-2 4.5-2 2-4.5Z" fill="#a9d7ff" />
+          <circle cx="27" cy="109" r="3" fill="#75e2cf" />
+          <circle cx="49" cy="55" r="2" fill="#f4b7dc" />
+        </g>
+      ) : null}
+      <g className="kimo-mascot__character">
+        <g className="kimo-mascot__arm kimo-mascot__arm--left">
+          <path d="M56 91 40 103" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
+          <circle cx="38" cy="105" r="6" fill="#8db7ff" />
+        </g>
+        <g className="kimo-mascot__arm kimo-mascot__arm--right">
+          <path d="m104 91 16 12" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
+          <circle cx="122" cy="105" r="6" fill="#8db7ff" />
+        </g>
+        <g className="kimo-mascot__head">
+          <path d="M68 29 73 22h14l5 7" stroke="#9fc5ff" strokeWidth="4" strokeLinecap="round" />
+          <rect x="43" y="30" width="74" height="55" rx="19" fill="url(#kimo-case)" stroke="#c3daff" strokeWidth="2" />
+          <rect x="52" y="39" width="56" height="35" rx="12" fill="url(#kimo-screen)" stroke="#93baff" strokeOpacity="0.55" strokeWidth="1.5" />
+          <g className="kimo-mascot__eyes kimo-mascot__eyes--calm">
+            <path d="M63 56h9M88 56h9" stroke="#86f4e5" strokeWidth="3" strokeLinecap="round" />
+          </g>
+          <g className="kimo-mascot__eyes kimo-mascot__eyes--happy">
+            <path d="M62 53q5 7 10 0M87 53q5 7 10 0" stroke="#e2ffff" strokeWidth="3" strokeLinecap="round" />
+          </g>
+          <path d="M73 66q7 4 14 0" stroke="#7ee9d8" strokeWidth="2" strokeLinecap="round" />
+        </g>
+        <path d="M60 84h40v28c0 8-7 14-16 14h-8c-9 0-16-6-16-14V84Z" fill="url(#kimo-case)" stroke="#bed8ff" strokeWidth="2" />
+        <rect x="72" y="94" width="16" height="12" rx="4" fill="#182b62" stroke="#8ac7ff" strokeWidth="1.5" />
+        <path d="M68 124v7M92 124v7" stroke="#87adff" strokeWidth="7" strokeLinecap="round" />
+        <path d="M61 132h15M84 132h15" stroke="#9bc2ff" strokeWidth="6" strokeLinecap="round" />
+      </g>
     </svg>
   )
 }
@@ -126,14 +170,14 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
   const hasMessages = messages.length > 0
 
   return (
-    <aside className="assistant-panel" aria-label="Assistant panel">
+    <aside className="assistant-panel" aria-label="Kimo panel">
       {/* Header */}
       <div className="assistant-header">
         <div className="assistant-header-left">
           <div className="assistant-logo">
-            <AssistantLogoSvg size={16} />
+            <KimoMascot compact />
           </div>
-          <h2>Assistant</h2>
+          <h2>Kimo</h2>
         </div>
       </div>
 
@@ -141,13 +185,10 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
       {!hasMessages ? (
         <div className="assistant-welcome">
           <div className="assistant-welcome-logo">
-            <AssistantLogoSvg size={28} />
+            <KimoMascot />
           </div>
-          <h3>Assistant</h3>
-          <p>
-            Prompt Defense Assistant analyzes your prompts and page content for security threats
-            before they reach the AI model.
-          </p>
+          <h3>Kimo</h3>
+          <p>Kimo here—your personal prompt-defense assistant.</p>
         </div>
       ) : (
         <div className="chat-messages">

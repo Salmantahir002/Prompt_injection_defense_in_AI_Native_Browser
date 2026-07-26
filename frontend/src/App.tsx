@@ -30,19 +30,6 @@ function getTabTitle(url: string) {
   }
 }
 
-function BrandMark() {
-  return (
-    <div className="brand-mark" aria-label="Prompt Defense">
-      <span className="brand-mark__rings" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-      <span>prompt defense</span>
-    </div>
-  )
-}
-
 function SlideStartButton({ onStart }: { onStart: () => void }) {
   const containerRef = useRef<HTMLButtonElement>(null)
   const handleRef = useRef<HTMLSpanElement>(null)
@@ -189,6 +176,7 @@ function StartupScreen({
   isTransitioning: boolean
 }) {
   const solarSystemRef = useRef<HTMLDivElement>(null)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   useEffect(() => {
     if (isTransitioning) {
@@ -244,11 +232,24 @@ function StartupScreen({
       <div className="aurora-layer" />
 
       <header className="startup-header">
-        <BrandMark />
-        <button className="sound-button" type="button" aria-label="Toggle sound">
-          <span aria-hidden="true">))</span>
+        <button
+          className={`sound-button ${isGuideOpen ? 'sound-button--active' : ''}`}
+          type="button"
+          aria-controls="defense-guide"
+          aria-expanded={isGuideOpen}
+          aria-label="How Prompt Defense works"
+          onClick={() => setIsGuideOpen((isOpen) => !isOpen)}
+        >
+          <span aria-hidden="true">?</span>
         </button>
       </header>
+
+      {isGuideOpen ? (
+        <aside className="startup-guide" id="defense-guide" aria-label="How Prompt Defense works">
+          <h2>How your defense works</h2>
+          <p>Browse normally, then scan a page or ask the Assistant to detect hidden instructions before they can influence your next action.</p>
+        </aside>
+      ) : null}
 
       <section className="welcome-stage" aria-labelledby="welcome-title">
         <h1 id="welcome-title" className="welcome-title">
