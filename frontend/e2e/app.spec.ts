@@ -30,6 +30,15 @@ test.describe('Prompt Defense Application E2E tests', () => {
     }
   })
 
+  async function openBrowserShell() {
+    const startButton = window.locator('.start-button')
+    if (await startButton.isVisible()) {
+      await startButton.click()
+    }
+
+    await expect(window.locator('.browser-frame')).toBeVisible()
+  }
+
   test('should load startup screen correctly', async () => {
     // Verify window title
     expect(await window.title()).toBe('Prompt Defense')
@@ -49,23 +58,19 @@ test.describe('Prompt Defense Application E2E tests', () => {
   })
 
   test('should transition to browser shell on clicking Get started', async () => {
-    const startButton = window.locator('.start-button')
-    await startButton.click()
-
-    // Verify that the startup screen fades out and the browser shell loads
-    // We expect the browser shell grid to be visible
-    const browserFrame = window.locator('.browser-frame')
-    await expect(browserFrame).toBeVisible()
+    await openBrowserShell()
 
     const toolbar = window.locator('[aria-label="Browser toolbar"]')
     await expect(toolbar).toBeVisible()
   })
 
   test('should display default toolbar state and initial address value', async () => {
-    // Verify the address bar value is the default search URL
+    await openBrowserShell()
+
+    // A new tab deliberately starts with an empty address field.
     const addressInput = window.locator('input[aria-label="URL"]')
     await expect(addressInput).toBeVisible()
-    await expect(addressInput).toHaveValue('https://www.google.com')
+    await expect(addressInput).toHaveValue('')
 
     // Back, Forward and Reload buttons should render
     await expect(window.locator('button[aria-label="Back"]')).toBeVisible()
@@ -78,8 +83,10 @@ test.describe('Prompt Defense Application E2E tests', () => {
   })
 
   test('should toggle AI Assistant Sidebar correctly', async () => {
+    await openBrowserShell()
+
     // Assert assistant panel is not visible initially
-    const assistantPanel = window.locator('[aria-label="Assistant panel"]')
+    const assistantPanel = window.locator('[aria-label="Kimo panel"]')
     await expect(assistantPanel).not.toBeVisible()
 
     // Click the assistant toggle button in the toolbar
@@ -91,10 +98,10 @@ test.describe('Prompt Defense Application E2E tests', () => {
 
     // Check that the sidebar welcome message renders
     const sidebarTitle = assistantPanel.locator('h3')
-    await expect(sidebarTitle).toHaveText('Assistant')
+    await expect(sidebarTitle).toHaveText('Kimo')
 
     const welcomeText = assistantPanel.locator('.assistant-welcome p')
-    await expect(welcomeText).toContainText('Prompt Defense Assistant analyzes your prompts')
+    await expect(welcomeText).toContainText('personal prompt-defense assistant')
 
     // Toggle it back off
     await assistantPill.click()

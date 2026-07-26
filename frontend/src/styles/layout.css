@@ -2626,3 +2626,102 @@ te
     transform: scale(1) translate3d(0, 0, 0);
   }
 }
+/* Webpage scan progress — deliberately scoped to content the active webview exposes. */
+.webpage-scan-progress {
+  display: grid;
+  justify-items: center;
+  min-height: 390px;
+  padding: 58px 28px 34px;
+  text-align: center;
+}
+
+.webpage-scan-progress__radar {
+  position: relative;
+  width: 110px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(44, 215, 160, 0.4);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(47, 220, 164, 0.16) 0 2%, transparent 3% 24%, rgba(47, 220, 164, 0.08) 25% 26%, transparent 27% 49%, rgba(47, 220, 164, 0.08) 50% 51%, transparent 52%), linear-gradient(90deg, transparent 49.5%, rgba(47, 220, 164, 0.2) 50% 50.5%, transparent 51%), linear-gradient(transparent 49.5%, rgba(47, 220, 164, 0.2) 50% 50.5%, transparent 51%);
+  box-shadow: 0 0 38px rgba(47, 220, 164, 0.16), inset 0 0 22px rgba(47, 220, 164, 0.12);
+}
+
+.webpage-scan-progress__radar::after {
+  position: absolute;
+  inset: 4px 50% 50% 50%;
+  width: 1px;
+  height: 50%;
+  transform-origin: bottom;
+  background: linear-gradient(to top, rgba(89, 255, 193, 0.95), transparent);
+  box-shadow: 0 0 12px rgba(89, 255, 193, 0.8);
+  content: '';
+  animation: webpage-scan-sweep 1.9s linear infinite;
+}
+
+.webpage-scan-progress__radar span {
+  position: absolute;
+  top: 37%;
+  left: 62%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7fffc9;
+  box-shadow: 0 0 13px #7fffc9;
+  animation: webpage-scan-pulse 1.9s ease-out infinite;
+}
+
+.webpage-scan-progress__eyebrow {
+  margin: 27px 0 8px;
+  color: #35d69d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.webpage-scan-progress h4 {
+  margin: 0;
+  color: #f1f5f3;
+  font-size: 1.38rem;
+}
+
+.webpage-scan-progress__phase { margin: 10px 0 23px; color: #aab6b1; }
+
+.webpage-scan-progress__track {
+  width: min(100%, 360px);
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.webpage-scan-progress__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1dbb80, #74f2c0);
+  box-shadow: 0 0 14px rgba(74, 233, 167, 0.65);
+  transition: width 120ms linear;
+}
+
+.webpage-scan-progress__meta {
+  display: flex;
+  width: min(100%, 360px);
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 10px;
+  color: #7f928b;
+  font-size: 0.73rem;
+}
+
+.webpage-scan-progress__scope {
+  max-width: 365px;
+  margin: 30px 0 0;
+  color: #7f8b87;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+@keyframes webpage-scan-sweep { to { transform: rotate(360deg); } }
+@keyframes webpage-scan-pulse { 65%, 100% { opacity: 0.1; transform: scale(2.8); } }

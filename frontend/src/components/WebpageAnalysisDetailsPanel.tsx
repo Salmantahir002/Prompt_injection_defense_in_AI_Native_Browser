@@ -1,11 +1,51 @@
+import { useEffect, useState } from 'react'
 import type { ChunkResult } from '../types/analysisDetailsTypes'
 import type { SecurityCheckResponse, WebpageContent } from '../types/securityTypes'
 
 type Props = {
   content: WebpageContent | null
   isOpen: boolean
+  isScanning: boolean
   result: SecurityCheckResponse | null
   onClose: () => void
+}
+
+const MINIMUM_SCAN_DURATION_MS = 10_000
+
+function ScanProgress({ content }: { content: WebpageContent }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const startedAt = performance.now()
+    const timer = window.setInterval(() => {
+      setElapsed(performance.now() - startedAt)
+    }, 100)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const progress = Math.min(96, Math.max(8, Math.round((elapsed / MINIMUM_SCAN_DURATION_MS) * 100)))
+  const phase = progress < 30
+    ? 'Capturing the rendered document'
+    : progress < 58
+      ? 'Inspecting hidden content and metadata'
+      : progress < 82
+        ? 'Reviewing comments and input fields'
+        : 'Classifying page content for injection patterns'
+
+  return (
+    <div className="webpage-scan-progress" aria-live="polite">
+      <div className="webpage-scan-progress__radar" aria-hidden="true"><span /></div>
+      <p className="webpage-scan-progress__eyebrow">Live webpage content review</p>
+      <h4>Scanning the open page</h4>
+      <p className="webpage-scan-progress__phase">{phase}</p>
+      <div className="webpage-scan-progress__track" aria-label={`${progress}% scan progress`} role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <div className="webpage-scan-progress__meta"><span>{progress}% reviewed</span><span>{content.visible_text.length.toLocaleString()} visible characters captured</span></div>
+      <p className="webpage-scan-progress__scope">Reviewing the rendered page content available to this browser tab. Server-side systems and private APIs are not accessed.</p>
+    </div>
+  )
 }
 
 function ShieldIcon({ blocked = false }: { blocked?: boolean }) {
@@ -61,9 +101,29 @@ function SuspiciousChunk({ chunk }: { chunk: ChunkResult }) {
   )
 }
 
-export function WebpageAnalysisDetailsPanel({ content, isOpen, result, onClose }: Props) {
-  if (!content || !result) return null
+export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, result, onClose }: Props) {
+  if (!content || (!isScanning && !result)) return null
 
+  if (isScanning) {
+    return (
+      <>
+        <div className={`analysis-drawer-overlay ${isOpen ? 'analysis-drawer-overlay--open' : ''}`} onClick={onClose} />
+        <section className={`analysis-drawer webpage-analysis-drawer ${isOpen ? 'analysis-drawer--open' : ''}`} aria-label="Webpage scan in progress" aria-modal="true" role="dialog">
+          <header className="drawer-header">
+            <div>
+              <h3>Webpage Scan Report</h3>
+              <p className="webpage-scan-subtitle">Indirect prompt-injection analysis</p>
+            </div>
+            <button className="drawer-close-btn" type="button" onClick={onClose} aria-label="Close webpage scan report">✕</button>
+          </header>
+          <div className="drawer-content"><ScanProgress content={content} /></div>
+        </section>
+      </>
+    )
+  }
+
+  // The result is guaranteed when the scan is no longer in progress.
+  if (!result) return null
   const details = result.analysis_details
   const suspiciousChunks = details.chunk_results.filter((chunk) => chunk.label === 'malicious')
   const isBlocked = !result.allowed

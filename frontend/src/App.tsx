@@ -12,6 +12,14 @@ import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
 const HOMEPAGE_TAB_TITLE = 'New Tab'
+const MINIMUM_WEBPAGE_SCAN_DURATION_MS = 10_000
+
+function waitForMinimumScanDuration(startedAt: number) {
+  const remainingTime = MINIMUM_WEBPAGE_SCAN_DURATION_MS - (performance.now() - startedAt)
+  return remainingTime > 0
+    ? new Promise<void>((resolve) => window.setTimeout(resolve, remainingTime))
+    : Promise.resolve()
+}
 
 type BrowserTab = {
   id: string
@@ -395,21 +403,26 @@ function BrowserShell() {
   const handleScanPage = useCallback(async () => {
     if (isScanningPage) return
 
-    const content = await extractPageContent(webviewHandlesRef.current.get(activeTabId) ?? null)
-    if (!content) {
-      return
-    }
-
     setIsScanningPage(true)
+    const scanStartedAt = performance.now()
     try {
-      const result = await checkWebpage(content)
+      const content = await extractPageContent(webviewHandlesRef.current.get(activeTabId) ?? null)
+      if (!content) {
+        return
+      }
+
       setWebpageScanContent(content)
-      setWebpageScanResult(result)
+      setWebpageScanResult(null)
       setPromptDrawerOpen(false)
       setWebpageDrawerOpen(true)
 
+      const result = await checkWebpage(content)
+      await waitForMinimumScanDuration(scanStartedAt)
+      setWebpageScanResult(result)
+
     } catch (error) {
       console.error('[ScanPage] Failed:', error)
+      setWebpageDrawerOpen(false)
     } finally {
       setIsScanningPage(false)
     }
@@ -511,6 +524,7 @@ function BrowserShell() {
       />
       <WebpageAnalysisDetailsPanel
         content={webpageScanContent}
+        isScanning={isScanningPage}
         result={webpageScanResult}
         isOpen={webpageDrawerOpen}
         onClose={handleCloseWebpageDrawer}
