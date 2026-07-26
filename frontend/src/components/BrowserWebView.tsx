@@ -30,9 +30,11 @@ export type BrowserWebViewHandle = {
 
 type BrowserWebViewProps = {
   initialUrl: string
-  onLoadingChange: (isLoading: boolean) => void
-  onNavigate: (url: string) => void
-  onSearch: (query: string) => void
+  isActive: boolean
+  tabId: string
+  onLoadingChange: (tabId: string, isLoading: boolean) => void
+  onNavigate: (tabId: string, url: string) => void
+  onSearch: (tabId: string, query: string) => void
 }
 
 const HOMEPAGE_URL = 'about:blank'
@@ -246,7 +248,7 @@ const EXTRACT_CONTENT_SCRIPT = `
 `
 
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
-  function BrowserWebView({ initialUrl, onLoadingChange, onNavigate, onSearch }, ref) {
+  function BrowserWebView({ initialUrl, isActive, tabId, onLoadingChange, onNavigate, onSearch }, ref) {
     const webviewRef = useRef<WebViewDomElement | null>(null)
     const [activeUrl, setActiveUrl] = useState(initialUrl)
     const [errorMessage, setErrorMessage] = useState('')
@@ -300,13 +302,13 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
       }
 
       const webview = webviewRef.current
-      const handleStartLoading = () => onLoadingChange(true)
-      const handleStopLoading = () => onLoadingChange(false)
+      const handleStartLoading = () => onLoadingChange(tabId, true)
+      const handleStopLoading = () => onLoadingChange(tabId, false)
       const handleNavigate = (event: Event) => {
         const nextUrl = (event as NavigationEvent).url
         if (nextUrl) {
           setActiveUrl(nextUrl)
-          onNavigate(nextUrl)
+          onNavigate(tabId, nextUrl)
         }
       }
       const handleFailure = (event: Event) => {
@@ -316,7 +318,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         }
 
         setErrorMessage(failure.errorDescription ?? 'Page failed to load')
-        onLoadingChange(false)
+        onLoadingChange(tabId, false)
       }
 
       webview.addEventListener('did-start-loading', handleStartLoading)
@@ -332,26 +334,26 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         webview.removeEventListener('did-navigate-in-page', handleNavigate)
         webview.removeEventListener('did-fail-load', handleFailure)
       }
-    }, [isElectronRuntime, onLoadingChange, onNavigate])
+    }, [isElectronRuntime, onLoadingChange, onNavigate, tabId])
 
     if (!isElectronRuntime) {
       return (
-        <section className="webview-stage" aria-label="Browser web view">
+        <section className={`webview-stage ${isActive ? '' : 'webview-stage--inactive'}`} aria-hidden={!isActive} aria-label="Browser web view">
           <iframe className="browser-iframe" src={activeUrl} title="Browser preview" />
-          {isHomePage ? <HomePage onSearch={onSearch} /> : null}
+          {isHomePage ? <HomePage onSearch={(query) => onSearch(tabId, query)} /> : null}
           {!isHomePage ? <div className="webview-note">Electron webview activates inside desktop app.</div> : null}
         </section>
       )
     }
 
     return (
-      <section className="webview-stage" aria-label="Browser web view">
+      <section className={`webview-stage ${isActive ? '' : 'webview-stage--inactive'}`} aria-hidden={!isActive} aria-label="Browser web view">
         <webview
           ref={setWebviewRef}
           className="browser-webview"
           src={initialUrl}
         />
-        {isHomePage ? <HomePage onSearch={onSearch} /> : null}
+        {isHomePage ? <HomePage onSearch={(query) => onSearch(tabId, query)} /> : null}
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>
     )

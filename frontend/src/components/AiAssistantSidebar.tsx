@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
-import type { LlmResponse, SecurityCheckResponse, SecurityEvent } from '../types/securityTypes'
+import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
 import { PromptInputBox } from './PromptInputBox'
 
 type ChatMessage = {
@@ -16,7 +16,6 @@ type ChatMessage = {
 
 type AiAssistantSidebarProps = {
   onViewDetails?: (details: AnalysisDetails) => void
-  onSecurityEvent?: (event: SecurityEvent) => void
 }
 
 function ShieldCheckIcon() {
@@ -90,7 +89,7 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -127,15 +126,6 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
 
     try {
       const result = await checkPrompt(prompt)
-
-      // Trigger security event callback
-      onSecurityEvent?.({
-        allowed: result.allowed,
-        label: result.label,
-        source: result.source,
-        summary_reason: result.summary_reason,
-        timestamp: result.timestamp,
-      })
 
       let llmResp: LlmResponse | undefined
       if (result.allowed) {

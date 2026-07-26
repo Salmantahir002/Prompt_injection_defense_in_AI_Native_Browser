@@ -7,7 +7,7 @@ import { WebpageAnalysisDetailsPanel } from './components/WebpageAnalysisDetails
 import { extractPageContent } from './services/pageContentExtractor'
 import { checkWebpage } from './services/backendApiClient'
 import type { AnalysisDetails } from './types/analysisDetailsTypes'
-import type { SecurityCheckResponse, SecurityEvent, WebpageContent } from './types/securityTypes'
+import type { SecurityCheckResponse, WebpageContent } from './types/securityTypes'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
@@ -287,7 +287,7 @@ function StartupScreen({
 }
 
 function BrowserShell() {
-  const webviewRef = useRef<BrowserWebViewHandle | null>(null)
+  const webviewHandlesRef = useRef(new Map<string, BrowserWebViewHandle>())
   const nextTabId = useRef(2)
   const [tabs, setTabs] = useState<BrowserTab[]>([
     { id: 'tab-1', title: HOMEPAGE_TAB_TITLE, url: DEFAULT_BROWSER_URL },
@@ -307,36 +307,50 @@ function BrowserShell() {
   const [webpageScanContent, setWebpageScanContent] = useState<WebpageContent | null>(null)
   const [isScanningPage, setIsScanningPage] = useState(false)
 
-  // Toast notifications state
-  const [toasts, setToasts] = useState<(SecurityEvent & { id: string })[]>([])
-  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
-
   const updateTabUrl = useCallback((tabId: string, url: string) => {
     setTabs((previousTabs) => previousTabs.map((tab) => (
       tab.id === tabId ? { ...tab, title: getTabTitle(url), url } : tab
     )))
   }, [])
 
-  const addToast = useCallback((event: SecurityEvent) => {
-    const id = `${Date.now()}-${Math.random()}`
-    setToasts((prev) => [...prev, { ...event, id }])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 4500)
-  }, [])
-
   const handleNavigate = useCallback((url: string) => {
     setCurrentUrl(url)
     setAddressValue(url)
     updateTabUrl(activeTabId, url)
-    webviewRef.current?.loadURL(url)
+    webviewHandlesRef.current.get(activeTabId)?.loadURL(url)
   }, [activeTabId, updateTabUrl])
 
-  const handleWebViewNavigate = useCallback((url: string) => {
-    setCurrentUrl(url)
-    setAddressValue(url === DEFAULT_BROWSER_URL ? '' : url)
-    updateTabUrl(activeTabId, url)
+  const handleWebViewNavigate = useCallback((tabId: string, url: string) => {
+    updateTabUrl(tabId, url)
+    if (tabId === activeTabId) {
+      setCurrentUrl(url)
+      setAddressValue(url === DEFAULT_BROWSER_URL ? '' : url)
+    }
   }, [activeTabId, updateTabUrl])
+
+  const handleWebViewLoadingChange = useCallback((tabId: string, loading: boolean) => {
+    if (tabId === activeTabId) {
+      setIsLoading(loading)
+    }
+  }, [activeTabId])
+
+  const handleWebViewSearch = useCallback((tabId: string, query: string) => {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`
+    updateTabUrl(tabId, url)
+    if (tabId === activeTabId) {
+      setCurrentUrl(url)
+      setAddressValue(url)
+    }
+    webviewHandlesRef.current.get(tabId)?.loadURL(url)
+  }, [activeTabId, updateTabUrl])
+
+  const setWebviewHandle = useCallback((tabId: string, handle: BrowserWebViewHandle | null) => {
+    if (handle) {
+      webviewHandlesRef.current.set(tabId, handle)
+    } else {
+      webviewHandlesRef.current.delete(tabId)
+    }
+  }, [])
 
   const handleSelectTab = useCallback((tab: BrowserTab) => {
     setActiveTabId(tab.id)
@@ -381,7 +395,7 @@ function BrowserShell() {
   const handleScanPage = useCallback(async () => {
     if (isScanningPage) return
 
-    const content = await extractPageContent(webviewRef.current)
+    const content = await extractPageContent(webviewHandlesRef.current.get(activeTabId) ?? null)
     if (!content) {
       return
     }
@@ -394,20 +408,12 @@ function BrowserShell() {
       setPromptDrawerOpen(false)
       setWebpageDrawerOpen(true)
 
-      // Add a security toast
-      addToast({
-        allowed: result.allowed,
-        label: result.label,
-        source: result.source,
-        summary_reason: result.summary_reason,
-        timestamp: result.timestamp,
-      })
     } catch (error) {
       console.error('[ScanPage] Failed:', error)
     } finally {
       setIsScanningPage(false)
     }
-  }, [addToast, isScanningPage])
+  }, [activeTabId, isScanningPage])
 
   const handleViewPromptDetails = useCallback((details: AnalysisDetails) => {
     setPromptDetails(details)
@@ -470,58 +476,31 @@ function BrowserShell() {
           isScanning={isScanningPage}
           onAddressChange={setAddressValue}
           onAssistantToggle={() => setAssistantOpen((isOpen) => !isOpen)}
-          onBack={() => webviewRef.current?.goBack()}
-          onForward={() => webviewRef.current?.goForward()}
+          onBack={() => webviewHandlesRef.current.get(activeTabId)?.goBack()}
+          onForward={() => webviewHandlesRef.current.get(activeTabId)?.goForward()}
           onNavigate={handleNavigate}
-          onReload={() => webviewRef.current?.reload()}
+          onReload={() => webviewHandlesRef.current.get(activeTabId)?.reload()}
           onScanPage={handleScanPage}
         />
         <div className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''}`}>
-          <BrowserWebView
-            key={activeTab.id}
-            ref={webviewRef}
-            initialUrl={activeTab.url}
-            onLoadingChange={setIsLoading}
-            onNavigate={handleWebViewNavigate}
-            onSearch={(query) => handleNavigate(`https://www.google.com/search?q=${encodeURIComponent(query)}`)}
-          />
+          <div className="webview-stack">
+            {tabs.map((tab) => (
+              <BrowserWebView
+                key={tab.id}
+                ref={(handle) => setWebviewHandle(tab.id, handle)}
+                initialUrl={tab.url}
+                isActive={tab.id === activeTabId}
+                tabId={tab.id}
+                onLoadingChange={handleWebViewLoadingChange}
+                onNavigate={handleWebViewNavigate}
+                onSearch={handleWebViewSearch}
+              />
+            ))}
+          </div>
           {assistantOpen ? (
-            <AiAssistantSidebar onViewDetails={handleViewPromptDetails} onSecurityEvent={addToast} />
+            <AiAssistantSidebar onViewDetails={handleViewPromptDetails} />
           ) : null}
         </div>
-      </div>
-
-      {/* Toast Notifications System */}
-      <div className="toast-container" aria-live="polite">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`toast-notification ${
-              toast.allowed ? 'toast-notification--safe' : 'toast-notification--blocked'
-            }`}
-          >
-            <div className="toast-header">
-              <span className="toast-title">
-                {toast.allowed
-                  ? (toast.source === 'webpage_content' ? '🛡️ Page scan passed' : '🛡️ Prompt check passed')
-                  : (toast.source === 'webpage_content' ? '🚨 Page threat detected' : '🚨 Malicious prompt blocked')}
-              </span>
-              <time className="toast-time">
-                {(() => {
-                  try {
-                    const date = new Date(toast.timestamp)
-                    return isNaN(date.getTime())
-                      ? new Date().toLocaleTimeString()
-                      : date.toLocaleTimeString()
-                  } catch {
-                    return new Date().toLocaleTimeString()
-                  }
-                })()}
-              </time>
-            </div>
-            <p className="toast-body">{toast.summary_reason}</p>
-          </div>
-        ))}
       </div>
 
       {/* These are separate reports and retain their own result state. */}
