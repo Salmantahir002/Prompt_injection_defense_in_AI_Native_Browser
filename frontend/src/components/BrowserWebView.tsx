@@ -34,6 +34,8 @@ type BrowserWebViewProps = {
   onNavigate: (url: string) => void
 }
 
+const HOMEPAGE_URL = 'about:blank'
+
 const EXTRACT_CONTENT_SCRIPT = `
 (function() {
   function getComments(root) {
@@ -94,6 +96,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
     const [activeUrl, setActiveUrl] = useState(initialUrl)
     const [errorMessage, setErrorMessage] = useState('')
     const isElectronRuntime = Boolean(window.electronAPI)
+    const isHomePage = activeUrl === HOMEPAGE_URL
 
     const setWebviewRef = useCallback((element: HTMLElement | null) => {
       webviewRef.current = element as WebViewDomElement | null
@@ -180,7 +183,12 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
       return (
         <section className="webview-stage" aria-label="Browser web view">
           <iframe className="browser-iframe" src={activeUrl} title="Browser preview" />
-          <div className="webview-note">Electron webview activates inside desktop app.</div>
+          {isHomePage ? (
+            <div className="homepage-message">
+              <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
+            </div>
+          ) : null}
+          {!isHomePage ? <div className="webview-note">Electron webview activates inside desktop app.</div> : null}
         </section>
       )
     }
@@ -192,6 +200,11 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
           className="browser-webview"
           src={initialUrl}
         />
+        {isHomePage ? (
+          <div className="homepage-message">
+            <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
+          </div>
+        ) : null}
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>
     )

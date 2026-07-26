@@ -9,7 +9,26 @@ import type { AnalysisDetails } from './types/analysisDetailsTypes'
 import type { SecurityEvent } from './types/securityTypes'
 import './styles/layout.css'
 
-const DEFAULT_BROWSER_URL = 'https://www.google.com'
+const DEFAULT_BROWSER_URL = 'about:blank'
+const HOMEPAGE_TAB_TITLE = 'Prompt Defense'
+
+type BrowserTab = {
+  id: string
+  title: string
+  url: string
+}
+
+function getTabTitle(url: string) {
+  if (url === DEFAULT_BROWSER_URL) {
+    return HOMEPAGE_TAB_TITLE
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '') || url
+  } catch {
+    return url
+  }
+}
 
 function BrandMark() {
   return (
@@ -267,6 +286,11 @@ function StartupScreen({
 
 function BrowserShell() {
   const webviewRef = useRef<BrowserWebViewHandle | null>(null)
+  const nextTabId = useRef(2)
+  const [tabs, setTabs] = useState<BrowserTab[]>([
+    { id: 'tab-1', title: HOMEPAGE_TAB_TITLE, url: DEFAULT_BROWSER_URL },
+  ])
+  const [activeTabId, setActiveTabId] = useState('tab-1')
   const [currentUrl, setCurrentUrl] = useState(DEFAULT_BROWSER_URL)
   const [addressValue, setAddressValue] = useState(DEFAULT_BROWSER_URL)
   const [isLoading, setIsLoading] = useState(false)
@@ -278,6 +302,13 @@ function BrowserShell() {
 
   // Toast notifications state
   const [toasts, setToasts] = useState<(SecurityEvent & { id: string })[]>([])
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
+
+  const updateTabUrl = useCallback((tabId: string, url: string) => {
+    setTabs((previousTabs) => previousTabs.map((tab) => (
+      tab.id === tabId ? { ...tab, title: getTabTitle(url), url } : tab
+    )))
+  }, [])
 
   const addToast = useCallback((event: SecurityEvent) => {
     const id = `${Date.now()}-${Math.random()}`
@@ -290,13 +321,55 @@ function BrowserShell() {
   const handleNavigate = useCallback((url: string) => {
     setCurrentUrl(url)
     setAddressValue(url)
+    updateTabUrl(activeTabId, url)
     webviewRef.current?.loadURL(url)
-  }, [])
+  }, [activeTabId, updateTabUrl])
 
   const handleWebViewNavigate = useCallback((url: string) => {
     setCurrentUrl(url)
     setAddressValue(url)
+    updateTabUrl(activeTabId, url)
+  }, [activeTabId, updateTabUrl])
+
+  const handleSelectTab = useCallback((tab: BrowserTab) => {
+    setActiveTabId(tab.id)
+    setCurrentUrl(tab.url)
+    setAddressValue(tab.url)
+    setIsLoading(false)
   }, [])
+
+  const handleNewTab = useCallback(() => {
+    const tab: BrowserTab = {
+      id: `tab-${nextTabId.current++}`,
+      title: HOMEPAGE_TAB_TITLE,
+      url: DEFAULT_BROWSER_URL,
+    }
+
+    setTabs((previousTabs) => [...previousTabs, tab])
+    handleSelectTab(tab)
+  }, [handleSelectTab])
+
+  const handleCloseTab = useCallback((tabId: string) => {
+    const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
+
+    if (tabs.length === 1) {
+      const replacementTab: BrowserTab = {
+        id: `tab-${nextTabId.current++}`,
+        title: HOMEPAGE_TAB_TITLE,
+        url: DEFAULT_BROWSER_URL,
+      }
+      setTabs([replacementTab])
+      handleSelectTab(replacementTab)
+      return
+    }
+
+    const remainingTabs = tabs.filter((tab) => tab.id !== tabId)
+    setTabs(remainingTabs)
+
+    if (tabId === activeTabId) {
+      handleSelectTab(remainingTabs[Math.max(0, tabIndex - 1)])
+    }
+  }, [activeTabId, handleSelectTab, tabs])
 
   const handleScanPage = useCallback(async () => {
     const content = await extractPageContent(webviewRef.current)
@@ -335,15 +408,38 @@ function BrowserShell() {
   return (
     <main className="browser-shell">
       {/* Tab Strip */}
-      <div className="tab-strip">
-        <div className="tab active-tab">
-          <span className="tab-dot" />
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Prompt Defense
-          </span>
-          <button className="tab-close-btn" type="button" aria-label="Close tab">✕</button>
-        </div>
-        <button className="new-tab-btn" type="button" aria-label="New tab">+</button>
+      <div className="tab-strip" role="tablist" aria-label="Browser tabs">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            aria-selected={tab.id === activeTabId}
+            className={`tab ${tab.id === activeTabId ? 'active-tab' : ''}`}
+            onClick={() => handleSelectTab(tab)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleSelectTab(tab)
+              }
+            }}
+            role="tab"
+            tabIndex={tab.id === activeTabId ? 0 : -1}
+          >
+            <span className="tab-dot" />
+            <span className="tab-title">{tab.title}</span>
+            <button
+              className="tab-close-btn"
+              type="button"
+              aria-label={`Close ${tab.title}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                handleCloseTab(tab.id)
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button className="new-tab-btn" type="button" aria-label="New tab" onClick={handleNewTab}>+</button>
       </div>
 
       {/* Browser Frame */}
@@ -363,8 +459,9 @@ function BrowserShell() {
         />
         <div className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''}`}>
           <BrowserWebView
+            key={activeTab.id}
             ref={webviewRef}
-            initialUrl={DEFAULT_BROWSER_URL}
+            initialUrl={activeTab.url}
             onLoadingChange={setIsLoading}
             onNavigate={handleWebViewNavigate}
           />
