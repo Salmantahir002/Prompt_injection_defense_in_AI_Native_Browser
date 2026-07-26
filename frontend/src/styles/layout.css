@@ -628,10 +628,26 @@ te
     radial-gradient(circle at 82% 76%, rgba(52, 211, 153, 0.14), transparent 35%),
     #101513;
   color: rgba(255, 255, 255, 0.94);
-  pointer-events: none;
+  isolation: isolate;
 }
 
-.homepage-message p {
+.homepage-content {
+  display: grid;
+  justify-items: center;
+  gap: 30px;
+  max-width: 920px;
+  animation: homepage-enter 460ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
+  transition: filter 240ms ease, opacity 240ms ease, transform 240ms ease;
+}
+
+.homepage-message--search-open .homepage-content {
+  opacity: 0.4;
+  filter: blur(7px);
+  pointer-events: none;
+  transform: scale(0.975);
+}
+
+.homepage-content p {
   max-width: 760px;
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
@@ -641,6 +657,228 @@ te
   line-height: 1.06;
   text-align: center;
   text-wrap: balance;
+}
+
+.homepage-start-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 19px 0 22px;
+  border: 1px solid rgba(252, 211, 77, 0.58);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.96), rgba(245, 158, 11, 0.88));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.44);
+  color: #191406;
+  cursor: pointer;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  animation: homepage-button-pulse 2.6s ease-in-out infinite;
+  transition: transform 170ms ease, box-shadow 170ms ease, filter 170ms ease;
+}
+
+.homepage-start-button svg,
+.homepage-search-submit svg {
+  width: 18px;
+  height: 18px;
+}
+
+.homepage-start-button:hover {
+  animation-play-state: paused;
+  filter: brightness(1.06);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.homepage-start-button svg {
+  animation: homepage-button-arrow 1.8s ease-in-out infinite;
+}
+
+.homepage-start-button:focus-visible,
+.homepage-search-popup input:focus-visible,
+.homepage-search-submit:focus-visible,
+.homepage-suggestions button:focus-visible {
+  outline: 2px solid #fcd34d;
+  outline-offset: 3px;
+}
+
+.homepage-search-popup {
+  position: absolute;
+  top: clamp(74px, 27%, 205px);
+  left: 50%;
+  z-index: 2;
+  width: min(760px, calc(100% - 48px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  background: rgba(26, 29, 29, 0.96);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  transform: translate(-50%, -50%);
+  animation: search-popup-enter 200ms ease-out both;
+}
+
+.homepage-search-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: rgba(3, 8, 6, 0.28);
+  cursor: default;
+  backdrop-filter: blur(9px) saturate(0.78);
+  animation: homepage-backdrop-enter 200ms ease-out both;
+}
+
+.homepage-search-popup form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 8px 0 18px;
+}
+
+.homepage-search-popup form > svg {
+  width: 19px;
+  height: 19px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.homepage-search-popup input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.96);
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+
+.homepage-search-popup input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.homepage-search-submit {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.94);
+  color: #1b1709;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.homepage-search-submit:hover {
+  background: #fcd34d;
+  transform: scale(1.04);
+}
+
+.homepage-suggestions {
+  padding: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.homepage-suggestions button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 13px;
+  text-align: left;
+  transition: background 130ms ease, color 130ms ease;
+}
+
+.homepage-suggestions button svg {
+  width: 16px;
+  height: 16px;
+  color: rgba(251, 191, 36, 0.72);
+}
+
+.homepage-suggestions button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.homepage-suggestions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+@keyframes homepage-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes search-popup-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes homepage-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes homepage-button-pulse {
+  0%, 100% {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.44);
+  }
+  50% {
+    box-shadow: 0 16px 42px rgba(251, 191, 36, 0.2), 0 0 0 6px rgba(251, 191, 36, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+}
+
+@keyframes homepage-button-arrow {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-content,
+  .homepage-start-button,
+  .homepage-start-button svg,
+  .homepage-search-popup,
+  .homepage-search-backdrop {
+    animation: none;
+    transition: none;
+  }
 }
 
 .webview-note,

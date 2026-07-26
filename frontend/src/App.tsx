@@ -10,7 +10,7 @@ import type { SecurityEvent } from './types/securityTypes'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
-const HOMEPAGE_TAB_TITLE = 'Prompt Defense'
+const HOMEPAGE_TAB_TITLE = 'New Tab'
 
 type BrowserTab = {
   id: string
@@ -292,7 +292,7 @@ function BrowserShell() {
   ])
   const [activeTabId, setActiveTabId] = useState('tab-1')
   const [currentUrl, setCurrentUrl] = useState(DEFAULT_BROWSER_URL)
-  const [addressValue, setAddressValue] = useState(DEFAULT_BROWSER_URL)
+  const [addressValue, setAddressValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
 
@@ -327,14 +327,14 @@ function BrowserShell() {
 
   const handleWebViewNavigate = useCallback((url: string) => {
     setCurrentUrl(url)
-    setAddressValue(url)
+    setAddressValue(url === DEFAULT_BROWSER_URL ? '' : url)
     updateTabUrl(activeTabId, url)
   }, [activeTabId, updateTabUrl])
 
   const handleSelectTab = useCallback((tab: BrowserTab) => {
     setActiveTabId(tab.id)
     setCurrentUrl(tab.url)
-    setAddressValue(tab.url)
+    setAddressValue(tab.url === DEFAULT_BROWSER_URL ? '' : tab.url)
     setIsLoading(false)
   }, [])
 
@@ -464,6 +464,7 @@ function BrowserShell() {
             initialUrl={activeTab.url}
             onLoadingChange={setIsLoading}
             onNavigate={handleWebViewNavigate}
+            onSearch={(query) => handleNavigate(`https://www.google.com/search?q=${encodeURIComponent(query)}`)}
           />
           {assistantOpen ? (
             <AiAssistantSidebar onViewDetails={handleViewDetails} onSecurityEvent={addToast} />

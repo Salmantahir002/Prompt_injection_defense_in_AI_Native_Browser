@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react'
 import type { WebpageContent } from '../types/securityTypes'
 
 type WebViewDomElement = HTMLElement & {
@@ -32,9 +32,164 @@ type BrowserWebViewProps = {
   initialUrl: string
   onLoadingChange: (isLoading: boolean) => void
   onNavigate: (url: string) => void
+  onSearch: (query: string) => void
 }
 
 const HOMEPAGE_URL = 'about:blank'
+
+type HomePageProps = {
+  onSearch: (query: string) => void
+}
+
+function ArrowIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
+function HomePage({ onSearch }: HomePageProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [suggestionResult, setSuggestionResult] = useState({
+    query: '',
+    suggestions: [] as string[],
+  })
+
+  useEffect(() => {
+    if (isSearchOpen) {
+      inputRef.current?.focus()
+    }
+  }, [isSearchOpen])
+
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (!query) {
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const requestId = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
+          { signal: controller.signal },
+        )
+        const data: unknown = await response.json()
+        const nextSuggestions = Array.isArray(data) && Array.isArray(data[1])
+          ? data[1].filter((item): item is string => typeof item === 'string').slice(0, 5)
+          : []
+        setSuggestionResult({ query, suggestions: nextSuggestions })
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setSuggestionResult({ query, suggestions: [] })
+        }
+      }
+    }, 180)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(requestId)
+    }
+  }, [searchQuery])
+
+  const fallbackSuggestions = searchQuery.trim()
+    ? [searchQuery.trim(), `${searchQuery.trim()} news`, `${searchQuery.trim()} latest`]
+    : []
+  const visibleSuggestions = suggestionResult.query === searchQuery.trim() && suggestionResult.suggestions.length > 0
+    ? suggestionResult.suggestions
+    : fallbackSuggestions
+
+  function submitSearch(query = searchQuery) {
+    const trimmedQuery = query.trim()
+    if (!trimmedQuery) {
+      return
+    }
+
+    onSearch(trimmedQuery)
+    setIsSearchOpen(false)
+  }
+
+  function dismissSearch() {
+    setIsSearchOpen(false)
+    setSearchQuery('')
+    setSuggestionResult({ query: '', suggestions: [] })
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    submitSearch()
+  }
+
+  return (
+    <div className={`homepage-message ${isSearchOpen ? 'homepage-message--search-open' : ''}`}>
+      <div className="homepage-content">
+        <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
+        <button className="homepage-start-button" type="button" onClick={() => setIsSearchOpen(true)}>
+          Start browsing
+          <ArrowIcon />
+        </button>
+      </div>
+
+      {isSearchOpen ? (
+        <button
+          className="homepage-search-backdrop"
+          type="button"
+          aria-label="Close search"
+          onClick={dismissSearch}
+        />
+      ) : null}
+
+      {isSearchOpen ? (
+        <div className="homepage-search-popup" role="dialog" aria-modal="true" aria-label="Search Google">
+          <form onSubmit={handleSubmit}>
+            <SearchIcon />
+            <input
+              ref={inputRef}
+              aria-autocomplete="list"
+              aria-controls="homepage-search-suggestions"
+              aria-expanded={visibleSuggestions.length > 0}
+              autoComplete="off"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  dismissSearch()
+                }
+              }}
+              placeholder="Search anything"
+              value={searchQuery}
+            />
+            <button className="homepage-search-submit" type="submit" aria-label="Search Google">
+              <ArrowIcon />
+            </button>
+          </form>
+          {visibleSuggestions.length > 0 ? (
+            <div className="homepage-suggestions" id="homepage-search-suggestions" role="listbox">
+              {visibleSuggestions.map((suggestion) => (
+                <button key={suggestion} type="button" role="option" onClick={() => submitSearch(suggestion)}>
+                  <SearchIcon />
+                  <span>{suggestion}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 const EXTRACT_CONTENT_SCRIPT = `
 (function() {
@@ -91,7 +246,7 @@ const EXTRACT_CONTENT_SCRIPT = `
 `
 
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
-  function BrowserWebView({ initialUrl, onLoadingChange, onNavigate }, ref) {
+  function BrowserWebView({ initialUrl, onLoadingChange, onNavigate, onSearch }, ref) {
     const webviewRef = useRef<WebViewDomElement | null>(null)
     const [activeUrl, setActiveUrl] = useState(initialUrl)
     const [errorMessage, setErrorMessage] = useState('')
@@ -183,11 +338,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
       return (
         <section className="webview-stage" aria-label="Browser web view">
           <iframe className="browser-iframe" src={activeUrl} title="Browser preview" />
-          {isHomePage ? (
-            <div className="homepage-message">
-              <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
-            </div>
-          ) : null}
+          {isHomePage ? <HomePage onSearch={onSearch} /> : null}
           {!isHomePage ? <div className="webview-note">Electron webview activates inside desktop app.</div> : null}
         </section>
       )
@@ -200,11 +351,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
           className="browser-webview"
           src={initialUrl}
         />
-        {isHomePage ? (
-          <div className="homepage-message">
-            <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
-          </div>
-        ) : null}
+        {isHomePage ? <HomePage onSearch={onSearch} /> : null}
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>
     )
