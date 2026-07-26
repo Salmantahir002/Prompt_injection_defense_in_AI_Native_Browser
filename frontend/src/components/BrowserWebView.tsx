@@ -250,6 +250,9 @@ const EXTRACT_CONTENT_SCRIPT = `
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
   function BrowserWebView({ initialUrl, isActive, tabId, onLoadingChange, onNavigate, onSearch }, ref) {
     const webviewRef = useRef<WebViewDomElement | null>(null)
+    // Electron treats a changed `src` attribute as a new navigation. Keep the
+    // mount URL stable; subsequent navigation always goes through loadURL().
+    const webviewInitialUrlRef = useRef(initialUrl)
     const [activeUrl, setActiveUrl] = useState(initialUrl)
     const [errorMessage, setErrorMessage] = useState('')
     const isElectronRuntime = Boolean(window.electronAPI)
@@ -351,7 +354,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         <webview
           ref={setWebviewRef}
           className="browser-webview"
-          src={initialUrl}
+          src={webviewInitialUrlRef.current}
         />
         {isHomePage ? <HomePage onSearch={(query) => onSearch(tabId, query)} /> : null}
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}

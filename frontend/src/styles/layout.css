@@ -647,11 +647,14 @@ te
 .webview-stack .webview-stage {
   position: absolute;
   inset: 0;
+  z-index: 1;
 }
 
 .webview-stage--inactive {
-  visibility: hidden;
+  /* Keep the Electron surface live so returning to a tab is instant. */
+  opacity: 0;
   pointer-events: none;
+  z-index: 0 !important;
 }
 
 .browser-webview,
