@@ -27,12 +27,14 @@ export type FeatureEvidence = {
 
 export type ChunkResult = {
   chunk_id: string
+  source: string
   label: SecurityLabel
   confidence: number
   risk_level: RiskLevel
   matched_patterns: string[]
   reason: string
   excerpt: string
+  matched_evidence: string[]
 }
 
 export type AnalysisDetails = {

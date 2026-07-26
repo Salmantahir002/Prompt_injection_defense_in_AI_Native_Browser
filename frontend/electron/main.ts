@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyElectronSecurityConfig } from './electronSecurityConfig.js'
+import { CdpInspectionService } from './cdpInspectionService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -16,6 +17,7 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disk-cache-size', '0')
 
 let mainWindow: BrowserWindow | null = null
+const cdpInspectionService = new CdpInspectionService()
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -38,6 +40,9 @@ async function createWindow() {
   })
 
   applyElectronSecurityConfig(session.defaultSession, mainWindow, isDevelopment)
+  mainWindow.webContents.on('did-attach-webview', (_event, guestContents) => {
+    cdpInspectionService.watch(guestContents)
+  })
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
     console.error(`[renderer-load-failed] ${errorCode} ${errorDescription} ${validatedUrl}`)
@@ -60,6 +65,13 @@ async function createWindow() {
 }
 
 ipcMain.handle('app:get-version', () => app.getVersion())
+ipcMain.handle('security:scan-webview', (event, webContentsId: unknown) => {
+  if (!mainWindow || event.sender.id !== mainWindow.webContents.id || !Number.isInteger(webContentsId)) {
+    return null
+  }
+
+  return cdpInspectionService.capture(webContentsId as number)
+})
 
 app.whenReady().then(async () => {
   await createWindow()

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-const allowedInvokeChannels = ['app:get-version'] as const
+const allowedInvokeChannels = ['app:get-version', 'security:scan-webview'] as const
 type InvokeChannel = (typeof allowedInvokeChannels)[number]
 
 const electronAPI = {
@@ -13,6 +13,7 @@ const electronAPI = {
     return ipcRenderer.invoke(channel) as Promise<unknown>
   },
   extractPageContent: () => Promise.resolve(null),
+  scanWebview: (webContentsId: number) => ipcRenderer.invoke('security:scan-webview', webContentsId) as Promise<unknown>,
   versions: process.versions,
 }
 

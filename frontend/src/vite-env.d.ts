@@ -3,8 +3,9 @@
 interface Window {
   electronAPI?: {
     getAppVersion: () => Promise<string>
-    invoke: (channel: 'app:get-version') => Promise<unknown>
+    invoke: (channel: 'app:get-version' | 'security:scan-webview') => Promise<unknown>
     extractPageContent: () => Promise<null>
+    scanWebview: (webContentsId: number) => Promise<unknown>
   }
 }
 

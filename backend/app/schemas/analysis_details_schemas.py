@@ -28,12 +28,14 @@ class FeatureEvidence(BaseModel):
 
 class ChunkResult(BaseModel):
     chunk_id: str
+    source: str = "prompt"
     label: Literal["benign", "malicious"]
     confidence: float
     risk_level: Literal["low", "medium", "high"]
     matched_patterns: List[str]
     reason: str
     excerpt: str
+    matched_evidence: List[str] = []
 
 
 class AnalysisDetails(BaseModel):

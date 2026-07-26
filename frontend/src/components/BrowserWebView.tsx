@@ -5,6 +5,7 @@ type WebViewDomElement = HTMLElement & {
   canGoBack: () => boolean
   canGoForward: () => boolean
   executeJavaScript: (code: string) => Promise<unknown>
+  getWebContentsId: () => number
   getURL: () => string
   goBack: () => void
   goForward: () => void
@@ -266,6 +267,10 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
       extractContent: async () => {
         if (!webviewRef.current) return null
         try {
+          if (window.electronAPI?.scanWebview) {
+            const result = await window.electronAPI.scanWebview(webviewRef.current.getWebContentsId())
+            if (result) return result as WebpageContent
+          }
           const result = await webviewRef.current.executeJavaScript(EXTRACT_CONTENT_SCRIPT)
           return result as WebpageContent
         } catch {

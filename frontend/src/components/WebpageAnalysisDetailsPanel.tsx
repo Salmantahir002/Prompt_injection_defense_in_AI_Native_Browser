@@ -26,12 +26,12 @@ function ScanProgress({ content }: { content: WebpageContent }) {
 
   const progress = Math.min(96, Math.max(8, Math.round((elapsed / MINIMUM_SCAN_DURATION_MS) * 100)))
   const phase = progress < 30
-    ? 'Capturing the rendered document'
+    ? 'Capturing rendered frames and DOM snapshots'
     : progress < 58
-      ? 'Inspecting hidden content and metadata'
-      : progress < 82
-        ? 'Reviewing comments and input fields'
-        : 'Classifying page content for injection patterns'
+      ? 'Inspecting shadow DOM, hidden CSS, and accessibility text'
+    : progress < 82
+        ? 'Reviewing scripts, resources, and network activity'
+        : 'Classifying captured content for injection patterns'
 
   return (
     <div className="webpage-scan-progress" aria-live="polite">
@@ -84,14 +84,33 @@ function SourceStat({ label, value }: { label: string; value: string }) {
   )
 }
 
+const CONTENT_CHANNELS: Array<{ key: keyof WebpageContent; label: string }> = [
+  { key: 'visible_text', label: 'Visible page text' },
+  { key: 'hidden_text', label: 'Hidden content' },
+  { key: 'html_comments', label: 'HTML comments' },
+  { key: 'meta_tags', label: 'Metadata' },
+  { key: 'input_values', label: 'Input fields' },
+  { key: 'aria_text', label: 'Accessibility text' },
+  { key: 'iframe_content', label: 'Nested frames' },
+  { key: 'shadow_dom_content', label: 'Shadow DOM' },
+  { key: 'inline_javascript', label: 'Inline JavaScript' },
+  { key: 'css_content', label: 'CSS content' },
+  { key: 'css_generated_content', label: 'CSS-generated content' },
+  { key: 'network_responses', label: 'Network responses' },
+  { key: 'websocket_messages', label: 'WebSocket messages' },
+  { key: 'service_worker_activity', label: 'Service-worker activity' },
+]
+
 function SuspiciousChunk({ chunk }: { chunk: ChunkResult }) {
   return (
     <article className="webpage-scan-chunk">
       <div className="webpage-scan-chunk__header">
-        <span>{chunk.chunk_id}</span>
+        <span>{chunk.source.replaceAll('_', ' ')}</span>
         <strong>{Math.round(chunk.confidence * 100)}%</strong>
       </div>
       <p>{chunk.reason}</p>
+      <p className="webpage-scan-chunk__excerpt">{chunk.excerpt}</p>
+      {chunk.matched_evidence.length > 0 ? <p className="webpage-scan-chunk__evidence">Matched text: {chunk.matched_evidence.map((term) => `“${term}”`).join(', ')}</p> : null}
       {chunk.matched_patterns.length > 0 ? (
         <div className="feature-tags">
           {chunk.matched_patterns.map((pattern) => <span className="feature-tag feature-tag--danger" key={pattern}>{pattern}</span>)}
@@ -126,6 +145,8 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
   if (!result) return null
   const details = result.analysis_details
   const suspiciousChunks = details.chunk_results.filter((chunk) => chunk.label === 'malicious')
+  const maliciousSources = new Set(suspiciousChunks.map((chunk) => chunk.source))
+  const scannedChannels = CONTENT_CHANNELS.filter(({ key }) => content[key].trim().length > 0)
   const isBlocked = !result.allowed
 
   return (
@@ -179,8 +200,25 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
               <SourceStat label="Hidden content" value={`${content.hidden_text.length.toLocaleString()} chars`} />
               <SourceStat label="HTML comments" value={`${content.html_comments.length.toLocaleString()} chars`} />
               <SourceStat label="Metadata" value={`${content.meta_tags.length.toLocaleString()} chars`} />
+              <SourceStat label="Frames & Shadow DOM" value={`${(content.iframe_content.length + content.shadow_dom_content.length).toLocaleString()} chars`} />
+              <SourceStat label="Accessibility text" value={`${content.aria_text.length.toLocaleString()} chars`} />
+              <SourceStat label="Network & sockets" value={`${(content.network_responses.length + content.websocket_messages.length).toLocaleString()} chars`} />
+              <SourceStat label="Scripts & CSS" value={`${(content.external_javascript.length + content.inline_javascript.length + content.css_content.length).toLocaleString()} chars`} />
               <SourceStat label="Content chunks" value={String(details.chunking.chunk_count)} />
               <SourceStat label="Classifier" value={details.classifier_mode === 'ml_model' ? 'ML model' : 'Rule based'} />
+            </div>
+          </section>
+
+          <section className="drawer-section">
+            <div className="drawer-section-header"><ScanIcon /> Channel results</div>
+            <div className="drawer-section-body webpage-scan-stats">
+              {scannedChannels.map(({ key, label }) => (
+                <SourceStat
+                  key={key}
+                  label={label}
+                  value={maliciousSources.has(key) ? 'Threat signal detected' : 'No injection detected'}
+                />
+              ))}
             </div>
           </section>
 
@@ -191,7 +229,7 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
                 <div className="feature-tags">
                   {result.matched_patterns.map((pattern) => <span className="feature-tag feature-tag--danger" key={pattern}>{pattern}</span>)}
                 </div>
-              ) : <p className="webpage-scan-empty">No indirect prompt-injection patterns were found in the scanned page content.</p>}
+              ) : <p className="webpage-scan-empty">All scanned content channels were benign: no instruction-like prompt injection pattern was detected.</p>}
               {suspiciousChunks.length > 0 ? (
                 <div className="webpage-scan-chunks">
                   {suspiciousChunks.map((chunk) => <SuspiciousChunk chunk={chunk} key={chunk.chunk_id} />)}

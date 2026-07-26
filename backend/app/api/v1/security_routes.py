@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Sequence, Tuple
 
 from fastapi import APIRouter, HTTPException
 
@@ -29,24 +29,51 @@ def risk_level_for_confidence(confidence: float) -> str:
     return "low"
 
 
-def excerpt_for_display(text: str) -> str:
-    return text[:140] + "..." if len(text) > 140 else text
+def excerpt_for_display(text: str, evidence: Sequence[str]) -> str:
+    """Return the text around the actual match, rather than a chunk's start."""
+    lower_text = text.lower()
+    matched_term = next((term for term in evidence if term.lower() in lower_text), "")
+    if not matched_term:
+        return text[:240] + ("..." if len(text) > 240 else "")
+
+    match_start = lower_text.index(matched_term.lower())
+    start = max(0, match_start - 110)
+    end = min(len(text), match_start + len(matched_term) + 180)
+    prefix = "..." if start else ""
+    suffix = "..." if end < len(text) else ""
+    return f"{prefix}{text[start:end]}{suffix}"
 
 
-def chunk_reason(label: str, matched_patterns: List[str]) -> str:
+def chunk_reason(label: str, matched_patterns: List[str], evidence: Sequence[str]) -> str:
     if label == "malicious":
-        return f"Chunk matched prompt injection indicators: {', '.join(matched_patterns)}."
+        phrases = ", ".join(f'“{term}”' for term in evidence[:3])
+        return f"Matched {', '.join(matched_patterns)} indicator(s): {phrases}."
 
     return "Chunk does not contain suspicious override, reveal, hidden instruction, or exfiltration intent."
 
 
-def analyze_text(raw_text: str, source: str) -> SecurityCheckResponse:
+def analyze_text(
+    raw_text: str,
+    source: str,
+    content_sources: Sequence[Tuple[str, str]] | None = None,
+) -> SecurityCheckResponse:
     normalized_prompt, preprocessing_data = preprocessing_service.preprocess(raw_text)
     preprocessing = PreprocessingSummary(**preprocessing_data)
 
     chunk_size = settings.DEFAULT_CHUNK_SIZE
     overlap = settings.DEFAULT_CHUNK_OVERLAP
-    chunks = chunking_service.chunk_text(normalized_prompt, chunk_size, overlap)
+    sources = content_sources or [("prompt", normalized_prompt)]
+    chunks = []
+    for source_name, source_text in sources:
+        # Keep the original channel text in the result so the report can show
+        # the user exactly what was captured. The classifier normalizes its own
+        # search text, while aggregate preprocessing remains in the metadata.
+        for source_chunk in chunking_service.chunk_text(source_text, chunk_size, overlap):
+            chunks.append({
+                **source_chunk,
+                "chunk_id": f"{source_name}_{source_chunk['chunk_id']}",
+                "source": source_name,
+            })
 
     chunk_results: List[ChunkResult] = []
     aggregated_evidence: Dict[str, List[str]] = {}
@@ -56,6 +83,11 @@ def analyze_text(raw_text: str, source: str) -> SecurityCheckResponse:
         label = "malicious" if detector_result["is_malicious"] else "benign"
         confidence = detector_result["confidence"] if label == "malicious" else 0.94
         matched_patterns = detector_result["matched_patterns"]
+        matched_evidence = sorted({
+            keyword
+            for keywords in detector_result["pattern_evidence"].values()
+            for keyword in keywords
+        })
         chunk_classifier_mode = detector_result.get("classifier_mode", "rule_based_fallback")
 
         for category, keywords in detector_result["pattern_evidence"].items():
@@ -67,12 +99,14 @@ def analyze_text(raw_text: str, source: str) -> SecurityCheckResponse:
         chunk_results.append(
             ChunkResult(
                 chunk_id=chunk["chunk_id"],
+                source=chunk.get("source", "prompt"),
                 label=label,
                 confidence=confidence,
                 risk_level="low" if label == "benign" else risk_level_for_confidence(confidence),
                 matched_patterns=matched_patterns,
-                reason=chunk_reason(label, matched_patterns),
-                excerpt=excerpt_for_display(chunk["text"]),
+                reason=chunk_reason(label, matched_patterns, matched_evidence),
+                excerpt=excerpt_for_display(chunk["text"], matched_evidence),
+                matched_evidence=matched_evidence,
             )
         )
 
@@ -85,11 +119,15 @@ def analyze_text(raw_text: str, source: str) -> SecurityCheckResponse:
     highest_risk_chunk = max(malicious_chunks, key=lambda chunk: chunk.confidence) if malicious_chunks else chunk_results[0]
 
     if allowed:
-        summary_reason = "No suspicious instruction override or data exfiltration pattern detected."
-        final_rationale = "The input is safe because no chunk crossed the malicious threshold."
+        summary_reason = "No instruction-like prompt injection pattern was detected in the scanned content."
+        final_rationale = "All scanned content channels were analyzed without a chunk crossing the malicious threshold."
     else:
         detection_type = "Indirect prompt injection" if source == "webpage_content" else "Prompt injection"
-        summary_reason = f"{detection_type} indicators detected in {len(malicious_chunks)} chunk(s): {', '.join(matched_patterns)}."
+        affected_sources = sorted({chunk.source.replace('_', ' ') for chunk in malicious_chunks})
+        summary_reason = (
+            f"{detection_type} indicators detected in {len(malicious_chunks)} chunk(s) from "
+            f"{', '.join(affected_sources)}: {', '.join(matched_patterns)}."
+        )
         final_rationale = (
             "The input is blocked because one or more chunks crossed the malicious threshold "
             "with matched prompt injection indicators."
@@ -143,22 +181,31 @@ def check_prompt(request: PromptCheckRequest):
 
 @router.post("/security/check-webpage", response_model=SecurityCheckResponse)
 def check_webpage(request: WebpageCheckRequest):
-    combined_webpage_content = "\n".join(
-        [
-            f"Title: {request.page_title}",
-            f"URL: {request.url}",
-            f"Visible Content: {request.visible_text}",
-            f"Hidden Elements: {request.hidden_text}",
-            f"HTML Comments: {request.html_comments}",
-            f"Meta Tags: {request.meta_tags}",
-            f"Input Fields: {request.input_values}",
-        ]
-    )
+    # Keep every capture channel separate. This prevents a match in telemetry
+    # from being misreported as page text and lets the UI identify its origin.
+    content_sources = [
+        ("visible_text", request.visible_text),
+        ("hidden_text", request.hidden_text),
+        ("html_comments", request.html_comments),
+        ("meta_tags", request.meta_tags),
+        ("input_values", request.input_values),
+        ("aria_text", request.aria_text),
+        ("iframe_content", request.iframe_content),
+        ("shadow_dom_content", request.shadow_dom_content),
+        ("inline_javascript", request.inline_javascript),
+        ("css_content", request.css_content),
+        ("css_generated_content", request.css_generated_content),
+        ("network_responses", request.network_responses),
+        ("websocket_messages", request.websocket_messages),
+        ("service_worker_activity", request.service_worker_activity),
+    ]
+    non_empty_sources = [(name, text) for name, text in content_sources if text.strip()]
 
-    if not combined_webpage_content.strip():
+    if not non_empty_sources:
         raise HTTPException(status_code=400, detail="Webpage content cannot be empty.")
 
-    return analyze_text(combined_webpage_content, "webpage_content")
+    combined_webpage_content = "\n".join(text for _, text in non_empty_sources)
+    return analyze_text(combined_webpage_content, "webpage_content", non_empty_sources)
 
 
 @router.get("/security/events")
