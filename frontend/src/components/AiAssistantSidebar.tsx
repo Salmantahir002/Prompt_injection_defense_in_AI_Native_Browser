@@ -243,7 +243,7 @@ export function AiAssistantSidebar({ onViewDetails, onSecurityEvent }: AiAssista
                       type="button"
                       onClick={() => onViewDetails?.(msg.securityResult!.analysis_details)}
                     >
-                      View Detailed Analysis
+                      View Prompt Analysis
                     </button>
                   </div>
                 </div>

@@ -560,6 +560,11 @@ te
   border-color: rgba(52, 211, 153, 0.35);
 }
 
+.scan-button:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
 .scan-button svg {
   width: 13px;
   height: 13px;
@@ -1665,6 +1670,152 @@ te
 
 .analysis-drawer--open {
   transform: translateX(0);
+}
+
+.webpage-analysis-drawer .drawer-header {
+  align-items: flex-start;
+}
+
+.webpage-scan-subtitle {
+  margin: 3px 0 0;
+  color: rgba(96, 165, 250, 0.72);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.webpage-decision-copy {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.webpage-credential-notice {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.06);
+  color: #fcd34d;
+}
+
+.webpage-credential-notice--blocked {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+}
+
+.webpage-credential-notice svg {
+  width: 18px;
+  min-width: 18px;
+  margin-top: 1px;
+}
+
+.webpage-credential-notice strong {
+  display: block;
+  font-size: 12px;
+}
+
+.webpage-credential-notice p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.webpage-scan-page {
+  display: grid;
+  gap: 5px;
+}
+
+.webpage-scan-page__label {
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.webpage-scan-page strong,
+.webpage-scan-page code {
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.webpage-scan-page code {
+  color: #93c5fd;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.webpage-scan-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.webpage-scan-stat {
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.webpage-scan-stat span {
+  display: block;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.webpage-scan-stat strong {
+  display: block;
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.webpage-scan-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.webpage-scan-chunks {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.webpage-scan-chunk {
+  padding: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 9px;
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.webpage-scan-chunk__header {
+  display: flex;
+  justify-content: space-between;
+  color: #fca5a5;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.webpage-scan-chunk p {
+  margin: 7px 0;
+  color: rgba(255, 255, 255, 0.67);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 /* ── Drawer Header ── */

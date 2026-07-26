@@ -3,10 +3,11 @@ import { AiAssistantSidebar } from './components/AiAssistantSidebar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
 import { PromptAnalysisDetailsPanel } from './components/PromptAnalysisDetailsPanel'
+import { WebpageAnalysisDetailsPanel } from './components/WebpageAnalysisDetailsPanel'
 import { extractPageContent } from './services/pageContentExtractor'
 import { checkWebpage } from './services/backendApiClient'
 import type { AnalysisDetails } from './types/analysisDetailsTypes'
-import type { SecurityEvent } from './types/securityTypes'
+import type { SecurityCheckResponse, SecurityEvent, WebpageContent } from './types/securityTypes'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
@@ -297,9 +298,14 @@ function BrowserShell() {
   const [isLoading, setIsLoading] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
 
-  // Analysis drawer state (Phase 4)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [activeDetails, setActiveDetails] = useState<AnalysisDetails | null>(null)
+  // Prompt and webpage analyses deliberately keep independent state. A benign
+  // prompt must never replace or be displayed as the result of a webpage scan.
+  const [promptDrawerOpen, setPromptDrawerOpen] = useState(false)
+  const [promptDetails, setPromptDetails] = useState<AnalysisDetails | null>(null)
+  const [webpageDrawerOpen, setWebpageDrawerOpen] = useState(false)
+  const [webpageScanResult, setWebpageScanResult] = useState<SecurityCheckResponse | null>(null)
+  const [webpageScanContent, setWebpageScanContent] = useState<WebpageContent | null>(null)
+  const [isScanningPage, setIsScanningPage] = useState(false)
 
   // Toast notifications state
   const [toasts, setToasts] = useState<(SecurityEvent & { id: string })[]>([])
@@ -373,16 +379,20 @@ function BrowserShell() {
   }, [activeTabId, handleSelectTab, tabs])
 
   const handleScanPage = useCallback(async () => {
+    if (isScanningPage) return
+
     const content = await extractPageContent(webviewRef.current)
     if (!content) {
       return
     }
 
+    setIsScanningPage(true)
     try {
       const result = await checkWebpage(content)
-      // Show result in the analysis drawer
-      setActiveDetails(result.analysis_details)
-      setDrawerOpen(true)
+      setWebpageScanContent(content)
+      setWebpageScanResult(result)
+      setPromptDrawerOpen(false)
+      setWebpageDrawerOpen(true)
 
       // Add a security toast
       addToast({
@@ -394,16 +404,23 @@ function BrowserShell() {
       })
     } catch (error) {
       console.error('[ScanPage] Failed:', error)
+    } finally {
+      setIsScanningPage(false)
     }
-  }, [addToast])
+  }, [addToast, isScanningPage])
 
-  const handleViewDetails = useCallback((details: AnalysisDetails) => {
-    setActiveDetails(details)
-    setDrawerOpen(true)
+  const handleViewPromptDetails = useCallback((details: AnalysisDetails) => {
+    setPromptDetails(details)
+    setWebpageDrawerOpen(false)
+    setPromptDrawerOpen(true)
   }, [])
 
-  const handleCloseDrawer = useCallback(() => {
-    setDrawerOpen(false)
+  const handleClosePromptDrawer = useCallback(() => {
+    setPromptDrawerOpen(false)
+  }, [])
+
+  const handleCloseWebpageDrawer = useCallback(() => {
+    setWebpageDrawerOpen(false)
   }, [])
 
   return (
@@ -450,6 +467,7 @@ function BrowserShell() {
           assistantOpen={assistantOpen}
           currentUrl={currentUrl}
           isLoading={isLoading}
+          isScanning={isScanningPage}
           onAddressChange={setAddressValue}
           onAssistantToggle={() => setAssistantOpen((isOpen) => !isOpen)}
           onBack={() => webviewRef.current?.goBack()}
@@ -468,7 +486,7 @@ function BrowserShell() {
             onSearch={(query) => handleNavigate(`https://www.google.com/search?q=${encodeURIComponent(query)}`)}
           />
           {assistantOpen ? (
-            <AiAssistantSidebar onViewDetails={handleViewDetails} onSecurityEvent={addToast} />
+            <AiAssistantSidebar onViewDetails={handleViewPromptDetails} onSecurityEvent={addToast} />
           ) : null}
         </div>
       </div>
@@ -484,7 +502,9 @@ function BrowserShell() {
           >
             <div className="toast-header">
               <span className="toast-title">
-                {toast.allowed ? '🛡️ Safe Check' : '🚨 Blocked'}
+                {toast.allowed
+                  ? (toast.source === 'webpage_content' ? '🛡️ Page scan passed' : '🛡️ Prompt check passed')
+                  : (toast.source === 'webpage_content' ? '🚨 Page threat detected' : '🚨 Malicious prompt blocked')}
               </span>
               <time className="toast-time">
                 {(() => {
@@ -504,11 +524,17 @@ function BrowserShell() {
         ))}
       </div>
 
-      {/* Analysis Details Drawer (Phase 4) */}
+      {/* These are separate reports and retain their own result state. */}
       <PromptAnalysisDetailsPanel
-        details={activeDetails}
-        isOpen={drawerOpen}
-        onClose={handleCloseDrawer}
+        details={promptDetails}
+        isOpen={promptDrawerOpen}
+        onClose={handleClosePromptDrawer}
+      />
+      <WebpageAnalysisDetailsPanel
+        content={webpageScanContent}
+        result={webpageScanResult}
+        isOpen={webpageDrawerOpen}
+        onClose={handleCloseWebpageDrawer}
       />
     </main>
   )

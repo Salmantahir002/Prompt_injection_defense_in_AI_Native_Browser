@@ -242,7 +242,7 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
       {/* Drawer */}
       <div className={`analysis-drawer ${isOpen ? 'analysis-drawer--open' : ''}`}>
         <div className="drawer-header">
-          <h3>Detailed Analysis</h3>
+          <h3>Prompt Safety Analysis</h3>
           <button className="drawer-close-btn" type="button" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -255,10 +255,10 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
             <div className="drawer-decision-label">
               {isSafe ? <ShieldCheckIcon /> : <ShieldXIcon />}
               <div>
-                <div>{isSafe ? 'Safe — Allowed' : 'Malicious — Blocked'}</div>
+              <div>{isSafe ? 'Prompt Safe — Allowed' : 'Malicious Prompt — Blocked'}</div>
                 <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.6, marginTop: 2 }}>
                   {isSafe
-                    ? `All ${details.chunk_results.length} chunks passed the safety threshold`
+                    ? `All ${details.chunk_results.length} prompt chunks passed the safety threshold`
                     : `${maliciousChunks.length} of ${details.chunk_results.length} chunks flagged`}
                 </div>
               </div>
@@ -336,7 +336,7 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
           <div className="drawer-section">
             <div className="drawer-section-header">
               <AlertTriangleIcon />
-              Threat Signals Detected
+              Prompt-Injection Signals Detected
             </div>
             <div className="drawer-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Count badges */}

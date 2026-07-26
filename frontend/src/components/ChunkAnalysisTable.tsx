@@ -48,9 +48,9 @@ export function ChunkAnalysisTable({ chunks }: ChunkAnalysisTableProps) {
                     textTransform: 'capitalize',
                     fontSize: 11.5,
                     fontWeight: 600,
-                    color: chunk.risk_level === 'Low'
+                    color: chunk.risk_level === 'low'
                       ? 'rgba(52, 211, 153, 0.75)'
-                      : chunk.risk_level === 'High'
+                      : chunk.risk_level === 'high'
                         ? '#f87171'
                         : 'rgba(251, 191, 36, 0.75)',
                   }}>

@@ -6,6 +6,7 @@ type BrowserToolbarProps = {
   assistantOpen: boolean
   currentUrl: string
   isLoading: boolean
+  isScanning: boolean
   onAddressChange: (value: string) => void
   onAssistantToggle: () => void
   onBack: () => void
@@ -78,6 +79,7 @@ export function BrowserToolbar({
   addressValue,
   assistantOpen,
   isLoading,
+  isScanning,
   onAddressChange,
   onAssistantToggle,
   onBack,
@@ -128,9 +130,9 @@ export function BrowserToolbar({
       </form>
 
       <div className="toolbar-actions">
-        <button className="scan-button" type="button" onClick={onScanPage}>
+        <button className="scan-button" type="button" onClick={onScanPage} disabled={isScanning}>
           <ShieldIcon />
-          Scan
+          {isScanning ? 'Scanning Page...' : 'Scan Page'}
         </button>
         <button
           className={`assistant-pill ${assistantOpen ? 'assistant-pill--active' : ''}`}
