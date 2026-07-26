@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AiAssistantSidebar } from './components/AiAssistantSidebar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
@@ -42,11 +42,34 @@ function getTabTitle(url: string) {
 function SlideStartButton({ onStart }: { onStart: () => void }) {
   const containerRef = useRef<HTMLButtonElement>(null)
   const handleRef = useRef<HTMLSpanElement>(null)
+  const labelRef = useRef<HTMLSpanElement>(null)
 
   const [dragOffset, setDragOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const startXRef = useRef(0)
   const maxOffsetRef = useRef(0)
+  const dragOffsetRef = useRef(0)
+  const dragAnimationFrameRef = useRef<number | null>(null)
+
+  const updateDragVisual = useCallback((offset: number) => {
+    dragOffsetRef.current = offset
+
+    if (dragAnimationFrameRef.current !== null) return
+
+    dragAnimationFrameRef.current = requestAnimationFrame(() => {
+      dragAnimationFrameRef.current = null
+      const currentOffset = dragOffsetRef.current
+      const maxOffset = maxOffsetRef.current
+
+      if (handleRef.current) {
+        handleRef.current.style.transform = `translateX(${currentOffset}px)`
+      }
+
+      if (labelRef.current && maxOffset > 0) {
+        labelRef.current.style.opacity = String(Math.max(0, 1 - currentOffset / (maxOffset * 0.7)))
+      }
+    })
+  }, [])
 
   // Track global drag events to ensure smooth dragging outside the button boundaries
   useEffect(() => {
@@ -55,7 +78,7 @@ function SlideStartButton({ onStart }: { onStart: () => void }) {
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startXRef.current
       const newOffset = Math.max(0, Math.min(maxOffsetRef.current, deltaX))
-      setDragOffset(newOffset)
+      updateDragVisual(newOffset)
 
       if (newOffset >= maxOffsetRef.current * 0.95) {
         setIsDragging(false)
@@ -68,7 +91,7 @@ function SlideStartButton({ onStart }: { onStart: () => void }) {
       if (e.touches.length === 0) return
       const deltaX = e.touches[0].clientX - startXRef.current
       const newOffset = Math.max(0, Math.min(maxOffsetRef.current, deltaX))
-      setDragOffset(newOffset)
+      updateDragVisual(newOffset)
 
       if (newOffset >= maxOffsetRef.current * 0.95) {
         setIsDragging(false)
@@ -88,12 +111,16 @@ function SlideStartButton({ onStart }: { onStart: () => void }) {
     window.addEventListener('touchend', handleDragEnd)
 
     return () => {
+      if (dragAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(dragAnimationFrameRef.current)
+        dragAnimationFrameRef.current = null
+      }
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleDragEnd)
       window.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('touchend', handleDragEnd)
     }
-  }, [isDragging, onStart])
+  }, [isDragging, onStart, updateDragVisual])
 
   const handleStartDrag = (clientX: number) => {
     if (!containerRef.current || !handleRef.current) return
@@ -165,6 +192,7 @@ function SlideStartButton({ onStart }: { onStart: () => void }) {
         →
       </span>
       <span
+        ref={labelRef}
         style={{
           opacity: textOpacity,
           transition: isDragging ? 'none' : 'opacity 0.2s ease',
@@ -187,7 +215,9 @@ function StartupScreen({
   const solarSystemRef = useRef<HTMLDivElement>(null)
   const [isGuideOpen, setIsGuideOpen] = useState(false)
 
-  useEffect(() => {
+  // Cancel the mouse-follow rAF before the transition frame paints. This keeps
+  // it from competing with the solar-system burst as the swipe completes.
+  useLayoutEffect(() => {
     if (isTransitioning) {
       if (solarSystemRef.current) {
         solarSystemRef.current.style.removeProperty('transform')

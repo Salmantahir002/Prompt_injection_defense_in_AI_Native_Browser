@@ -32,6 +32,7 @@ te
     radial-gradient(ellipse at 52% 57%, rgba(245, 190, 119, 0.22), transparent 31%),
     radial-gradient(ellipse at 34% 33%, rgba(35, 116, 112, 0.38), transparent 39%);
   animation: auroraDrift 13s ease-in-out infinite alternate;
+  will-change: transform, opacity;
 }
 
 .startup-header {
@@ -167,6 +168,10 @@ te
   animation:
     orbFloatAndPulse 6.5s ease-in-out infinite,
     orbGlow 3.5s ease-in-out infinite alternate;
+  /* Allocate the composited layer before the transition starts so the full
+     explosion can begin without a first-frame texture upload. */
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 .defense-orb::before {
@@ -179,6 +184,8 @@ te
     linear-gradient(168deg, rgba(60, 11, 16, 0.02), rgba(153, 64, 16, 0.76) 58%, rgba(18, 8, 7, 0.04));
   transform: rotate(-10deg);
   animation: beltDrift 9s linear infinite;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .defense-orb::after {
@@ -190,6 +197,7 @@ te
   opacity: 0.22;
   mix-blend-mode: overlay;
   animation: grainShimmer 8s ease-in-out infinite alternate;
+  will-change: opacity;
 }
 
 .orb-shade {
@@ -220,6 +228,7 @@ te
   height: 26%;
   background: radial-gradient(ellipse at center, rgba(212, 124, 54, 0.22), transparent 69%);
   animation: glowPulse 3s ease-in-out infinite alternate;
+  will-change: opacity;
 }
 
 .start-button {
@@ -259,6 +268,17 @@ te
   color: #121316;
   font-size: 22px;
   font-weight: 900;
+}
+
+/* These elements are all transformed or faded by the original exit
+   animation. Promoting them while the welcome screen is visible avoids a
+   layer-creation hitch on the first transition frame without changing it. */
+.welcome-title,
+.start-button,
+.terms-copy,
+.startup-header,
+.startup-guide {
+  will-change: transform, opacity;
 }
 
 .terms-copy {
