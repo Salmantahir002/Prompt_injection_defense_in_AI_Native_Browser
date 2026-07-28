@@ -3,6 +3,7 @@ import { AgentTask } from '../services/agentRuntimeCore'
 import type { ApprovalRequest } from '../services/agentApprovalPolicy'
 import type { CircuitBreakerState } from '../services/agentCircuitBreaker'
 import type { AgentScanDecision, AgentTaskResult, AgentToolCall } from '../types/agentTypes'
+import { AgentThreatDetailsModal } from './AgentThreatDetailsModal'
 
 /**
  * Agent mode: give the agent a goal and watch it work.
@@ -59,6 +60,7 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
   const [result, setResult] = useState<AgentTaskResult | null>(null)
   const [blockState, setBlockState] = useState<CircuitBreakerState | null>(null)
   const [approval, setApproval] = useState<ApprovalRequest | null>(null)
+  const [showThreatDetails, setShowThreatDetails] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const approvalResolverRef = useRef<((granted: boolean) => void) | null>(null)
@@ -107,6 +109,7 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
     setSteps([])
     setResult(null)
     setBlockState(null)
+    setShowThreatDetails(false)
     setActiveGoal(trimmedGoal)
     setGoal('')
     setStatus('Scanning the page and planning the first action…')
@@ -217,6 +220,15 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
                   Found in: {blockState.decision.blocked_sources.join(', ')}
                 </p>
               ) : null}
+              {blockState.decision ? (
+                <button
+                  type="button"
+                  className="agent-block-details-button"
+                  onClick={() => setShowThreatDetails(true)}
+                >
+                  View details
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -277,6 +289,10 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
           )}
         </div>
       </form>
+
+      {showThreatDetails && blockState?.decision ? (
+        <AgentThreatDetailsModal decision={blockState.decision} onClose={() => setShowThreatDetails(false)} />
+      ) : null}
     </div>
   )
 }
