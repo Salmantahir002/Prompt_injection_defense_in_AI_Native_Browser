@@ -2,7 +2,10 @@ import { useRef, useState, useEffect } from 'react'
 import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
 import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
+import { AgentModePanel } from './AgentModePanel'
 import { PromptInputBox } from './PromptInputBox'
+
+type SidebarMode = 'chat' | 'agent'
 
 type ChatMessage = {
   id: string
@@ -16,6 +19,9 @@ type ChatMessage = {
 
 type AiAssistantSidebarProps = {
   onViewDetails?: (details: AnalysisDetails) => void
+  /** Browser Runtime target id for the active tab, for agent mode. */
+  activeTargetId?: number | null
+  currentUrl?: string
 }
 
 function ShieldCheckIcon() {
@@ -89,7 +95,8 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, currentUrl = '' }: AiAssistantSidebarProps) {
+  const [mode, setMode] = useState<SidebarMode>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -169,8 +176,39 @@ export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
           </div>
           <h2>Kimo</h2>
         </div>
+        {/* Chat and agent mode are separate surfaces on purpose: one answers
+            questions, the other operates the browser. */}
+        <div className="assistant-mode-switch" role="tablist" aria-label="Assistant mode">
+          <button
+            className={`assistant-mode-tab ${mode === 'chat' ? 'assistant-mode-tab--active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={mode === 'chat'}
+            onClick={() => setMode('chat')}
+          >
+            Chat
+          </button>
+          <button
+            className={`assistant-mode-tab ${mode === 'agent' ? 'assistant-mode-tab--active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={mode === 'agent'}
+            onClick={() => setMode('agent')}
+          >
+            Agent
+          </button>
+        </div>
       </div>
 
+      {/* Agent mode stays mounted while chat is shown. Unmounting it would
+          abort a running task and discard a half-written goal simply because
+          the user glanced at the chat tab. */}
+      <div className="assistant-pane" hidden={mode !== 'agent'}>
+        <AgentModePanel targetId={activeTargetId} currentUrl={currentUrl} />
+      </div>
+
+      {mode === 'chat' ? (
+        <>
       {/* Welcome state or messages */}
       {!hasMessages ? (
         <div className="assistant-welcome">
@@ -256,6 +294,8 @@ export function AiAssistantSidebar({ onViewDetails }: AiAssistantSidebarProps) {
           clearSignal={clearSignal}
         />
       </div>
+        </>
+      ) : null}
     </aside>
   )
 }

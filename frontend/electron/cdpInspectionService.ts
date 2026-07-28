@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { CdpParams, CdpSession } from './browserRuntime/cdpSession.js'
 
 const MAX_TEXT_PER_SOURCE = 24_000
 const MAX_NETWORK_BODIES = 40
@@ -52,7 +52,7 @@ export type DevToolsPageContent = {
 }
 
 type InspectionState = {
-  contents: WebContents
+  session: CdpSession
   requests: Map<string, NetworkRecord>
   responseBodies: Map<string, string>
   websocketMessages: string[]
@@ -125,57 +125,60 @@ const FRAME_COLLECTOR = `(() => {
   const inputs = [...document.querySelectorAll('input, textarea, select, option')].map(el => el.value || text(el));
   return {
     visible_text: cap(document.body && document.body.innerText),
-    hidden_text: cap(unique(hidden).join('\n')),
-    html_comments: cap(comments.join('\n')),
-    meta_tags: cap(meta.join('\n')),
-    input_values: cap(inputs.join('\n')),
+    hidden_text: cap(unique(hidden).join('\\n')),
+    html_comments: cap(comments.join('\\n')),
+    meta_tags: cap(meta.join('\\n')),
+    input_values: cap(inputs.join('\\n')),
     page_title: cap(document.title, 500), url: location.href,
-    aria_text: cap(unique(aria).join('\n')),
-    shadow_dom_content: cap(unique(shadow).join('\n')),
-    css_generated_content: cap(unique(generated).join('\n')),
-    external_javascript: cap(externalScripts.join('\n')),
-    inline_javascript: cap(inlineScripts.join('\n')),
-    css_content: cap(externalCss.concat(inlineCss).join('\n')),
+    aria_text: cap(unique(aria).join('\\n')),
+    shadow_dom_content: cap(unique(shadow).join('\\n')),
+    css_generated_content: cap(unique(generated).join('\\n')),
+    external_javascript: cap(externalScripts.join('\\n')),
+    inline_javascript: cap(inlineScripts.join('\\n')),
+    css_content: cap(externalCss.concat(inlineCss).join('\\n')),
   };
 })()`
 
+const INSPECTION_DOMAINS = ['Network', 'Page', 'Runtime', 'Debugger', 'DOMSnapshot', 'Accessibility'] as const
+const INSPECTION_DOMAIN_PARAMS: Record<string, CdpParams> = {
+  Network: { maxResourceBufferSize: 1_000_000, maxTotalBufferSize: 10_000_000 },
+}
+
 /**
- * Attaches Electron's Chromium debugger to each guest webview. The renderer
- * cannot choose arbitrary targets: only webContents registered by watch() are
- * eligible for a scan request.
+ * Backs the user-initiated "Scan Page" workflow. It observes each guest
+ * webview through the shared CdpSession rather than attaching Electron's
+ * debugger itself, since a webContents permits only one attachment and the
+ * agent Browser Runtime needs the same channel.
+ *
+ * The renderer cannot choose arbitrary targets: only sessions registered by
+ * watch() are eligible for a scan request.
  */
 export class CdpInspectionService {
   private readonly states = new Map<number, InspectionState>()
 
-  watch(contents: WebContents) {
-    if (this.states.has(contents.id)) return
+  watch(session: CdpSession) {
+    if (this.states.has(session.targetId)) return
     const state: InspectionState = {
-      contents, requests: new Map(), responseBodies: new Map(), websocketMessages: [], serviceWorkerActivity: [],
+      session, requests: new Map(), responseBodies: new Map(), websocketMessages: [], serviceWorkerActivity: [],
       sourceMaps: [], redirects: [], frameNavigation: [], runtimeActivity: [], loadedResources: [],
     }
-    this.states.set(contents.id, state)
-    contents.once('destroyed', () => this.states.delete(contents.id))
+    this.states.set(session.targetId, state)
 
-    try {
-      contents.debugger.attach('1.3')
-      this.enableCollection(state)
-      contents.debugger.on('message', (_event, method, params) => this.onDebuggerMessage(state, method, params as CdpResponse))
-      contents.debugger.on('detach', (_event, reason) => console.warn(`[cdp] Detached from ${contents.id}: ${reason}`))
-    } catch (error) {
-      console.warn(`[cdp] Could not attach to guest ${contents.id}:`, error)
-    }
+    this.enableCollection(state)
+    session.on((method, params) => this.onDebuggerMessage(state, method, params as CdpResponse))
+  }
+
+  forget(targetId: number) {
+    this.states.delete(targetId)
   }
 
   private enableCollection(state: InspectionState) {
-    void Promise.all([
-      this.command(state, 'Network.enable', { maxResourceBufferSize: 1_000_000, maxTotalBufferSize: 10_000_000 }),
-      this.command(state, 'Page.enable'), this.command(state, 'Runtime.enable'), this.command(state, 'Debugger.enable'),
-      this.command(state, 'DOMSnapshot.enable'), this.command(state, 'Accessibility.enable'),
-    ]).catch((error) => console.warn('[cdp] Domain setup failed:', error))
+    void state.session.enableDomains(INSPECTION_DOMAINS, INSPECTION_DOMAIN_PARAMS)
+      .catch((error) => console.warn('[cdp] Domain setup failed:', error))
   }
 
   private command(state: InspectionState, method: string, params?: CdpResponse): Promise<CdpResponse> {
-    return state.contents.debugger.sendCommand(method, params) as Promise<CdpResponse>
+    return state.session.send(method, params)
   }
 
   private onDebuggerMessage(state: InspectionState, method: string, params: CdpResponse) {
@@ -238,9 +241,9 @@ export class CdpInspectionService {
 
   async capture(webContentsId: number): Promise<DevToolsPageContent | null> {
     const state = this.states.get(webContentsId)
-    if (!state || state.contents.isDestroyed() || !state.contents.debugger.isAttached()) return null
+    if (!state || !state.session.isAlive()) return null
 
-    const base = emptyContent(state.contents.getURL())
+    const base = emptyContent(state.session.url())
     const frameTree = await this.command(state, 'Page.getFrameTree').catch((): CdpResponse => ({}))
     const tree = frameTree.frameTree as FrameTree | undefined
     const frameIds = tree ? collectFrameIds(tree) : []
@@ -273,10 +276,32 @@ export class CdpInspectionService {
   }
 
   private async collectFrame(state: InspectionState, frameId: string): Promise<Partial<DevToolsPageContent> | null> {
-    const world = await this.command(state, 'Page.createIsolatedWorld', { frameId, worldName: 'prompt-defense-inspector', grantUniveralAccess: true }).catch((): CdpResponse => ({}))
+    const world = await this.command(state, 'Page.createIsolatedWorld', {
+      frameId,
+      worldName: 'prompt-defense-inspector',
+      grantUniversalAccess: true,
+    }).catch((error): CdpResponse => {
+      console.warn(`[cdp] createIsolatedWorld failed for frame ${frameId}:`, error)
+      return {}
+    })
+
     const contextId = typeof world.executionContextId === 'number' ? world.executionContextId : undefined
     if (!contextId) return null
-    const result = await this.command(state, 'Runtime.evaluate', { expression: FRAME_COLLECTOR, contextId, returnByValue: true }).catch((): CdpResponse => ({}))
+
+    const result = await this.command(state, 'Runtime.evaluate', {
+      expression: FRAME_COLLECTOR,
+      contextId,
+      returnByValue: true,
+    }).catch((error): CdpResponse => {
+      console.warn(`[cdp] Frame collector evaluate failed for frame ${frameId}:`, error)
+      return {}
+    })
+
+    if (result.exceptionDetails) {
+      console.warn(`[cdp] Frame collector threw for frame ${frameId}:`, JSON.stringify(result.exceptionDetails).slice(0, 600))
+      return null
+    }
+
     const resultObject = result.result as CdpResponse | undefined
     const value = resultObject?.value
     return value && typeof value === 'object' ? value as Partial<DevToolsPageContent> : null

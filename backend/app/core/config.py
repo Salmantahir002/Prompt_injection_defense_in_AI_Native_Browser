@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     DEFAULT_CHUNK_SIZE: int = 800
     DEFAULT_CHUNK_OVERLAP: int = 100
 
+    # Autonomous agent runtime
+    # Below this planner confidence the runtime pauses and asks the user
+    # instead of executing the action (Step 16).
+    AGENT_MIN_CONFIDENCE: float = 0.60
+
     # NVIDIA NIM configurations
     NVIDIA_NIM_API_KEY: str = "replace_with_your_key"
     NVIDIA_NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"

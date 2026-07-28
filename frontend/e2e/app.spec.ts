@@ -1,4 +1,4 @@
-import { _electron as electron, test, expect } from '@playwright/test'
+import { _electron as electron, test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -6,16 +6,23 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 test.describe('Prompt Defense Application E2E tests', () => {
-  let electronApp: any
-  let window: any
+  let electronApp: ElectronApplication
+  let window: Page
 
   test.beforeAll(async () => {
-    // Launch the Electron application pointing to the compiled main.js
+    // ELECTRON_RUN_AS_NODE makes electron.exe behave as a plain Node binary,
+    // which then rejects Chromium switches such as --remote-debugging-port
+    // that Playwright needs to attach. Some shells and IDE terminals export
+    // it, so it is stripped explicitly rather than inherited.
+    const cleanEnv = { ...process.env }
+    delete cleanEnv.ELECTRON_RUN_AS_NODE
+
     electronApp = await electron.launch({
       args: [path.join(__dirname, '../dist-electron/main.js')],
       env: {
-        PROMPT_DEFENSE_DEV: 'false', // Run in production-like mode so it loads dist/index.html
-        ...process.env,
+        ...cleanEnv,
+        // Last, so the production-like path is not overridden by the shell.
+        PROMPT_DEFENSE_DEV: 'false',
       },
     })
 
@@ -96,8 +103,9 @@ test.describe('Prompt Defense Application E2E tests', () => {
     // Assert that the sidebar slides into view
     await expect(assistantPanel).toBeVisible()
 
-    // Check that the sidebar welcome message renders
-    const sidebarTitle = assistantPanel.locator('h3')
+    // Scoped to the chat welcome: agent mode stays mounted alongside it and
+    // has its own heading.
+    const sidebarTitle = assistantPanel.locator('.assistant-welcome h3')
     await expect(sidebarTitle).toHaveText('Kimo')
 
     const welcomeText = assistantPanel.locator('.assistant-welcome p')

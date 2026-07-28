@@ -22,6 +22,8 @@ type NavigationEvent = Event & {
 
 export type BrowserWebViewHandle = {
   extractContent: () => Promise<WebpageContent | null>
+  /** Browser Runtime target id for this tab; null before the webview attaches. */
+  getWebContentsId: () => number | null
   getURL: () => string
   goBack: () => void
   goForward: () => void
@@ -273,6 +275,13 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
           }
           const result = await webviewRef.current.executeJavaScript(EXTRACT_CONTENT_SCRIPT)
           return result as WebpageContent
+        } catch {
+          return null
+        }
+      },
+      getWebContentsId: () => {
+        try {
+          return webviewRef.current?.getWebContentsId() ?? null
         } catch {
           return null
         }

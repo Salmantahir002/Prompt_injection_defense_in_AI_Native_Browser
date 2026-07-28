@@ -179,26 +179,40 @@ def check_prompt(request: PromptCheckRequest):
     return analyze_text(request.prompt, "direct_prompt")
 
 
+# Channels the manual "Scan Page" button analyses.
+#
+# `dom_snapshot_content` is deliberately excluded: it is the raw string table
+# from DOMSnapshot.captureSnapshot (every tag name, class, attribute value and
+# URL, unstructured). Its readable text is already covered by visible_text,
+# hidden_text and aria_text, so scanning it adds noise without reach.
+#
+# The agent scanner keeps its own copy of this list in agent_routes.py — the
+# two subsystems stay isolated — but they must agree, or a user would scan a
+# page by hand, see "safe", and then watch the agent refuse it. That agreement
+# is enforced by test_agent_and_manual_scan_agree.py.
+MANUAL_SCAN_CHANNELS = (
+    "visible_text",
+    "hidden_text",
+    "html_comments",
+    "meta_tags",
+    "input_values",
+    "aria_text",
+    "iframe_content",
+    "shadow_dom_content",
+    "inline_javascript",
+    "css_content",
+    "css_generated_content",
+    "network_responses",
+    "websocket_messages",
+    "service_worker_activity",
+)
+
+
 @router.post("/security/check-webpage", response_model=SecurityCheckResponse)
 def check_webpage(request: WebpageCheckRequest):
     # Keep every capture channel separate. This prevents a match in telemetry
     # from being misreported as page text and lets the UI identify its origin.
-    content_sources = [
-        ("visible_text", request.visible_text),
-        ("hidden_text", request.hidden_text),
-        ("html_comments", request.html_comments),
-        ("meta_tags", request.meta_tags),
-        ("input_values", request.input_values),
-        ("aria_text", request.aria_text),
-        ("iframe_content", request.iframe_content),
-        ("shadow_dom_content", request.shadow_dom_content),
-        ("inline_javascript", request.inline_javascript),
-        ("css_content", request.css_content),
-        ("css_generated_content", request.css_generated_content),
-        ("network_responses", request.network_responses),
-        ("websocket_messages", request.websocket_messages),
-        ("service_worker_activity", request.service_worker_activity),
-    ]
+    content_sources = [(name, getattr(request, name)) for name in MANUAL_SCAN_CHANNELS]
     non_empty_sources = [(name, text) for name, text in content_sources if text.strip()]
 
     if not non_empty_sources:

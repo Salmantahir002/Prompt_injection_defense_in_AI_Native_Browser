@@ -344,6 +344,8 @@ function BrowserShell() {
   const [webpageScanResult, setWebpageScanResult] = useState<SecurityCheckResponse | null>(null)
   const [webpageScanContent, setWebpageScanContent] = useState<WebpageContent | null>(null)
   const [isScanningPage, setIsScanningPage] = useState(false)
+  // Resolved lazily: the webview only has a webContents id once it attaches.
+  const [activeTargetId, setActiveTargetId] = useState<number | null>(null)
 
   const updateTabUrl = useCallback((tabId: string, url: string) => {
     setTabs((previousTabs) => previousTabs.map((tab) => (
@@ -458,6 +460,21 @@ function BrowserShell() {
     }
   }, [activeTabId, isScanningPage])
 
+  // The webview attaches asynchronously, so the id is polled while the
+  // assistant is open rather than read once at mount.
+  useEffect(() => {
+    if (!assistantOpen) return undefined
+
+    const readTargetId = () => {
+      const nextId = webviewHandlesRef.current.get(activeTabId)?.getWebContentsId() ?? null
+      setActiveTargetId((current) => (current === nextId ? current : nextId))
+    }
+
+    readTargetId()
+    const intervalId = window.setInterval(readTargetId, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [activeTabId, assistantOpen, currentUrl])
+
   const handleViewPromptDetails = useCallback((details: AnalysisDetails) => {
     setPromptDetails(details)
     setWebpageDrawerOpen(false)
@@ -541,7 +558,11 @@ function BrowserShell() {
             ))}
           </div>
           {assistantOpen ? (
-            <AiAssistantSidebar onViewDetails={handleViewPromptDetails} />
+            <AiAssistantSidebar
+              activeTargetId={activeTargetId}
+              currentUrl={currentUrl}
+              onViewDetails={handleViewPromptDetails}
+            />
           ) : null}
         </div>
       </div>
