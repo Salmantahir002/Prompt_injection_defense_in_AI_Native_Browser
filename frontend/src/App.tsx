@@ -235,35 +235,48 @@ function StartupScreen({
     let mouseY = 0
     let currentX = 0
     let currentY = 0
-    let rafId: number
+    let rafId: number | null = null
+
+    // Below this the movement is under a pixel and invisible, so the loop stops
+    // rather than committing a new transform on every frame forever. An idle
+    // welcome screen then costs the compositor nothing.
+    const SETTLE_THRESHOLD_PX = 0.15
+
+    const updatePosition = () => {
+      if (!active) return
+      rafId = null
+
+      const deltaX = mouseX - currentX
+      const deltaY = mouseY - currentY
+      currentX += deltaX * 0.08
+      currentY += deltaY * 0.08
+
+      if (solarSystemRef.current) {
+        solarSystemRef.current.style.transform = `translate3d(${currentX.toFixed(2)}px, ${currentY.toFixed(2)}px, 0)`
+      }
+
+      if (Math.abs(deltaX) > SETTLE_THRESHOLD_PX || Math.abs(deltaY) > SETTLE_THRESHOLD_PX) {
+        rafId = requestAnimationFrame(updatePosition)
+      }
+    }
 
     const handleMouseMove = (e: MouseEvent) => {
       const targetX = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2)
       const targetY = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2)
       mouseX = targetX * 180 // Prominent 180px follow displacement
       mouseY = targetY * 180
-    }
 
-    const updatePosition = () => {
-      if (!active) return
-
-      currentX += (mouseX - currentX) * 0.08
-      currentY += (mouseY - currentY) * 0.08
-
-      if (solarSystemRef.current) {
-        solarSystemRef.current.style.transform = `scale(1) translate3d(${currentX}px, ${currentY}px, 0)`
+      if (rafId === null) {
+        rafId = requestAnimationFrame(updatePosition)
       }
-
-      rafId = requestAnimationFrame(updatePosition)
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    rafId = requestAnimationFrame(updatePosition)
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
 
     return () => {
       active = false
       window.removeEventListener('mousemove', handleMouseMove)
-      cancelAnimationFrame(rafId)
+      if (rafId !== null) cancelAnimationFrame(rafId)
       if (solarSystemRef.current) {
         solarSystemRef.current.style.removeProperty('transform')
       }

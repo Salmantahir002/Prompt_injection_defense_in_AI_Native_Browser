@@ -74,18 +74,20 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
   return (
     <svg className={`kimo-mascot ${compact ? 'kimo-mascot--compact' : ''}`} viewBox="0 0 120 104" fill="none" aria-hidden="true">
       <defs>
+        {/* Gold, taken from the startup screen's amber palette (--orb-ember and
+            the #fbbf24 accents) so the mascot belongs to the same product. */}
         <linearGradient id="kimo-case" x1="24" y1="14" x2="96" y2="94" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#cfe0ff" />
-          <stop offset="0.48" stopColor="#7ea2f8" />
-          <stop offset="1" stopColor="#3c56b8" />
+          <stop stopColor="#fdeec2" />
+          <stop offset="0.48" stopColor="#fbbf24" />
+          <stop offset="1" stopColor="#a84d18" />
         </linearGradient>
         <linearGradient id="kimo-screen" x1="32" y1="26" x2="88" y2="66" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#16244f" />
-          <stop offset="1" stopColor="#080e26" />
+          <stop stopColor="#3a1d09" />
+          <stop offset="1" stopColor="#150a03" />
         </linearGradient>
         <radialGradient id="kimo-halo" cx="0.5" cy="0.5" r="0.5">
-          <stop stopColor="#7ea2f8" stopOpacity="0.34" />
-          <stop offset="1" stopColor="#7ea2f8" stopOpacity="0" />
+          <stop stopColor="#fbbf24" stopOpacity="0.34" />
+          <stop offset="1" stopColor="#fbbf24" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -94,37 +96,37 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <g className="kimo-mascot__trail">
           <path d="M16 40l2.2 5.2L23.4 47l-5.2 2.2L16 54.4l-2.2-5.2L8.6 47l5.2-1.8L16 40Z" fill="#fcd34d" />
-          <circle cx="104" cy="34" r="2.6" fill="#75e2cf" />
-          <circle cx="98" cy="76" r="2" fill="#f4b7dc" />
+          <circle cx="104" cy="34" r="2.6" fill="#f0a04b" />
+          <circle cx="98" cy="76" r="2" fill="#fdeec2" />
         </g>
       ) : null}
 
       <g className="kimo-mascot__character">
         {/* Stubby arms, tucked close so the silhouette stays compact. */}
         <g className="kimo-mascot__arm kimo-mascot__arm--left">
-          <path d="M36 74h-7" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
+          <path d="M36 74h-7" stroke="#e0952a" strokeWidth="8" strokeLinecap="round" />
         </g>
         <g className="kimo-mascot__arm kimo-mascot__arm--right">
-          <path d="M84 74h7" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
+          <path d="M84 74h7" stroke="#e0952a" strokeWidth="8" strokeLinecap="round" />
         </g>
 
         {/* Short body — a rounded plinth rather than a torso with legs. */}
-        <path d="M38 62h44v14c0 6.6-5.4 12-12 12H50c-6.6 0-12-5.4-12-12V62Z" fill="url(#kimo-case)" stroke="#c3daff" strokeWidth="2" />
-        <rect x="52" y="70" width="16" height="9" rx="4.5" fill="#16244f" stroke="#8ac7ff" strokeWidth="1.4" />
+        <path d="M38 62h44v14c0 6.6-5.4 12-12 12H50c-6.6 0-12-5.4-12-12V62Z" fill="url(#kimo-case)" stroke="#f6d68f" strokeWidth="2" />
+        <rect x="52" y="70" width="16" height="9" rx="4.5" fill="#3a1d09" stroke="#f5c05a" strokeWidth="1.4" />
 
         <g className="kimo-mascot__head">
-          <path d="M60 14v-6" stroke="#9fc5ff" strokeWidth="3.4" strokeLinecap="round" />
-          <circle className="kimo-mascot__antenna" cx="60" cy="6" r="4" fill="#86f4e5" />
-          <rect x="20" y="14" width="80" height="52" rx="24" fill="url(#kimo-case)" stroke="#d3e4ff" strokeWidth="2" />
-          <rect x="29" y="22" width="62" height="36" rx="16" fill="url(#kimo-screen)" stroke="#93baff" strokeOpacity="0.5" strokeWidth="1.5" />
+          <path d="M60 14v-6" stroke="#f0c264" strokeWidth="3.4" strokeLinecap="round" />
+          <circle className="kimo-mascot__antenna" cx="60" cy="6" r="4" fill="#fde68a" />
+          <rect x="20" y="14" width="80" height="52" rx="24" fill="url(#kimo-case)" stroke="#fdeec2" strokeWidth="2" />
+          <rect x="29" y="22" width="62" height="36" rx="16" fill="url(#kimo-screen)" stroke="#f7c96b" strokeOpacity="0.5" strokeWidth="1.5" />
           <g className="kimo-mascot__eyes kimo-mascot__eyes--calm">
-            <rect x="43" y="35" width="9" height="9" rx="4.5" fill="#86f4e5" />
-            <rect x="68" y="35" width="9" height="9" rx="4.5" fill="#86f4e5" />
+            <rect x="43" y="35" width="9" height="9" rx="4.5" fill="#ffd066" />
+            <rect x="68" y="35" width="9" height="9" rx="4.5" fill="#ffd066" />
           </g>
           <g className="kimo-mascot__eyes kimo-mascot__eyes--happy">
-            <path d="M42 42q5.5 -8 11 0M67 42q5.5 -8 11 0" stroke="#e2ffff" strokeWidth="3.2" strokeLinecap="round" />
+            <path d="M42 42q5.5 -8 11 0M67 42q5.5 -8 11 0" stroke="#fff4d6" strokeWidth="3.2" strokeLinecap="round" />
           </g>
-          <path d="M53 50q7 4.5 14 0" stroke="#7ee9d8" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M53 50q7 4.5 14 0" stroke="#f5c05a" strokeWidth="2.2" strokeLinecap="round" />
         </g>
       </g>
     </svg>

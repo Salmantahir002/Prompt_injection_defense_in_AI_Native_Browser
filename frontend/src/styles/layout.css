@@ -18,12 +18,17 @@
   pointer-events: none;
 }
 
+/* A 4px tile repeated by the compositor, not a viewport-sized
+   `repeating-radial-gradient`: the latter is per-pixel work across the whole
+   screen every time the layer rasters. `mix-blend-mode` is gone too — blending
+   over the animating aurora forced an intermediate surface each frame. */
 .grain-layer {
-  opacity: 0.28; /* Slightly adjusted opacity to blend perfectly without needing the expensive contrast/brightness filters */
-  mix-blend-mode: screen;
+  opacity: 0.2;
   background-image:
-    repeating-radial-gradient(circle at 17% 22%, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 4px),
-    repeating-radial-gradient(circle at 83% 64%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 5px);
+    radial-gradient(circle, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px);
+  background-size: 4px 4px, 5px 5px;
+  background-position: 0 0, 2px 3px;
 }
 
 .aurora-layer {
@@ -32,6 +37,8 @@
     radial-gradient(ellipse at 34% 33%, rgba(35, 116, 112, 0.38), transparent 39%);
   animation: auroraDrift 13s ease-in-out infinite alternate;
   will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .startup-header {
@@ -145,6 +152,21 @@
   perspective: 900px;
 }
 
+/* The orb's breathing glow. It used to be an animated `box-shadow` on the orb
+   itself, which repaints six blurred shadow layers every frame; as its own
+   layer fading in and out it is a pure compositor opacity change. */
+.orb-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(245, 150, 60, 0.3) 0%, rgba(196, 69, 35, 0.14) 42%, transparent 68%);
+  animation: orbGlow 3.5s ease-in-out infinite alternate;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
 /* ── Orb with ALIVE animations ── */
 
 .defense-orb {
@@ -157,16 +179,13 @@
     radial-gradient(circle at 34% 20%, rgba(246, 134, 123, 0.34), transparent 27%),
     radial-gradient(circle at 45% 30%, #8e2a28, transparent 43%),
     linear-gradient(155deg, var(--orb-red), var(--orb-ember) 58%, var(--orb-shadow));
+  /* Static: only the two inset shades and the drop shadow stay on the orb. The
+     outer bloom moved to .orb-wrap::before so nothing here repaints. */
   box-shadow:
     inset -48px -32px 66px rgba(0, 0, 0, 0.62),
-    inset 38px 26px 58px rgba(255, 166, 88, 0.16),
-    32px 50px 50px rgba(0, 0, 0, 0.58),
-    0 0 54px rgba(196, 69, 35, 0.18),
-    0 0 100px rgba(196, 69, 35, 0.12),
-    0 0 200px rgba(196, 69, 35, 0.06);
-  animation:
-    orbFloatAndPulse 6.5s ease-in-out infinite,
-    orbGlow 3.5s ease-in-out infinite alternate;
+    inset 38px 26px 58px rgba(255, 166, 88, 0.19),
+    32px 50px 50px rgba(0, 0, 0, 0.58);
+  animation: orbFloatAndPulse 6.5s ease-in-out infinite;
   /* Allocate the composited layer before the transition starts so the full
      explosion can begin without a first-frame texture upload. */
   will-change: transform, opacity;
@@ -192,9 +211,9 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background-image: repeating-radial-gradient(circle at 39% 28%, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px 3px);
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px);
+  background-size: 3px 3px;
   opacity: 0.22;
-  mix-blend-mode: overlay;
   animation: grainShimmer 8s ease-in-out infinite alternate;
   will-change: opacity;
 }
@@ -1108,7 +1127,7 @@
 .assistant-logo svg {
   width: 16px;
   height: 16px;
-  color: #8ab4f8;
+  color: #fbbf24;
 }
 
 .kimo-mascot {
@@ -1138,7 +1157,7 @@
 .kimo-mascot__character {
   transform-origin: 60px 56px;
   animation: kimo-pet-float 4.2s ease-in-out infinite;
-  filter: drop-shadow(0 12px 12px rgba(61, 121, 255, 0.24));
+  filter: drop-shadow(0 12px 12px rgba(251, 191, 36, 0.26));
 }
 
 .kimo-mascot--compact .kimo-mascot__character {
@@ -1242,7 +1261,7 @@
 }
 
 .assistant-welcome-logo svg {
-  color: #8ab4f8;
+  color: #fbbf24;
 }
 
 .assistant-welcome h3 {
@@ -2409,23 +2428,14 @@
   }
 }
 
+/* Opacity only — see .orb-wrap::before. */
 @keyframes orbGlow {
   0% {
-    box-shadow:
-      inset -48px -32px 66px rgba(0, 0, 0, 0.62),
-      inset 38px 26px 58px rgba(255, 166, 88, 0.16),
-      0 0 54px rgba(196, 69, 35, 0.18),
-      0 0 100px rgba(196, 69, 35, 0.08),
-      0 0 200px rgba(196, 69, 35, 0.04);
+    opacity: 0.55;
   }
 
   100% {
-    box-shadow:
-      inset -48px -32px 66px rgba(0, 0, 0, 0.55),
-      inset 38px 26px 58px rgba(255, 166, 88, 0.22),
-      0 0 70px rgba(245, 150, 60, 0.25),
-      0 0 140px rgba(245, 150, 60, 0.12),
-      0 0 260px rgba(245, 150, 60, 0.06);
+    opacity: 1;
   }
 }
 
@@ -2798,6 +2808,28 @@
   backface-visibility: hidden;
 }
 
+/* The orb grows to 5× here. Anything textured or blurred inside it would have
+   to be re-rastered at every step of that growth, which is exactly where the
+   frame budget went. None of it is legible at that scale anyway, so the
+   decoration is switched off for the duration and the explosion gets the
+   whole frame to itself. */
+.startup-screen--transitioning .defense-orb::before,
+.startup-screen--transitioning .defense-orb::after,
+.startup-screen--transitioning .orb-shade--belt,
+.startup-screen--transitioning .orb-shade--glow,
+.startup-screen--transitioning .aurora-layer,
+.startup-screen--transitioning .orb-wrap::before {
+  animation: none;
+  opacity: 0;
+  filter: none;
+  transition: opacity 0.4s ease;
+}
+
+.startup-screen--transitioning .grain-layer {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
 @keyframes orbExplode {
   0% {
     transform: scale(1) translate3d(0, 0, 0);
@@ -2835,22 +2867,25 @@
    Blown Shell Grow-In Transition
    ──────────────────────────────────────────────────── */
 
+/* Opacity only, deliberately. This wrapper contains the Electron <webview>,
+   and scaling it forces the guest to re-raster its whole surface on every
+   frame while it is still attaching — the hitch that used to land right as the
+   browser appeared. A fade reaches the same place at a fixed cost per frame. */
 .blown-shell-wrapper {
-  animation: shellBlownIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  transform-origin: center center;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
+  height: 100vh;
+  /* No `will-change` on purpose: it would leave the entire browser promoted to
+     its own layer for the rest of the session. Chromium promotes for the
+     duration of a running opacity animation and releases it afterwards. */
+  animation: shellBlownIn 0.42s ease-out forwards;
 }
 
 @keyframes shellBlownIn {
   from {
     opacity: 0;
-    transform: scale(0.9) translate3d(0, 0, 0);
   }
 
   to {
     opacity: 1;
-    transform: scale(1) translate3d(0, 0, 0);
   }
 }
 /* Webpage scan progress — deliberately scoped to content the active webview exposes. */
