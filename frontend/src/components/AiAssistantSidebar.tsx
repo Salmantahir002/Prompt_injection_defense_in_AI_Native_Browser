@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
 import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
@@ -25,7 +26,15 @@ type AiAssistantSidebarProps = {
   currentUrl?: string
   /** Opens a tab for the agent's `open_tab` tool; resolves to its target id. */
   onOpenTab?: (url?: string) => Promise<number | null>
+  /** Current panel width in px; owned by the shell, which sets the grid column. */
+  width?: number
+  onWidthChange?: (width: number) => void
+  /** Raised while the edge is being dragged so the shell can shield the webview. */
+  onResizingChange?: (isResizing: boolean) => void
 }
+
+/** Keyboard nudge per arrow press on the resize separator. */
+const RESIZE_STEP = 24
 
 function ShieldCheckIcon() {
   return (
@@ -42,6 +51,15 @@ function ShieldXIcon() {
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       <line x1="9" y1="9" x2="15" y2="15" />
       <line x1="15" y1="9" x2="9" y2="15" />
+    </svg>
+  )
+}
+
+function NewSessionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
+      <path d="M18.4 3.6a1.98 1.98 0 0 1 2.8 2.8L12.7 15l-3.5.7.7-3.5 8.5-8.6z" />
     </svg>
   )
 }
@@ -113,10 +131,21 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, currentUrl = '', onOpenTab }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({
+  onViewDetails,
+  activeTargetId = null,
+  currentUrl = '',
+  onOpenTab,
+  width = 400,
+  onWidthChange,
+  onResizingChange,
+}: AiAssistantSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
+  // Bumped to remount the agent panel, which is how "new task" discards a
+  // running task and its transcript in one step.
+  const [agentSessionId, setAgentSessionId] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const prevMsgCountRef = useRef<number>(0)
@@ -182,10 +211,70 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
     }
   }
 
+  /** Starts a fresh session in whichever surface is currently showing. */
+  function handleNewSession() {
+    if (mode === 'chat') {
+      setMessages([])
+      setIsChecking(false)
+      setClearSignal((v) => v + 1)
+      return
+    }
+    setAgentSessionId((id) => id + 1)
+  }
+
+  // The drag is tracked on the handle itself via pointer capture: without it
+  // the pointer crosses into the Electron <webview>, whose guest process would
+  // swallow the move events and strand the drag.
+  function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return
+    event.preventDefault()
+
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    onResizingChange?.(true)
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      onWidthChange?.(window.innerWidth - moveEvent.clientX)
+    }
+    const handleEnd = () => {
+      handle.removeEventListener('pointermove', handleMove)
+      handle.removeEventListener('pointerup', handleEnd)
+      handle.removeEventListener('pointercancel', handleEnd)
+      onResizingChange?.(false)
+    }
+
+    handle.addEventListener('pointermove', handleMove)
+    handle.addEventListener('pointerup', handleEnd)
+    handle.addEventListener('pointercancel', handleEnd)
+  }
+
+  function handleResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      onWidthChange?.(width + RESIZE_STEP)
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      onWidthChange?.(width - RESIZE_STEP)
+    }
+  }
+
   const hasMessages = messages.length > 0
+  const canStartNewSession = mode === 'agent' || hasMessages || isChecking
 
   return (
     <aside className="assistant-panel" aria-label="Kimo panel">
+      {/* Drag edge. `separator` + arrow keys keeps the panel resizable without
+          a pointer. */}
+      <div
+        className="assistant-resize-handle"
+        role="separator"
+        aria-label="Resize assistant panel"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(width)}
+        tabIndex={0}
+        onPointerDown={handleResizePointerDown}
+        onKeyDown={handleResizeKeyDown}
+      />
       {/* Header */}
       <div className="assistant-header">
         <div className="assistant-header-left">
@@ -194,26 +283,43 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
           </div>
           <h2>Kimo</h2>
         </div>
-        {/* Chat and agent mode are separate surfaces on purpose: one answers
-            questions, the other operates the browser. */}
-        <div className="assistant-mode-switch" role="tablist" aria-label="Assistant mode">
+        <div className="assistant-header-right">
+          {/* Chat and agent mode are separate surfaces on purpose: one answers
+              questions, the other operates the browser. */}
+          <div className="assistant-mode-switch" role="tablist" aria-label="Assistant mode">
+            <button
+              className={`assistant-mode-tab ${mode === 'chat' ? 'assistant-mode-tab--active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === 'chat'}
+              onClick={() => setMode('chat')}
+            >
+              Chat
+            </button>
+            <button
+              className={`assistant-mode-tab ${mode === 'agent' ? 'assistant-mode-tab--active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === 'agent'}
+              onClick={() => setMode('agent')}
+            >
+              Agent
+            </button>
+          </div>
+
+          <span className="assistant-header-divider" aria-hidden="true" />
+
+          {/* One button, scoped to the visible surface: the other mode's session
+              is left untouched behind it. */}
           <button
-            className={`assistant-mode-tab ${mode === 'chat' ? 'assistant-mode-tab--active' : ''}`}
+            className="assistant-new-button"
             type="button"
-            role="tab"
-            aria-selected={mode === 'chat'}
-            onClick={() => setMode('chat')}
+            disabled={!canStartNewSession}
+            title={mode === 'chat' ? 'New chat' : 'New agent task'}
+            aria-label={mode === 'chat' ? 'New chat' : 'New agent task'}
+            onClick={handleNewSession}
           >
-            Chat
-          </button>
-          <button
-            className={`assistant-mode-tab ${mode === 'agent' ? 'assistant-mode-tab--active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={mode === 'agent'}
-            onClick={() => setMode('agent')}
-          >
-            Agent
+            <NewSessionIcon />
           </button>
         </div>
       </div>
@@ -222,7 +328,7 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
           abort a running task and discard a half-written goal simply because
           the user glanced at the chat tab. */}
       <div className="assistant-pane" hidden={mode !== 'agent'}>
-        <AgentModePanel targetId={activeTargetId} currentUrl={currentUrl} onOpenTab={onOpenTab} />
+        <AgentModePanel key={agentSessionId} targetId={activeTargetId} currentUrl={currentUrl} onOpenTab={onOpenTab} />
       </div>
 
       {mode === 'chat' ? (

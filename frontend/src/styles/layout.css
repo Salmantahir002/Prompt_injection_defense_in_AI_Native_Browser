@@ -644,7 +644,18 @@
 }
 
 .content-grid--assistant-open {
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) var(--assistant-width, 400px);
+}
+
+/* While the edge is dragged the webview must not take the pointer: the guest
+   process would swallow the move events and the drag would stick. */
+.content-grid--resizing .webview-stack {
+  pointer-events: none;
+}
+
+.content-grid--resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .webview-stack {
@@ -973,7 +984,9 @@
    ──────────────────────────────────────────────────── */
 
 /* The assistant surface is typeset in its own family (see --font-assistant):
-   an interface grotesque, distinct from the browser chrome around it. */
+   an interface grotesque, distinct from the browser chrome around it. Its
+   surfaces, however, are the browser's own greys — the panel is part of the
+   window, not a differently-coloured app pinned to its side. */
 .assistant-panel {
   min-height: 0;
   display: flex;
@@ -982,22 +995,29 @@
   overflow: hidden;
   font-family: var(--font-assistant);
   letter-spacing: -0.006em;
-  background:
-    radial-gradient(120% 62% at 50% -8%, rgba(126, 162, 248, 0.16), transparent 62%),
-    radial-gradient(90% 46% at 12% 104%, rgba(52, 211, 153, 0.07), transparent 60%),
-    linear-gradient(180deg, #0e1116 0%, #0a0c11 46%, #07090d 100%);
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  background: #1a1d1f;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* One quiet light source at the top instead of the old starfield: the panel
-   should recede behind the conversation, not compete with it. */
-.assistant-panel::before {
-  content: '';
+/* Drag edge, sitting on the panel's own border so it reads as the seam between
+   the page and the panel rather than as a control. */
+.assistant-resize-handle {
   position: absolute;
-  inset: 0 0 auto;
-  height: 220px;
-  pointer-events: none;
-  background: radial-gradient(80% 100% at 50% 0%, rgba(138, 180, 248, 0.1), transparent 70%);
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 6;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+  touch-action: none;
+}
+
+.assistant-resize-handle:hover,
+.assistant-resize-handle:focus-visible {
+  background: rgba(138, 180, 248, 0.35);
+  outline: 0;
 }
 
 /* Header Area */
@@ -1008,10 +1028,62 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-  background: rgba(10, 12, 17, 0.55);
-  backdrop-filter: blur(14px);
+  padding: 10px 14px 10px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #202225;
+}
+
+.assistant-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.assistant-header-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Same shape and weight as the toolbar's round icon buttons, so the header
+   reads as one family of controls with the chrome above it. */
+.assistant-new-button {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assistant-new-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.assistant-new-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.assistant-new-button:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.assistant-new-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.assistant-new-button:focus-visible {
+  outline: 2px solid rgba(138, 180, 248, 0.7);
+  outline-offset: 2px;
 }
 
 .assistant-header-left {
@@ -1024,10 +1096,10 @@
 .assistant-logo {
   width: 30px;
   height: 30px;
-  border-radius: 10px;
-  background: linear-gradient(150deg, rgba(126, 162, 248, 0.26), rgba(13, 27, 42, 0.9));
-  border: 1px solid rgba(138, 180, 248, 0.24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: #2a2e31;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -1122,7 +1194,7 @@
   margin: 0;
   font-size: 14.5px;
   font-weight: 600;
-  color: #e7eefb;
+  color: rgba(255, 255, 255, 0.92);
   letter-spacing: -0.01em;
 }
 
@@ -1178,14 +1250,14 @@
   font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #f2f6ff;
+  color: rgba(255, 255, 255, 0.94);
   margin: 0;
 }
 
 .assistant-welcome p {
   margin: 0;
   font-size: 13px;
-  color: rgba(220, 234, 255, 0.55);
+  color: rgba(255, 255, 255, 0.5);
   line-height: 1.6;
   max-width: 264px;
   text-wrap: balance;
@@ -1314,9 +1386,9 @@
 }
 
 .chat-bubble--user {
-  background: rgba(126, 162, 248, 0.16);
-  border: 1px solid rgba(126, 162, 248, 0.2);
-  color: rgba(238, 244, 255, 0.94);
+  background: #2a2e31;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
   border-bottom-right-radius: 6px;
 }
 
@@ -1328,7 +1400,7 @@
   gap: 9px;
   padding: 2px 2px 2px 0;
   font-size: 12.5px;
-  color: rgba(220, 234, 255, 0.45);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* Inline Security Card in Chat */
@@ -1438,8 +1510,8 @@
 /* Chat Input Area */
 .chat-input-area {
   padding: 12px 14px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-  background: linear-gradient(180deg, rgba(8, 10, 14, 0) 0%, rgba(8, 10, 14, 0.5) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #202225;
 }
 
 .chat-input-context {
@@ -1459,9 +1531,9 @@
 .prompt-form {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
+  background: #2a2e31;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -1590,8 +1662,8 @@
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  background: linear-gradient(150deg, rgba(126, 162, 248, 0.24), rgba(13, 27, 42, 0.85));
-  border: 1px solid rgba(138, 180, 248, 0.2);
+  background: #2a2e31;
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .llm-answer-avatar .kimo-mascot {
@@ -2891,7 +2963,7 @@
   gap: 2px;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: #2a2e31;
   border: 1px solid rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
@@ -2900,7 +2972,7 @@
   appearance: none;
   border: 0;
   background: transparent;
-  color: rgba(233, 238, 245, 0.55);
+  color: rgba(255, 255, 255, 0.55);
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
@@ -2912,13 +2984,13 @@
 }
 
 .assistant-mode-tab:hover {
-  color: rgba(233, 238, 245, 0.9);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .assistant-mode-tab--active {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f0f5ff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: #3a3f43;
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .assistant-mode-tab:focus-visible {

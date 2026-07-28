@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { AiAssistantSidebar } from './components/AiAssistantSidebar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
@@ -328,6 +329,27 @@ function StartupScreen({
   )
 }
 
+/* The panel is a grid column, so its width has to stay wide enough to read and
+   narrow enough to leave the page usable. */
+const ASSISTANT_MIN_WIDTH = 320
+const ASSISTANT_MAX_WIDTH = 760
+const ASSISTANT_DEFAULT_WIDTH = 400
+const ASSISTANT_WIDTH_STORAGE_KEY = 'promptguard.assistantWidth'
+
+function clampAssistantWidth(width: number): number {
+  // Never let the panel crowd the page out entirely on a small window.
+  const upperBound = Math.max(
+    ASSISTANT_MIN_WIDTH,
+    Math.min(ASSISTANT_MAX_WIDTH, window.innerWidth - 420),
+  )
+  return Math.round(Math.min(Math.max(width, ASSISTANT_MIN_WIDTH), upperBound))
+}
+
+function readStoredAssistantWidth(): number {
+  const stored = Number(window.localStorage.getItem(ASSISTANT_WIDTH_STORAGE_KEY))
+  return Number.isFinite(stored) && stored > 0 ? clampAssistantWidth(stored) : ASSISTANT_DEFAULT_WIDTH
+}
+
 function BrowserShell() {
   const webviewHandlesRef = useRef(new Map<string, BrowserWebViewHandle>())
   const nextTabId = useRef(2)
@@ -339,6 +361,8 @@ function BrowserShell() {
   const [addressValue, setAddressValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantWidth, setAssistantWidth] = useState(readStoredAssistantWidth)
+  const [isResizingAssistant, setIsResizingAssistant] = useState(false)
 
   // Prompt and webpage analyses deliberately keep independent state. A benign
   // prompt must never replace or be displayed as the result of a webpage scan.
@@ -527,6 +551,23 @@ function BrowserShell() {
     setWebpageDrawerOpen(false)
   }, [])
 
+  const handleAssistantWidthChange = useCallback((width: number) => {
+    setAssistantWidth(clampAssistantWidth(width))
+  }, [])
+
+  // Persisted after the drag rather than during it, so one resize is one write.
+  useEffect(() => {
+    if (isResizingAssistant) return
+    window.localStorage.setItem(ASSISTANT_WIDTH_STORAGE_KEY, String(assistantWidth))
+  }, [assistantWidth, isResizingAssistant])
+
+  // A shrinking window can leave a stored width wider than the shell allows.
+  useEffect(() => {
+    const handleResize = () => setAssistantWidth((current) => clampAssistantWidth(current))
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   return (
     <main className="browser-shell">
       {/* Tab Strip */}
@@ -580,7 +621,10 @@ function BrowserShell() {
           onReload={() => webviewHandlesRef.current.get(activeTabId)?.reload()}
           onScanPage={handleScanPage}
         />
-        <div className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''}`}>
+        <div
+          className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''} ${isResizingAssistant ? 'content-grid--resizing' : ''}`}
+          style={{ '--assistant-width': `${assistantWidth}px` } as CSSProperties}
+        >
           <div className="webview-stack">
             {tabs.map((tab) => (
               <BrowserWebView
@@ -600,7 +644,10 @@ function BrowserShell() {
               activeTargetId={activeTargetId}
               currentUrl={currentUrl}
               onOpenTab={handleAgentOpenTab}
+              onResizingChange={setIsResizingAssistant}
               onViewDetails={handleViewPromptDetails}
+              onWidthChange={handleAssistantWidthChange}
+              width={assistantWidth}
             />
           ) : null}
         </div>
