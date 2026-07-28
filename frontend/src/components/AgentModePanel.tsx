@@ -52,6 +52,7 @@ function describeArguments(toolCall: AgentToolCall): string {
 
 export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePanelProps) {
   const [goal, setGoal] = useState('')
+  const [activeGoal, setActiveGoal] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [steps, setSteps] = useState<StepEntry[]>([])
   const [status, setStatus] = useState('')
@@ -106,6 +107,8 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
     setSteps([])
     setResult(null)
     setBlockState(null)
+    setActiveGoal(trimmedGoal)
+    setGoal('')
     setStatus('Scanning the page and planning the first action…')
 
     const task = new AgentTask({
@@ -154,6 +157,8 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
     setStatus('Stopping…')
   }
 
+  const hasPage = Boolean(currentUrl) && currentUrl !== 'about:blank'
+
   const resultTone = result?.status === 'completed'
     ? 'agent-result--ok'
     : result?.status === 'blocked' ? 'agent-result--blocked' : 'agent-result--failed'
@@ -162,15 +167,25 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
     <div className="agent-mode" aria-label="Agent mode">
       {steps.length === 0 && !result && !isRunning ? (
         <div className="agent-intro">
+          <span className="agent-intro-badge">
+            <ShieldIcon />
+            Scanned before every action
+          </span>
           <h3>Agent mode</h3>
           <p>
             Give the agent a goal and it will operate this tab for you. Every page
             it reaches is scanned for hidden instructions before it is allowed to act.
           </p>
-          <p className="agent-intro-page">{currentUrl && currentUrl !== 'about:blank' ? currentUrl : 'Open a page to begin.'}</p>
+          {/* The page address is deliberately not printed here — it is already in
+              the address bar, and a long URL wrecked this panel's layout. */}
+          {/* `status` here is a refusal from a failed start (e.g. the view is not
+              attached yet) — without this it would never be seen. */}
+          {status ? <p className="agent-intro-hint">{status}</p> : hasPage ? null : <p className="agent-intro-hint">Open a page to begin.</p>}
         </div>
       ) : (
         <div className="agent-timeline">
+          {activeGoal ? <div className="agent-goal-bubble">{activeGoal}</div> : null}
+
           {steps.map((entry) => (
             <div className="agent-step" key={entry.id}>
               <span className="agent-step-index">{entry.step}</span>
@@ -235,6 +250,8 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
         </div>
       ) : null}
 
+      {/* The goal box and its button share one framed composer so the button
+          can never drift out of alignment as the textarea grows. */}
       <form className="agent-goal-form" onSubmit={handleSubmit}>
         <textarea
           className="agent-goal-input"
@@ -251,11 +268,14 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
             }
           }}
         />
-        {isRunning ? (
-          <button type="button" className="agent-stop-button" onClick={handleStop}>Stop</button>
-        ) : (
-          <button type="submit" className="agent-run-button" disabled={!goal.trim()}>Run</button>
-        )}
+        <div className="agent-goal-footer">
+          <span className="agent-goal-hint">{isRunning ? 'Running…' : 'Enter to run'}</span>
+          {isRunning ? (
+            <button type="button" className="agent-stop-button" onClick={handleStop}>Stop</button>
+          ) : (
+            <button type="submit" className="agent-run-button" disabled={!goal.trim()}>Run</button>
+          )}
+        </div>
       </form>
     </div>
   )

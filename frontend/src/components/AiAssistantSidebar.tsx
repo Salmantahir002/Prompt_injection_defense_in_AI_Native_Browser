@@ -3,6 +3,7 @@ import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
 import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
 import { AgentModePanel } from './AgentModePanel'
+import { MarkdownMessage } from './MarkdownMessage'
 import { PromptInputBox } from './PromptInputBox'
 
 type SidebarMode = 'chat' | 'agent'
@@ -45,53 +46,68 @@ function ShieldXIcon() {
   )
 }
 
+/**
+ * Kimo, the assistant's mascot: the same friendly screen-faced robot as before,
+ * redrawn with squat proportions — a wide head over a short body, no legs — so
+ * it reads clearly at 20px in the header as well as full size in the welcome
+ * state.
+ */
 function KimoMascot({ compact = false }: { compact?: boolean }) {
   return (
-    <svg className={`kimo-mascot ${compact ? 'kimo-mascot--compact' : ''}`} viewBox="0 0 160 150" fill="none" aria-hidden="true">
+    <svg className={`kimo-mascot ${compact ? 'kimo-mascot--compact' : ''}`} viewBox="0 0 120 104" fill="none" aria-hidden="true">
       <defs>
-        <linearGradient id="kimo-case" x1="45" y1="26" x2="115" y2="112" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#a8c8ff" />
-          <stop offset="0.52" stopColor="#628ef4" />
-          <stop offset="1" stopColor="#314aab" />
+        <linearGradient id="kimo-case" x1="24" y1="14" x2="96" y2="94" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#cfe0ff" />
+          <stop offset="0.48" stopColor="#7ea2f8" />
+          <stop offset="1" stopColor="#3c56b8" />
         </linearGradient>
-        <linearGradient id="kimo-screen" x1="54" y1="39" x2="106" y2="75" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#182b62" />
-          <stop offset="1" stopColor="#0b1434" />
+        <linearGradient id="kimo-screen" x1="32" y1="26" x2="88" y2="66" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#16244f" />
+          <stop offset="1" stopColor="#080e26" />
         </linearGradient>
+        <radialGradient id="kimo-halo" cx="0.5" cy="0.5" r="0.5">
+          <stop stopColor="#7ea2f8" stopOpacity="0.34" />
+          <stop offset="1" stopColor="#7ea2f8" stopOpacity="0" />
+        </radialGradient>
       </defs>
+
+      {!compact ? <ellipse className="kimo-mascot__halo" cx="60" cy="52" rx="56" ry="50" fill="url(#kimo-halo)" /> : null}
+
       {!compact ? (
         <g className="kimo-mascot__trail">
-          <path d="M31 77l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z" fill="#fcd34d" />
-          <path d="M45 99l2 4.5 4.5 2-4.5 2-2 4.5-2-4.5-4.5-2 4.5-2 2-4.5Z" fill="#a9d7ff" />
-          <circle cx="27" cy="109" r="3" fill="#75e2cf" />
-          <circle cx="49" cy="55" r="2" fill="#f4b7dc" />
+          <path d="M16 40l2.2 5.2L23.4 47l-5.2 2.2L16 54.4l-2.2-5.2L8.6 47l5.2-1.8L16 40Z" fill="#fcd34d" />
+          <circle cx="104" cy="34" r="2.6" fill="#75e2cf" />
+          <circle cx="98" cy="76" r="2" fill="#f4b7dc" />
         </g>
       ) : null}
+
       <g className="kimo-mascot__character">
+        {/* Stubby arms, tucked close so the silhouette stays compact. */}
         <g className="kimo-mascot__arm kimo-mascot__arm--left">
-          <path d="M56 91 40 103" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
-          <circle cx="38" cy="105" r="6" fill="#8db7ff" />
+          <path d="M36 74h-7" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
         </g>
         <g className="kimo-mascot__arm kimo-mascot__arm--right">
-          <path d="m104 91 16 12" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
-          <circle cx="122" cy="105" r="6" fill="#8db7ff" />
+          <path d="M84 74h7" stroke="#6f9dff" strokeWidth="8" strokeLinecap="round" />
         </g>
+
+        {/* Short body — a rounded plinth rather than a torso with legs. */}
+        <path d="M38 62h44v14c0 6.6-5.4 12-12 12H50c-6.6 0-12-5.4-12-12V62Z" fill="url(#kimo-case)" stroke="#c3daff" strokeWidth="2" />
+        <rect x="52" y="70" width="16" height="9" rx="4.5" fill="#16244f" stroke="#8ac7ff" strokeWidth="1.4" />
+
         <g className="kimo-mascot__head">
-          <path d="M68 29 73 22h14l5 7" stroke="#9fc5ff" strokeWidth="4" strokeLinecap="round" />
-          <rect x="43" y="30" width="74" height="55" rx="19" fill="url(#kimo-case)" stroke="#c3daff" strokeWidth="2" />
-          <rect x="52" y="39" width="56" height="35" rx="12" fill="url(#kimo-screen)" stroke="#93baff" strokeOpacity="0.55" strokeWidth="1.5" />
+          <path d="M60 14v-6" stroke="#9fc5ff" strokeWidth="3.4" strokeLinecap="round" />
+          <circle className="kimo-mascot__antenna" cx="60" cy="6" r="4" fill="#86f4e5" />
+          <rect x="20" y="14" width="80" height="52" rx="24" fill="url(#kimo-case)" stroke="#d3e4ff" strokeWidth="2" />
+          <rect x="29" y="22" width="62" height="36" rx="16" fill="url(#kimo-screen)" stroke="#93baff" strokeOpacity="0.5" strokeWidth="1.5" />
           <g className="kimo-mascot__eyes kimo-mascot__eyes--calm">
-            <path d="M63 56h9M88 56h9" stroke="#86f4e5" strokeWidth="3" strokeLinecap="round" />
+            <rect x="43" y="35" width="9" height="9" rx="4.5" fill="#86f4e5" />
+            <rect x="68" y="35" width="9" height="9" rx="4.5" fill="#86f4e5" />
           </g>
           <g className="kimo-mascot__eyes kimo-mascot__eyes--happy">
-            <path d="M62 53q5 7 10 0M87 53q5 7 10 0" stroke="#e2ffff" strokeWidth="3" strokeLinecap="round" />
+            <path d="M42 42q5.5 -8 11 0M67 42q5.5 -8 11 0" stroke="#e2ffff" strokeWidth="3.2" strokeLinecap="round" />
           </g>
-          <path d="M73 66q7 4 14 0" stroke="#7ee9d8" strokeWidth="2" strokeLinecap="round" />
+          <path d="M53 50q7 4.5 14 0" stroke="#7ee9d8" strokeWidth="2.2" strokeLinecap="round" />
         </g>
-        <path d="M60 84h40v28c0 8-7 14-16 14h-8c-9 0-16-6-16-14V84Z" fill="url(#kimo-case)" stroke="#bed8ff" strokeWidth="2" />
-        <rect x="72" y="94" width="16" height="12" rx="4" fill="#182b62" stroke="#8ac7ff" strokeWidth="1.5" />
-        <path d="M68 124v7M92 124v7" stroke="#87adff" strokeWidth="7" strokeLinecap="round" />
-        <path d="M61 132h15M84 132h15" stroke="#9bc2ff" strokeWidth="6" strokeLinecap="round" />
       </g>
     </svg>
   )
@@ -210,7 +226,7 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
       </div>
 
       {mode === 'chat' ? (
-        <>
+        <div className="assistant-pane">
       {/* Welcome state or messages */}
       {!hasMessages ? (
         <div className="assistant-welcome">
@@ -218,7 +234,7 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
             <KimoMascot />
           </div>
           <h3>Kimo</h3>
-          <p>Kimo here—your personal prompt-defense assistant.</p>
+          <p>Your prompt-defense assistant. Every message is checked for injection before it reaches the model.</p>
         </div>
       ) : (
         <div className="chat-messages">
@@ -229,8 +245,8 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
               ) : null}
 
               {msg.sender === 'assistant' && msg.isChecking ? (
-                <div className="chat-bubble chat-bubble--checking">
-                  Analyzing
+                <div className="chat-checking">
+                  <span>Checking for injection</span>
                   <div className="dot-pulse">
                     <span />
                     <span />
@@ -280,7 +296,17 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
               ) : null}
 
               {msg.sender === 'assistant' && msg.llmResponse ? (
-                <p className="llm-placeholder">{msg.llmResponse.response}</p>
+                <div className="llm-answer">
+                  <div className="llm-answer-byline">
+                    <span className="llm-answer-avatar">
+                      <KimoMascot compact />
+                    </span>
+                    Kimo
+                  </div>
+                  {/* The model replies in markdown; rendering it raw would leave
+                      `**` and `###` in the transcript. */}
+                  <MarkdownMessage text={msg.llmResponse.response} />
+                </div>
               ) : null}
             </div>
           ))}
@@ -296,7 +322,7 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
           clearSignal={clearSignal}
         />
       </div>
-        </>
+        </div>
       ) : null}
     </aside>
   )
