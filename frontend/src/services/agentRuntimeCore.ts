@@ -13,7 +13,7 @@ import { AgentRecoveryEngine, refindElement, type RecoveryContext } from './agen
 import { AgentSecurityPipeline } from './agentSecurityPipeline'
 import { AgentWorkingMemory } from './agentWorkingMemory'
 import { isTerminalTool, resolveToolCall } from './agentToolRegistry'
-import { invokeRuntime } from './browserRuntime'
+import { invokeRuntime, setAgentOverlay } from './browserRuntime'
 
 /**
  * The agent runtime core: one security-gated iteration, and the loop over it.
@@ -54,17 +54,25 @@ export type AgentTaskOptions = {
    * silently.
    */
   onApprovalRequest?: ApprovalHandler
+  /**
+   * Opens a new browser tab and resolves to its Browser Runtime target id, or
+   * null if the tab could not be opened. Supplied by the UI, which owns the tab
+   * strip. Without it the `open_tab` tool is refused rather than faked.
+   */
+  onOpenTab?: (url?: string) => Promise<number | null>
 }
 
 export class AgentTask {
   readonly taskId: string
   readonly goal: string
 
-  private readonly targetId: number
+  /** Not readonly: `open_tab` re-points the task at the tab it just opened. */
+  private targetId: number
   private readonly maxSteps: number
   private readonly signal?: AbortSignal
   private readonly events: AgentTaskEvents
   private readonly onApprovalRequest?: ApprovalHandler
+  private readonly onOpenTab?: (url?: string) => Promise<number | null>
 
   private readonly memory: AgentWorkingMemory
   private readonly breaker = new AgentCircuitBreaker()
@@ -83,6 +91,7 @@ export class AgentTask {
     this.signal = options.signal
     this.events = options.events ?? {}
     this.onApprovalRequest = options.onApprovalRequest
+    this.onOpenTab = options.onOpenTab
 
     this.memory = new AgentWorkingMemory(this.goal)
     this.security = new AgentSecurityPipeline(this.taskId)
@@ -106,6 +115,10 @@ export class AgentTask {
     if (!this.goal) {
       return { taskId: this.taskId, status: 'failed', message: 'A goal is required.', steps: 0 }
     }
+
+    // Lights the page up for the duration of the task. Cosmetic, so it is
+    // never awaited for correctness and never allowed to fail the run.
+    void setAgentOverlay(this.targetId, true)
 
     try {
       while (this.steps < this.maxSteps) {
@@ -135,6 +148,7 @@ export class AgentTask {
       return this.result('failed', `Stopped after ${this.maxSteps} steps without completing the goal.`, 'step_limit')
     } finally {
       this.security.endTask()
+      void setAgentOverlay(this.targetId, false)
     }
   }
 
@@ -222,6 +236,10 @@ export class AgentTask {
         continue
       }
 
+      if (toolCall.tool === 'open_tab') {
+        return this.openTab(toolCall, decision)
+      }
+
       lastOutcome = await this.execute(toolCall, decision)
       if (lastOutcome.status !== 'continue') return lastOutcome
 
@@ -256,6 +274,58 @@ export class AgentTask {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Opens a new tab and re-points the task at it.
+   *
+   * The tab strip lives in the renderer, not in the Browser Runtime, so this
+   * cannot be a runtime command — the runtime drives an existing target and has
+   * no concept of a tab. Switching `targetId` is the essential half: without it
+   * the agent would open a tab and carry on driving the old one.
+   *
+   * Returns `continue` rather than executing the rest of the queue, because the
+   * new tab is a different page that has not been security-scanned yet. The
+   * next iteration scans it before anything touches it.
+   */
+  private async openTab(toolCall: AgentToolCall, decision: AgentScanDecision | null): Promise<AgentIterationOutcome> {
+    if (!this.onOpenTab) {
+      const message = 'This build cannot open tabs, so the tab was not opened.'
+      this.memory.recordFailure('open_tab', message)
+      return { status: 'aborted', reason: 'action_failed', message, toolCall, decision }
+    }
+
+    const url = typeof toolCall.arguments.url === 'string' ? toolCall.arguments.url : undefined
+
+    // Stays null if onOpenTab throws, which the null check below then handles.
+    let newTargetId: number | null = null
+    try {
+      newTargetId = await this.onOpenTab(url)
+    } catch (error) {
+      this.events.onStatus?.(`Could not open a tab: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    if (newTargetId === null) {
+      const message = 'The new tab did not attach, so the agent stayed on the current tab.'
+      this.memory.recordFailure('open_tab', message)
+      this.memory.incrementRetries()
+      // Recoverable: the planner can pick a different route next iteration.
+      return { status: 'continue', message, toolCall, decision }
+    }
+
+    // The overlay follows the agent: clear it from the tab being left behind,
+    // or that tab keeps breathing after the agent has moved on.
+    void setAgentOverlay(this.targetId, false)
+    this.targetId = newTargetId
+    void setAgentOverlay(this.targetId, true)
+
+    // The breaker's verdict covered the previous page; the new tab is unscanned
+    // until the next iteration, which is exactly why the queue stops here.
+    this.memory.recordStep('open_tab', url ? `Opened a new tab at ${url}` : 'Opened a new tab')
+    this.memory.setCurrentPage(url ?? '')
+    this.events.onStatus?.(url ? `Opened a new tab at ${url}.` : 'Opened a new tab.')
+
+    return { status: 'continue', message: 'Opened a new tab; scanning it before continuing.', toolCall, decision }
   }
 
   private async pageMovedOn(plannedUrl: string): Promise<boolean> {

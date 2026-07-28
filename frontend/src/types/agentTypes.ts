@@ -7,6 +7,7 @@ export type AgentToolName =
   | 'type'
   | 'press_key'
   | 'navigate'
+  | 'open_tab'
   | 'scroll'
   | 'upload'
   | 'wait'

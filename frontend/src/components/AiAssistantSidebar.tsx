@@ -22,6 +22,8 @@ type AiAssistantSidebarProps = {
   /** Browser Runtime target id for the active tab, for agent mode. */
   activeTargetId?: number | null
   currentUrl?: string
+  /** Opens a tab for the agent's `open_tab` tool; resolves to its target id. */
+  onOpenTab?: (url?: string) => Promise<number | null>
 }
 
 function ShieldCheckIcon() {
@@ -95,7 +97,7 @@ function KimoMascot({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, currentUrl = '' }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, currentUrl = '', onOpenTab }: AiAssistantSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
@@ -204,7 +206,7 @@ export function AiAssistantSidebar({ onViewDetails, activeTargetId = null, curre
           abort a running task and discard a half-written goal simply because
           the user glanced at the chat tab. */}
       <div className="assistant-pane" hidden={mode !== 'agent'}>
-        <AgentModePanel targetId={activeTargetId} currentUrl={currentUrl} />
+        <AgentModePanel targetId={activeTargetId} currentUrl={currentUrl} onOpenTab={onOpenTab} />
       </div>
 
       {mode === 'chat' ? (

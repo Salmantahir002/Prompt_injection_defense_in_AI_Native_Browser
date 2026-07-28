@@ -81,7 +81,14 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="press_key",
-        description="Press a single key, e.g. Enter, Tab, Escape, ArrowDown.",
+        # The scope note matters: key events are delivered to the page, not to
+        # the browser, so a planner reaching for Control+t to open a tab
+        # dispatches a keystroke that succeeds and does nothing.
+        description=(
+            "Press a single key inside the page, e.g. Enter, Tab, Escape, ArrowDown. "
+            "Browser-level shortcuts such as Control+t or Control+w have no effect here "
+            "— use open_tab to open a tab."
+        ),
         parameters=(
             ToolParameter("key", "string", True, "Key name"),
         ),
@@ -92,6 +99,20 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
         parameters=(
             ToolParameter("url", "url", True, "Absolute http or https url"),
         ),
+    ),
+    ToolSpec(
+        name="open_tab",
+        description=(
+            "Open a new browser tab and switch to it, optionally loading a url. "
+            "This is the only way to open a tab. To load a url in the tab already "
+            "showing, use navigate instead."
+        ),
+        parameters=(
+            ToolParameter("url", "url", False, "Absolute http or https url to open in the new tab"),
+        ),
+        # The tab strip is renderer state, so the agent loop opens the tab and
+        # re-points itself at it; the Browser Runtime never sees this tool.
+        handled_by_loop=True,
     ),
     ToolSpec(
         name="scroll",

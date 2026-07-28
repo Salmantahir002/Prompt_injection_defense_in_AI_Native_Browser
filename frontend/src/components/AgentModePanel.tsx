@@ -26,6 +26,11 @@ type AgentModePanelProps = {
   /** Browser Runtime target id for the active tab; null before it attaches. */
   targetId: number | null
   currentUrl: string
+  /**
+   * Opens a new tab for the agent's `open_tab` tool and resolves to its target
+   * id. Omitted means the app cannot open tabs, and the tool is refused.
+   */
+  onOpenTab?: (url?: string) => Promise<number | null>
 }
 
 function ShieldIcon() {
@@ -45,7 +50,7 @@ function describeArguments(toolCall: AgentToolCall): string {
     .join(' · ')
 }
 
-export function AgentModePanel({ targetId, currentUrl }: AgentModePanelProps) {
+export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePanelProps) {
   const [goal, setGoal] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [steps, setSteps] = useState<StepEntry[]>([])
@@ -109,6 +114,7 @@ export function AgentModePanel({ targetId, currentUrl }: AgentModePanelProps) {
       targetId,
       signal: controller.signal,
       onApprovalRequest: handleApprovalRequest,
+      onOpenTab,
       events: {
         onStatus: (message) => setStatus(message),
         onSecurityBlock: (state) => setBlockState(state),

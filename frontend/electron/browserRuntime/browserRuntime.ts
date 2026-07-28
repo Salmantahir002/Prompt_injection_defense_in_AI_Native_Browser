@@ -10,6 +10,14 @@ import {
 import { capturePageScreenshot, fetchAccessibilityTree } from './pageInspector.js'
 import { buildSemanticState } from './stateBuilder.js'
 import { settleAfterAction, waitForDomStable, waitForNavigation } from './waitEngine.js'
+import {
+  moveVirtualCursor,
+  parkVirtualCursor,
+  pulseVirtualCursorClick,
+  pulseVirtualCursorScroll,
+  pulseVirtualCursorTyping,
+  setAgentOverlayActive,
+} from './virtualCursor.js'
 import { captureActionSignature, verifyAction, type ActionSignature } from './verificationEngine.js'
 import {
   BrowserRuntimeError,
@@ -31,6 +39,7 @@ import {
   type RuntimeResult,
   type ScreenshotParams,
   type ScreenshotResult,
+  type OverlayParams,
   type ScrollParams,
   type TargetDescriptor,
   type TypeParams,
@@ -207,6 +216,8 @@ export class BrowserRuntime {
         return this.waitForNavigation(session, params as WaitParams)
       case 'waitForDomStable':
         return this.waitForDomStable(session, params as WaitParams)
+      case 'setAgentOverlay':
+        return this.setAgentOverlay(session, params as OverlayParams)
       default:
         return Promise.reject(new BrowserRuntimeError('INVALID_ARGUMENT', `Unknown runtime command: ${String(name)}`))
     }
@@ -339,13 +350,17 @@ export class BrowserRuntime {
   private async click(session: CdpSession, params: ClickParams): Promise<ActionAck> {
     const handle = this.requireHandle(session, params.elementId)
     const point = await resolveElementPoint(session, handle)
+    await moveVirtualCursor(session, point, handle.name || 'click')
 
     // A click that hits an overlay dispatches fine but changes nothing, so
     // "something changed" is the weakest honest expectation we can assert.
     return this.withVerification(
       session,
       'change',
-      () => dispatchNativeClick(session, point, { button: params.button, clickCount: params.clickCount }),
+      async () => {
+        await pulseVirtualCursorClick(session, point)
+        await dispatchNativeClick(session, point, { button: params.button, clickCount: params.clickCount })
+      },
       { backendNodeId: handle.backendNodeId },
     )
   }
@@ -363,14 +378,17 @@ export class BrowserRuntime {
     // Clicking focuses the way a user would, which also opens comboboxes and
     // date pickers that only react to pointer input.
     const point = await resolveElementPoint(session, handle)
+    await moveVirtualCursor(session, point, handle.name || 'fill')
 
     return this.withVerification(
       session,
       'value',
       async () => {
+        await pulseVirtualCursorClick(session, point)
         await dispatchNativeClick(session, point)
         await focusElement(session, handle).catch(() => undefined)
         await clearFocusedField(session)
+        await pulseVirtualCursorTyping(session, `type "${params.value.slice(0, 40)}"`)
         await dispatchNativeType(session, params.value, params.delayMs ?? 0)
       },
       { backendNodeId: handle.backendNodeId, expectedValue: params.value },
@@ -385,7 +403,10 @@ export class BrowserRuntime {
     return this.withVerification(
       session,
       'change',
-      () => dispatchNativeType(session, params.text, params.delayMs ?? 0),
+      async () => {
+        await pulseVirtualCursorTyping(session, `type "${params.text.slice(0, 40)}"`)
+        await dispatchNativeType(session, params.text, params.delayMs ?? 0)
+      },
     )
   }
 
@@ -397,7 +418,10 @@ export class BrowserRuntime {
     return this.withVerification(
       session,
       'change',
-      () => dispatchNativeKeyPress(session, params.key, params.modifiers ?? 0),
+      async () => {
+        await pulseVirtualCursorTyping(session, params.key)
+        await dispatchNativeKeyPress(session, params.key, params.modifiers ?? 0)
+      },
     )
   }
 
@@ -416,7 +440,30 @@ export class BrowserRuntime {
 
     // Scrolling usually leaves the accessibility tree untouched, so the
     // viewport offset is the signal that matters here.
-    return this.withVerification(session, 'scroll', () => dispatchNativeScroll(session, point, deltaX, deltaY))
+    return this.withVerification(session, 'scroll', async () => {
+      await pulseVirtualCursorScroll(session, point, deltaY)
+      await dispatchNativeScroll(session, point, deltaX, deltaY)
+    })
+  }
+
+  /**
+   * Switches the cosmetic agent overlay on or off. Kept as a runtime command so
+   * the renderer can light the page up for the duration of a task without ever
+   * touching the guest webview itself, and so failures degrade to "no overlay"
+   * rather than a failed task.
+   */
+  private async setAgentOverlay(session: CdpSession, params: OverlayParams): Promise<ActionAck> {
+    const active = params.active === true
+    await setAgentOverlayActive(session, active)
+
+    // Park the cursor mid-viewport so the first real move glides from
+    // somewhere sensible instead of materialising on the target.
+    if (active) {
+      const centre = await this.viewportCentre(session).catch(() => null)
+      if (centre) await parkVirtualCursor(session, centre)
+    }
+
+    return this.ack()
   }
 
   private async viewportCentre(session: CdpSession) {

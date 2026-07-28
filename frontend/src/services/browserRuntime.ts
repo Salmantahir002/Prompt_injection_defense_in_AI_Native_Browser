@@ -112,3 +112,12 @@ export function waitForNavigation(targetId: number, params: WaitParams = {}) {
 export function waitForDomStable(targetId: number, params: WaitParams = {}) {
   return invokeRuntime(targetId, 'waitForDomStable', params)
 }
+
+/**
+ * Turns the visual agent overlay — the virtual cursor and the blue breathing
+ * glow — on or off for the duration of a task. Cosmetic: callers should ignore
+ * the result, since a page that refuses the overlay is still fully drivable.
+ */
+export function setAgentOverlay(targetId: number, active: boolean) {
+  return invokeRuntime(targetId, 'setAgentOverlay', { active })
+}

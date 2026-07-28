@@ -133,6 +133,8 @@ export type ScrollParams = { deltaX?: number; deltaY?: number; elementId?: strin
 export type UploadParams = { elementId: string; filePaths: string[] }
 export type WaitParams = { timeoutMs?: number; quietPeriodMs?: number }
 export type ScreenshotParams = { fullPage?: boolean }
+/** Toggles the cosmetic agent overlay (virtual cursor + breathing glow). */
+export type OverlayParams = { active: boolean }
 export type EmptyParams = Record<string, never>
 
 export type RuntimeCommandMap = {
@@ -149,6 +151,7 @@ export type RuntimeCommandMap = {
   captureScreenshot: { params: ScreenshotParams; result: ScreenshotResult }
   extractPageState: { params: EmptyParams; result: PageStateSnapshot }
   captureSecuritySnapshot: { params: EmptyParams; result: AgentSecuritySnapshot }
+  setAgentOverlay: { params: OverlayParams; result: ActionAck }
 }
 
 export type RuntimeCommandName = keyof RuntimeCommandMap

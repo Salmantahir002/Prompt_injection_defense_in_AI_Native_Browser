@@ -12,6 +12,10 @@ import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
 const HOMEPAGE_TAB_TITLE = 'New Tab'
+
+/** How long to wait for an agent-opened tab's webview to attach: 20 × 150ms. */
+const AGENT_TAB_ATTACH_ATTEMPTS = 20
+const AGENT_TAB_ATTACH_POLL_MS = 150
 const MINIMUM_WEBPAGE_SCAN_DURATION_MS = 10_000
 
 function waitForMinimumScanDuration(startedAt: number) {
@@ -410,6 +414,40 @@ function BrowserShell() {
     handleSelectTab(tab)
   }, [handleSelectTab])
 
+  /**
+   * Opens a tab on the agent's behalf and resolves to its Browser Runtime
+   * target id.
+   *
+   * The runtime addresses tabs by webContents id, which does not exist until
+   * the <webview> has attached — so the id is polled rather than read straight
+   * after the state update, the same way the assistant resolves the active
+   * target. Resolving to null lets the agent replan instead of driving a tab
+   * that never appeared.
+   */
+  const handleAgentOpenTab = useCallback(async (url?: string): Promise<number | null> => {
+    const tabUrl = url ?? DEFAULT_BROWSER_URL
+    const tab: BrowserTab = {
+      id: `tab-${nextTabId.current++}`,
+      title: tabUrl === DEFAULT_BROWSER_URL ? HOMEPAGE_TAB_TITLE : getTabTitle(tabUrl),
+      url: tabUrl,
+    }
+
+    setTabs((previousTabs) => [...previousTabs, tab])
+    handleSelectTab(tab)
+
+    for (let attempt = 0; attempt < AGENT_TAB_ATTACH_ATTEMPTS; attempt += 1) {
+      await new Promise((resolve) => { window.setTimeout(resolve, AGENT_TAB_ATTACH_POLL_MS) })
+
+      const targetId = webviewHandlesRef.current.get(tab.id)?.getWebContentsId() ?? null
+      if (targetId !== null) {
+        setActiveTargetId(targetId)
+        return targetId
+      }
+    }
+
+    return null
+  }, [handleSelectTab])
+
   const handleCloseTab = useCallback((tabId: string) => {
     const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
 
@@ -561,6 +599,7 @@ function BrowserShell() {
             <AiAssistantSidebar
               activeTargetId={activeTargetId}
               currentUrl={currentUrl}
+              onOpenTab={handleAgentOpenTab}
               onViewDetails={handleViewPromptDetails}
             />
           ) : null}

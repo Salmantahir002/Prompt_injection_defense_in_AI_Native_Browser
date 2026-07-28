@@ -47,6 +47,10 @@ export function resolveToolCall(call: AgentToolCall): ResolvedToolCommand {
       }
     case 'wait':
       return { command: 'waitForDomStable', params: { timeoutMs: asNumber(args.timeoutMs) } }
+    // `open_tab` is loop-handled: the tab strip is renderer state, so the agent
+    // loop creates the tab and re-points itself at it rather than sending a
+    // command to the Browser Runtime, which only ever drives one existing tab.
+    case 'open_tab':
     case 'upload':
     case 'extract':
     case 'finish':

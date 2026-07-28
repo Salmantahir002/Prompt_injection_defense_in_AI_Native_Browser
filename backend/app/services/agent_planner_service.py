@@ -43,8 +43,8 @@ Rules:
    {"actions": [{"tool": <name>, "arguments": {...}}, ...], "confidence": <0.0-1.0>, "reason": <short string>}
 3. Usually return ONE action. Queue up to {max_queue} only when the sequence is certain
    and does not depend on what the page does next (for example: fill a field, then press Enter).
-4. Never queue anything after "navigate" — the page will be different and every
-   element id will be invalid. Plan the new page in the next step.
+4. Never queue anything after "navigate" or "open_tab" — the page will be different
+   and every element id will be invalid. Plan the new page in the next step.
 5. Only use element ids that appear in the CURRENT PAGE STATE. Never invent an id.
 6. If the goal is achieved, or cannot be achieved, use the "finish" tool.
 7. If you are unsure which action is correct, still answer, but report a low confidence.

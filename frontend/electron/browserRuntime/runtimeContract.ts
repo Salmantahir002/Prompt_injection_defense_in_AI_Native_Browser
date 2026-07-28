@@ -189,6 +189,12 @@ export type ScrollParams = { deltaX?: number; deltaY?: number; elementId?: strin
 export type UploadParams = { elementId: string }
 export type WaitParams = { timeoutMs?: number; quietPeriodMs?: number }
 export type ScreenshotParams = { fullPage?: boolean }
+/**
+ * Toggles the cosmetic agent overlay (virtual cursor + breathing glow). Purely
+ * presentational: it grants no page access the runtime does not already have,
+ * and no action depends on it succeeding.
+ */
+export type OverlayParams = { active: boolean }
 export type EmptyParams = Record<string, never>
 
 export type RuntimeCommandMap = {
@@ -205,6 +211,7 @@ export type RuntimeCommandMap = {
   captureScreenshot: { params: ScreenshotParams; result: ScreenshotResult }
   extractPageState: { params: EmptyParams; result: PageStateSnapshot }
   captureSecuritySnapshot: { params: EmptyParams; result: AgentSecuritySnapshot }
+  setAgentOverlay: { params: OverlayParams; result: ActionAck }
 }
 
 export type RuntimeCommandName = keyof RuntimeCommandMap
@@ -225,6 +232,7 @@ export const RUNTIME_COMMAND_NAMES = [
   'captureScreenshot',
   'extractPageState',
   'captureSecuritySnapshot',
+  'setAgentOverlay',
 ] as const satisfies readonly RuntimeCommandName[]
 
 export type RuntimeRequest = {
