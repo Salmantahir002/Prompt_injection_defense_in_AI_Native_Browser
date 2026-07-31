@@ -1173,27 +1173,28 @@
 
 .assistant-welcome-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 8px;
   margin: 0 0 2px;
 }
 
 .assistant-welcome-logo {
-  width: 88px;
-  height: 88px;
+  width: 128px;
+  height: 128px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
 
 .assistant-welcome-logo .kimo {
-  width: 88px;
-  height: 88px;
+  width: 128px;
+  height: 128px;
 }
 
 .assistant-welcome h3 {
   font-family: var(--font-assistant-serif);
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: rgba(255, 255, 255, 0.94);
