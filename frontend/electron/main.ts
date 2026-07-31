@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, session } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyElectronSecurityConfig } from './electronSecurityConfig.js'
+import { attachWebviewContextMenu } from './webviewContextMenu.js'
 import { CdpInspectionService } from './cdpInspectionService.js'
 import {
   BrowserRuntime,
@@ -65,10 +66,26 @@ async function createWindow() {
   })
 
   applyElectronSecurityConfig(session.defaultSession, mainWindow, isDevelopment)
+  // Every download prompts for a location, matching the "Save Image As" /
+  // "Save Link As" behaviour the webview context menu below triggers.
+  session.defaultSession.on('will-download', (_event, item) => {
+    const savePath = mainWindow
+      ? dialog.showSaveDialogSync(mainWindow, { defaultPath: item.getFilename() })
+      : dialog.showSaveDialogSync({ defaultPath: item.getFilename() })
+    if (savePath) {
+      item.setSavePath(savePath)
+    } else {
+      item.cancel()
+    }
+  })
   // One CDP session per guest webview, shared by the manual scanner and the
   // agent runtime. Electron permits only a single debugger attachment per
   // webContents, so neither consumer may attach on its own.
   mainWindow.webContents.on('did-attach-webview', (_event, guestContents) => {
+    // Electron's <webview> has no native context menu of its own; this is what
+    // supplies the Chrome-equivalent Back/Reload/Inspect/Console menu.
+    attachWebviewContextMenu(guestContents, mainWindow as BrowserWindow)
+
     const session = cdpSessionRegistry.attach(guestContents)
     if (!session) return
 
