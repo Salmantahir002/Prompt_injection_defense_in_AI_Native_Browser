@@ -48,7 +48,7 @@ export function PromptInputBox({ disabled, onSubmit, clearSignal }: PromptInputB
       <textarea
         className="prompt-textarea"
         disabled={disabled}
-        placeholder="Type / for search modes"
+        placeholder="Write a message..."
         rows={1}
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
