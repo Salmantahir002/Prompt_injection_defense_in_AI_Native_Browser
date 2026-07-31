@@ -223,6 +223,34 @@
   animation: kimo-look-eyes 2800ms ease-in-out;
 }
 
+/* ── Act: nod — a quick "yes" bob ── */
+
+.kimo[data-act='nod'] .kimo__head {
+  animation: kimo-nod 1400ms ease-in-out;
+}
+
+/* ── Act: shake — a quick "no" ── */
+
+.kimo[data-act='shake'] .kimo__head {
+  animation: kimo-shake 1400ms ease-in-out;
+}
+
+/* ── Act: spin — a playful full turn, replacing the idle float for one beat ── */
+
+.kimo[data-act='spin'] .kimo__float {
+  animation: kimo-spin 1600ms ease-in-out;
+}
+
+/* ── Act: point — the other arm (character's left hand) raises to point ── */
+
+.kimo[data-act='point'] .kimo__arm--right {
+  animation: kimo-point 1800ms ease-in-out;
+}
+
+.kimo[data-act='point'] .kimo__head {
+  animation: kimo-look-head 1800ms ease-in-out;
+}
+
 /* ── Act: cheer — both arms up, twice ── */
 
 .kimo[data-act='cheer'] .kimo__arm--right {
@@ -350,6 +378,39 @@
   30% { transform: rotate(158deg); }
   55% { transform: rotate(142deg); }
   78% { transform: rotate(156deg); }
+}
+
+/* Front-on 2D view can't tilt a head forward/back, so the "yes" nod is
+   approximated as a quick vertical bob. */
+@keyframes kimo-nod {
+  0%, 100% { transform: translateY(0); }
+  20% { transform: translateY(4px); }
+  40% { transform: translateY(-2px); }
+  60% { transform: translateY(3px); }
+  80% { transform: translateY(-1px); }
+}
+
+@keyframes kimo-shake {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(10deg); }
+  35% { transform: rotate(-10deg); }
+  55% { transform: rotate(8deg); }
+  75% { transform: rotate(-6deg); }
+  90% { transform: rotate(2deg); }
+}
+
+@keyframes kimo-spin {
+  0% { transform: translateY(3px) rotate(-0.6deg) scale(1); }
+  50% { transform: translateY(-7px) rotate(180deg) scale(0.94); }
+  100% { transform: translateY(3px) rotate(360deg) scale(1); }
+}
+
+/* Arm rotates up and holds, unlike the wave's repeated swing. */
+@keyframes kimo-point {
+  0% { transform: rotate(0deg); }
+  18% { transform: rotate(-140deg); }
+  82% { transform: rotate(-140deg); }
+  100% { transform: rotate(0deg); }
 }
 
 @keyframes kimo-blink {

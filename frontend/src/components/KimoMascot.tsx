@@ -17,21 +17,31 @@ import '../styles/kimo-mascot.css'
  * full-size mascot interrupts the routine with a wave, then resumes it.
  */
 
-type Act = 'idle' | 'wave' | 'think' | 'look' | 'cheer'
+type Act = 'idle' | 'wave' | 'think' | 'look' | 'cheer' | 'nod' | 'shake' | 'spin' | 'point'
 
 /**
- * The performance loop: [act, how long it holds].
+ * The performance loop: [act, how long it holds]. Idle beats are kept short
+ * so the character reads as lively rather than static — the routine cycles
+ * through a gesture every couple of seconds.
  * Durations are whole multiples of each act's keyframe cycle (see
  * kimo-mascot.css) so the gesture completes instead of being cut mid-swing.
  */
 const ROUTINE: ReadonlyArray<readonly [Act, number]> = [
-  ['idle', 5200],
+  ['idle', 2200],
   ['wave', 2400],
-  ['idle', 6800],
+  ['idle', 1800],
+  ['nod', 1400],
+  ['idle', 2000],
   ['think', 3600],
-  ['idle', 5600],
+  ['idle', 1800],
+  ['point', 1800],
+  ['idle', 2000],
   ['look', 2800],
-  ['idle', 7400],
+  ['idle', 1800],
+  ['shake', 1400],
+  ['idle', 2000],
+  ['spin', 1600],
+  ['idle', 2200],
   ['cheer', 2200],
 ]
 
