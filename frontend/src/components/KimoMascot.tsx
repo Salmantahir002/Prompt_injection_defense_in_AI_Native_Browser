@@ -183,6 +183,13 @@ export function KimoMascot({ compact = false }: { compact?: boolean }) {
           <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.03" />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0.12" />
         </linearGradient>
+        {/* Glossy eye fill: a bright amber core falling off to a deep rim, so
+            the eye reads as a lit dome rather than a flat dot. */}
+        <radialGradient id={`${uid}-eye`} cx="0.35" cy="0.3" r="0.85">
+          <stop offset="0" stopColor="#ffd28a" />
+          <stop offset="0.5" stopColor="#ff9f2d" />
+          <stop offset="1" stopColor="#e8630c" />
+        </radialGradient>
         <radialGradient id={`${uid}-thruster`} cx="0.5" cy="0.5" r="0.5">
           <stop stopColor="#bfe6ff" stopOpacity="0.95" />
           <stop offset="0.55" stopColor="#63b8ff" stopOpacity="0.5" />
@@ -291,10 +298,19 @@ export function KimoMascot({ compact = false }: { compact?: boolean }) {
           </g>
 
           <g className="kimo__face">
-            {/* Resting expression: the render's arched, smiling eyes. */}
-            <g className="kimo__eyes kimo__eyes--rest" stroke="#ff9f2d" strokeWidth="6" strokeLinecap="round">
-              <path d="M79 73q7-12 14 0" />
-              <path d="M107 73q7-12 14 0" />
+            {/* Resting expression: glossy almond eyes with a specular highlight,
+                blinked via kimo-blink. */}
+            <g className="kimo__eyes kimo__eyes--rest">
+              <circle cx="86" cy="68" r="7.4" fill={`url(#${uid}-eye)`} />
+              <circle cx="114" cy="68" r="7.4" fill={`url(#${uid}-eye)`} />
+              {/* Pupils drift independently of the iris so the face reads as
+                  glancing around rather than just blinking. */}
+              <g className="kimo__pupils">
+                <circle cx="87.4" cy="70" r="2.6" fill="#1b0e05" />
+                <circle cx="115.4" cy="70" r="2.6" fill="#1b0e05" />
+              </g>
+              <circle cx="83" cy="64.4" r="1.9" fill="#fff7ec" opacity="0.9" />
+              <circle cx="111" cy="64.4" r="1.9" fill="#fff7ec" opacity="0.9" />
             </g>
             {/* Alert expression, used while thinking and looking around. */}
             <g className="kimo__eyes kimo__eyes--wide" fill="#ff9f2d">

@@ -62,7 +62,8 @@
 .kimo__spark,
 .kimo__shine,
 .kimo__badge,
-.kimo__thought-dot {
+.kimo__thought-dot,
+.kimo__pupils {
   transform-box: view-box;
 }
 
@@ -95,7 +96,11 @@
 }
 
 .kimo__eyes--rest {
-  transform-origin: 100px 73px;
+  transform-origin: 100px 68px;
+}
+
+.kimo__pupils {
+  transform-origin: 100px 70px;
 }
 
 .kimo__eyes--wide,
@@ -103,16 +108,14 @@
   opacity: 0;
 }
 
-/* The alert face is worn while the character is thinking or looking around. */
+/* The alert face is worn only while thinking; looking around keeps the
+   round pupil eyes so they can visibly glance side to side instead. */
 .kimo[data-act='think'] .kimo__eyes--rest,
-.kimo[data-act='look'] .kimo__eyes--rest,
-.kimo[data-act='think'] .kimo__mouth--rest,
-.kimo[data-act='look'] .kimo__mouth--rest {
+.kimo[data-act='think'] .kimo__mouth--rest {
   opacity: 0;
 }
 
 .kimo[data-act='think'] .kimo__eyes--wide,
-.kimo[data-act='look'] .kimo__eyes--wide,
 .kimo[data-act='think'] .kimo__mouth--think {
   opacity: 1;
 }
@@ -161,7 +164,11 @@
 /* ── Act: idle — an occasional blink, nothing more ── */
 
 .kimo[data-act='idle'] .kimo__eyes--rest {
-  animation: kimo-blink 5200ms ease-in-out infinite;
+  animation: kimo-blink 1700ms ease-in-out infinite;
+}
+
+.kimo[data-act='idle'] .kimo__pupils {
+  animation: kimo-pupil-wander 1600ms ease-in-out infinite;
 }
 
 /* ── Act: wave — raise the (character's) right arm, wave four times, lower it.
@@ -218,9 +225,8 @@
   animation: kimo-look-head 2800ms ease-in-out;
 }
 
-.kimo[data-act='look'] .kimo__eyes--wide {
-  transform-origin: 100px 68px;
-  animation: kimo-look-eyes 2800ms ease-in-out;
+.kimo[data-act='look'] .kimo__pupils {
+  animation: kimo-look-pupils 2800ms ease-in-out;
 }
 
 /* ── Act: nod — a quick "yes" bob ── */
@@ -411,6 +417,26 @@
   18% { transform: rotate(-140deg); }
   82% { transform: rotate(-140deg); }
   100% { transform: rotate(0deg); }
+}
+
+/* Small idle saccades so the pupils drift like a person's do even when
+   nothing else is happening — kept well inside the iris radius. */
+@keyframes kimo-pupil-wander {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(1.6px, -0.6px); }
+  45% { transform: translate(-1.4px, 0.4px); }
+  70% { transform: translate(0.8px, 0.9px); }
+  85% { transform: translate(-0.7px, -0.5px); }
+}
+
+/* Bigger deliberate glance for the "look" act, scaled to stay inside the
+   iris (unlike kimo-look-eyes, which was sized for the old alert eyes). */
+@keyframes kimo-look-pupils {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-3.2px); }
+  46% { transform: translateX(-2.4px); }
+  70% { transform: translateX(3.2px); }
+  88% { transform: translateX(1.6px); }
 }
 
 @keyframes kimo-blink {
