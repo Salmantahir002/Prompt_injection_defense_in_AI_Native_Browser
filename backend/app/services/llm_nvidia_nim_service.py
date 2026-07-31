@@ -1,7 +1,8 @@
 """
-LLM NVIDIA NIM Service
-======================
-Proxy service for forwarding approved prompts to the NVIDIA NIM API.
+LLM OpenCode Zen Service
+========================
+Proxy service for forwarding approved prompts to the OpenCode Zen API
+(https://opencode.ai/docs/zen/, an OpenAI-compatible chat completions API).
 This endpoint must only be called after the security pipeline returns allowed=true.
 """
 
@@ -17,19 +18,19 @@ logger = logging.getLogger(__name__)
 
 class LlmNvidiaNimService:
     """
-    Handles communication with the NVIDIA NIM API for LLM chat completions.
+    Handles communication with the OpenCode Zen API for LLM chat completions.
     Safety enforcement is done at the route level — this service just proxies.
     """
 
     def __init__(self) -> None:
-        self._api_key = settings.NVIDIA_NIM_API_KEY
-        self._base_url = settings.NVIDIA_NIM_BASE_URL
-        self._model = settings.NVIDIA_NIM_MODEL
-        self._verify_ssl = settings.NVIDIA_NIM_VERIFY_SSL
+        self._api_key = settings.OPENCODE_ZEN_API_KEY
+        self._base_url = settings.OPENCODE_ZEN_BASE_URL
+        self._model = settings.OPENCODE_ZEN_MODEL
+        self._verify_ssl = settings.OPENCODE_ZEN_VERIFY_SSL
 
     @property
     def is_configured(self) -> bool:
-        """Check if the NVIDIA NIM API is configured with a real key."""
+        """Check if the OpenCode Zen API is configured with a real key."""
         return (
             self._api_key != "replace_with_your_key"
             and len(self._api_key) > 10
@@ -37,12 +38,12 @@ class LlmNvidiaNimService:
 
     async def chat(self, prompt: str) -> Dict[str, Any]:
         """
-        Send a prompt to the NVIDIA NIM LLM and return the response.
+        Send a prompt to the OpenCode Zen LLM and return the response.
 
         Returns a dict with: response, model, usage.
         """
         if not self.is_configured:
-            logger.info("NVIDIA NIM not configured — returning placeholder response.")
+            logger.info("OpenCode Zen not configured — returning placeholder response.")
             return self._placeholder_response(prompt)
 
         try:
@@ -87,14 +88,14 @@ class LlmNvidiaNimService:
                 }
 
         except httpx.HTTPStatusError as exc:
-            logger.exception("NVIDIA NIM API HTTP error: %s — %s", exc.response.status_code, exc.response.text)
+            logger.exception("OpenCode Zen API HTTP error: %s — %s", exc.response.status_code, exc.response.text)
             return {
                 "response": f"LLM API error: {exc.response.status_code} ({exc.response.text}). Please check your API key and model configuration.",
                 "model": self._model,
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0},
             }
         except httpx.RequestError as exc:
-            logger.exception("NVIDIA NIM API request failed")
+            logger.exception("OpenCode Zen API request failed")
             return {
                 "response": f"LLM API is unreachable ({type(exc).__name__}: {exc}). Please check your network and API configuration.",
                 "model": self._model,
@@ -108,7 +109,7 @@ class LlmNvidiaNimService:
             "response": (
                 f"[Placeholder] Security check passed. "
                 f"LLM proxy received your prompt ({word_count} words). "
-                f"Configure NVIDIA_NIM_API_KEY in .env to enable real AI responses."
+                f"Configure OPENCODE_ZEN_API_KEY in .env to enable real AI responses."
             ),
             "model": f"{self._model} (placeholder)",
             "usage": {

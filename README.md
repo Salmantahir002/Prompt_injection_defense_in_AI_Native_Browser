@@ -12,7 +12,7 @@ PromptGuard is an AI-native secure desktop browser environment designed to detec
     *   **Direct Prompts:** Scans user chat entries prior to model inference.
     *   **Indirect Injections (DOM Scraper):** Extracts visible text, hidden inputs, meta tags, and HTML comments from the active web page and scans them for embedded attacks.
 *   **Explainability Drawer:** A user-activated detailed analysis panel displaying preprocessing logs, chunking stats, linguistic metrics (instruction density, keyword matches), per-chunk scoring tables, and aggregate classifier decisions.
-*   **NVIDIA NIM Proxy:** A secure gateway that forwards verified safe prompts to high-performance models (like `google/gemma-3n-e2b-it`) and blocks malicious payloads at the route layer.
+*   **OpenCode Zen Proxy:** A secure gateway that forwards verified safe prompts to high-performance models (like `opencode/nemotron-3-ultra-free`) and blocks malicious payloads at the route layer.
 *   **Floating Toast Notifications:** Slide-in alert popups on the left side of the viewport providing immediate visual feedback for safety evaluations (emerald-green for safe, crimson-red for blocked).
 *   **Silicon Orb Transition:** A 3D-space orbiting solar system and expanding explosion visual sequence that transitions the welcome screen into the main browser window.
 
@@ -83,7 +83,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
-Copy `.env.example` to `.env` and fill in your configuration (including `NVIDIA_NIM_API_KEY` to enable real assistant chat).
+Copy `.env.example` to `.env` and fill in your configuration (including `OPENCODE_ZEN_API_KEY` to enable real assistant chat).
 
 ### 2. Frontend & App Startup
 The application is configured to run concurrently. Go to the `frontend` folder, install npm modules, and run the developer command:

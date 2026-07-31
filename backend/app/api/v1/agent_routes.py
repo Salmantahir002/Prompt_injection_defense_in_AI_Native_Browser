@@ -75,7 +75,7 @@ async def agent_plan(request: AgentPlanRequest):
         raise HTTPException(
             status_code=503,
             detail=(
-                "Agent planner unavailable: NVIDIA_NIM_API_KEY is not configured. "
+                "Agent planner unavailable: OPENCODE_ZEN_API_KEY is not configured. "
                 "Set it in backend/.env to enable autonomous planning."
             ),
         )

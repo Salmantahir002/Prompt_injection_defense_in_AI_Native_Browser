@@ -67,10 +67,10 @@ class AgentPlannerService:
     """Calls the configured LLM and enforces the tool-call contract on its reply."""
 
     def __init__(self) -> None:
-        self._api_key = settings.NVIDIA_NIM_API_KEY
-        self._base_url = settings.NVIDIA_NIM_BASE_URL
-        self._model = settings.NVIDIA_NIM_MODEL
-        self._verify_ssl = settings.NVIDIA_NIM_VERIFY_SSL
+        self._api_key = settings.OPENCODE_ZEN_API_KEY
+        self._base_url = settings.OPENCODE_ZEN_BASE_URL
+        self._model = settings.OPENCODE_ZEN_MODEL
+        self._verify_ssl = settings.OPENCODE_ZEN_VERIFY_SSL
 
     @property
     def is_configured(self) -> bool:

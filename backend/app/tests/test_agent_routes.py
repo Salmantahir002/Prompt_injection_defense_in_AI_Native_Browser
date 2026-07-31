@@ -45,7 +45,7 @@ def test_planner_unavailable_without_api_key(monkeypatch):
     monkeypatch.setattr(AgentPlannerService, "is_configured", property(lambda self: False))
     response = client.post("/api/v1/agent/plan", json=_plan_body())
     assert response.status_code == 503
-    assert "NVIDIA_NIM_API_KEY" in response.json()["detail"]
+    assert "OPENCODE_ZEN_API_KEY" in response.json()["detail"]
 
 
 def test_valid_plan_is_returned(configured_planner, monkeypatch):
