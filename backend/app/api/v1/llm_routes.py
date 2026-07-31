@@ -1,7 +1,7 @@
 """
 LLM Routes
 ==========
-POST /api/v1/llm/chat — forwards approved prompts to the NVIDIA NIM API.
+POST /api/v1/llm/chat — forwards approved prompts to the OpenCode Zen API.
 This endpoint enforces the security-first flow: prompts must have been checked
 by the security pipeline BEFORE reaching this endpoint.
 """
@@ -9,7 +9,7 @@ by the security pipeline BEFORE reaching this endpoint.
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.llm_schemas import LlmChatRequest, LlmChatResponse, LlmUsage
-from app.services.llm_nvidia_nim_service import llm_nvidia_nim_service
+from app.services.llm_opencode_zen_service import llm_opencode_zen_service
 from app.services.prompt_classifier_service import prompt_classifier
 
 router = APIRouter()
@@ -36,7 +36,7 @@ async def llm_chat(request: LlmChatRequest):
         )
 
     # Forward to LLM
-    result = await llm_nvidia_nim_service.chat(request.prompt)
+    result = await llm_opencode_zen_service.chat(request.prompt)
 
     return LlmChatResponse(
         response=result["response"],

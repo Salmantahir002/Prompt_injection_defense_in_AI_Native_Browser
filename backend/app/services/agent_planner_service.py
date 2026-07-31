@@ -302,7 +302,13 @@ class AgentPlannerService:
                     # Planning is a decision, not a creative task — keep it
                     # near-deterministic so repeated states plan consistently.
                     "temperature": 0.1,
-                    "max_tokens": 512,
+                    # A crowded page (e.g. a YouTube results grid) needs more
+                    # headroom: reasoning-capable models spend tokens thinking
+                    # before the JSON, and 512 was tight enough that the model
+                    # sometimes exhausted its budget before emitting any
+                    # content at all — surfacing as "Planner returned an empty
+                    # response" for exactly the pages with the most elements.
+                    "max_tokens": 1536,
                 },
             )
             response.raise_for_status()

@@ -16,7 +16,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-class LlmNvidiaNimService:
+class LlmOpenCodeZenService:
     """
     Handles communication with the OpenCode Zen API for LLM chat completions.
     Safety enforcement is done at the route level — this service just proxies.
@@ -120,4 +120,4 @@ class LlmNvidiaNimService:
 
 
 # Singleton
-llm_nvidia_nim_service = LlmNvidiaNimService()
+llm_opencode_zen_service = LlmOpenCodeZenService()

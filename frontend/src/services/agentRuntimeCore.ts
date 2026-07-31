@@ -154,8 +154,17 @@ export class AgentTask {
 
   /** One planning + scanning + execution cycle. */
   async runIteration(): Promise<AgentIterationOutcome> {
+    // The security capture is independent of the semantic page state — it
+    // takes its own CDP snapshot — so it is started immediately rather than
+    // after extractPageState resolves. That overlaps two CDP round trips that
+    // were previously serialized for no reason, which is most of the fixed
+    // per-step latency (redundant on the security guarantee: the scan still
+    // covers exactly the same page, it just starts earlier).
+    const scanPromise = this.scan()
+
     const stateResult = await invokeRuntime(this.targetId, 'extractPageState', {})
     if (!stateResult.ok) {
+      scanPromise.catch(() => undefined)
       return { status: 'aborted', reason: 'action_failed', message: `Could not read the page: ${stateResult.error.message}` }
     }
 
@@ -168,7 +177,7 @@ export class AgentTask {
     // scan failure must not be masked by a planner error.
     const [planOutcome, scanOutcome] = await Promise.allSettled([
       this.plan(pageState),
-      this.scan(),
+      scanPromise,
     ])
 
     // ---- the ordering rule: the verdict decides, always ----------------

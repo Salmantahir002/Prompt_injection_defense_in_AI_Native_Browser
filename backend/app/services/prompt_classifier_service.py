@@ -124,17 +124,17 @@ class PromptClassifierService:
     def _classify_with_model(self, text: str) -> Dict[str, Any]:
         """Run text through the loaded ML pipeline."""
         try:
-            # If we have a separate vectorizer, transform first
+            # predict_proba alone gives us both the label (argmax) and the
+            # confidence — calling predict() separately would run the whole
+            # pipeline (vectorizer + classifier) a second time for nothing.
             if self._vectorizer is not None:
                 features = self._vectorizer.transform([text])
-                prediction = self._pipeline.predict(features)
                 probabilities = self._pipeline.predict_proba(features)
             else:
                 # Full pipeline handles vectorization internally
-                prediction = self._pipeline.predict([text])
                 probabilities = self._pipeline.predict_proba([text])
 
-            label_idx = int(prediction[0])
+            label_idx = int(probabilities[0].argmax())
             is_malicious = label_idx == 1
             confidence = float(probabilities[0][label_idx])
 
