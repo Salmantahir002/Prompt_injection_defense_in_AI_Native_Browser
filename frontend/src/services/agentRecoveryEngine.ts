@@ -106,11 +106,17 @@ export class AgentRecoveryEngine {
       return this.abort(`"${context.toolCall.tool}" failed ${MAX_ATTEMPTS_PER_STEP} times: ${context.message}`)
     }
 
+    if (context.unverified) {
+      // An unverified action means the action was dispatched over CDP, but the page
+      // did not change (e.g. clicking a search button while the search box is empty).
+      // Retry once in case of a brief delay; if still unverified, immediately escalate
+      // to replan so the planner can pick the right action rather than aborting.
+      const strategy: RecoveryStrategy = this.stepAttempts === 1 ? 'retry' : 'replan'
+      return { strategy, message: describeStrategy(strategy, context), attempt: this.stepAttempts }
+    }
+
     const entry = context.errorCode ? ENTRY_STRATEGY[context.errorCode] : undefined
-    // An unverified action is a different problem from a failed one: the call
-    // succeeded, so repeating it once is reasonable before assuming the plan
-    // itself was wrong.
-    const startIndex = entry ? LADDER.indexOf(entry) : (context.unverified ? 0 : 0)
+    const startIndex = entry ? LADDER.indexOf(entry) : 0
     const index = Math.min(startIndex + this.stepAttempts - 1, LADDER.length - 1)
     const strategy = LADDER[index]
 

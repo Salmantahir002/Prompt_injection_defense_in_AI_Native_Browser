@@ -9,6 +9,7 @@ the compact semantic state the State Builder produced, and its reply is checked
 against the tool registry before anyone acts on it.
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -49,6 +50,15 @@ Rules:
 6. If the goal is achieved, or cannot be achieved, use the "finish" tool.
 7. If you are unsure which action is correct, still answer, but report a low confidence.
 8. Set confidence honestly: it decides whether a human is asked to confirm.
+
+SEARCH & FORM INPUT GUIDELINES:
+- To search on a site (e.g. YouTube, Google, etc.) or enter text into a form:
+  Always find the editable input field (role 'textbox', 'searchbox', 'combobox', or 'input') and use the "fill" tool with the target and value.
+- NEVER click a "Search" or "Submit" button (role 'button') while the search input is empty! Clicking an empty search button does nothing.
+- When searching, the standard reliable pattern is to queue "fill" on the search input followed by "press_key" with key "Enter":
+  {"actions": [{"tool": "fill", "arguments": {"target": "<input_id>", "value": "<query>"}}, {"tool": "press_key", "arguments": {"key": "Enter"}}], "confidence": 0.95, "reason": "Fill search box with query and press Enter"}
+- Distinguish between input fields and buttons: When multiple elements have similar names (e.g. e1 [combobox] "Search" vs e2 [button] "Search"), the combobox/textbox/searchbox is the input field where text must be entered; the button only triggers submission after the field is filled.
+- If a previous action failed with "Nothing on the page changed", do NOT repeat the same action; pick a different tool or target (such as filling an input field).
 
 Available tools:
 {tool_catalogue}
@@ -289,33 +299,82 @@ class AgentPlannerService:
         return self.parse_plan(raw, known_element_ids)
 
     async def _call_model(self, messages: List[Dict[str, str]]) -> str:
-        async with httpx.AsyncClient(timeout=60.0, verify=self._verify_ssl) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self._model,
-                    "messages": messages,
-                    # Planning is a decision, not a creative task — keep it
-                    # near-deterministic so repeated states plan consistently.
-                    "temperature": 0.1,
-                    # A crowded page (e.g. a YouTube results grid) needs more
-                    # headroom: reasoning-capable models spend tokens thinking
-                    # before the JSON, and 512 was tight enough that the model
-                    # sometimes exhausted its budget before emitting any
-                    # content at all — surfacing as "Planner returned an empty
-                    # response" for exactly the pages with the most elements.
-                    "max_tokens": 1536,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        max_retries = 3
+        last_exception: Optional[Exception] = None
 
-        choice = data.get("choices", [{}])[0]
-        return choice.get("message", {}).get("content", "")
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0, verify=self._verify_ssl) as client:
+                    response = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self._api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": self._model,
+                            "messages": messages,
+                            # Planning is a decision, not a creative task — keep it
+                            # near-deterministic so repeated states plan consistently.
+                            "temperature": 0.1,
+                            # A crowded page (e.g. a YouTube results grid) needs more
+                            # headroom: reasoning-capable models spend tokens thinking
+                            # before the JSON, and 512 was tight enough that the model
+                            # sometimes exhausted its budget before emitting any
+                            # content at all — surfacing as "Planner returned an empty
+                            # response" for exactly the pages with the most elements.
+                            "max_tokens": 1536,
+                        },
+                    )
+                    if response.status_code in (429, 503, 504) and attempt < max_retries - 1:
+                        retry_after = 1.5 * (2 ** attempt)
+                        logger.warning(
+                            "Planner LLM returned %s; retrying in %.1fs (attempt %d/%d)",
+                            response.status_code,
+                            retry_after,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        await asyncio.sleep(retry_after)
+                        continue
+
+                    response.raise_for_status()
+                    data = response.json()
+
+                choice = data.get("choices", [{}])[0]
+                return choice.get("message", {}).get("content", "")
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (429, 503, 504) and attempt < max_retries - 1:
+                    retry_after = 1.5 * (2 ** attempt)
+                    logger.warning(
+                        "Planner LLM HTTP %s; retrying in %.1fs (attempt %d/%d)",
+                        exc.response.status_code,
+                        retry_after,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(retry_after)
+                    last_exception = exc
+                    continue
+                raise
+            except httpx.RequestError as exc:
+                if attempt < max_retries - 1:
+                    retry_after = 1.5 * (2 ** attempt)
+                    logger.warning(
+                        "Planner LLM request error (%s); retrying in %.1fs (attempt %d/%d)",
+                        type(exc).__name__,
+                        retry_after,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(retry_after)
+                    last_exception = exc
+                    continue
+                raise
+
+        if last_exception:
+            raise last_exception
+        raise httpx.RequestError("Planner LLM request failed after retries")
 
 
 agent_planner_service = AgentPlannerService()

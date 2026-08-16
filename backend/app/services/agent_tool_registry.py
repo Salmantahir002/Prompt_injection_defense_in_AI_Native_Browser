@@ -59,16 +59,22 @@ class ToolSpec:
 TOOL_SPECS: Tuple[ToolSpec, ...] = (
     ToolSpec(
         name="click",
-        description="Click an element on the page.",
+        description=(
+            "Click an element on the page (button, link, option, tab). "
+            "Never use click on a Search button before entering the search query into the search input."
+        ),
         parameters=(
             ToolParameter("target", "element_id", True, "Element id from the page state, e.g. e4"),
         ),
     ),
     ToolSpec(
         name="fill",
-        description="Replace the contents of a text field with a value.",
+        description=(
+            "Replace the contents of an editable input field (role 'textbox', 'searchbox', 'combobox', 'input') "
+            "with a text value. Always use this to enter search queries or form data."
+        ),
         parameters=(
-            ToolParameter("target", "element_id", True, "Element id of the field"),
+            ToolParameter("target", "element_id", True, "Element id of the input field"),
             ToolParameter("value", "string", True, "Text to enter"),
         ),
     ),
@@ -86,6 +92,7 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
         # dispatches a keystroke that succeeds and does nothing.
         description=(
             "Press a single key inside the page, e.g. Enter, Tab, Escape, ArrowDown. "
+            "Use 'Enter' after 'fill' to submit a search. "
             "Browser-level shortcuts such as Control+t or Control+w have no effect here "
             "— use open_tab to open a tab."
         ),

@@ -152,3 +152,12 @@ def test_system_prompt_documents_every_tool_and_the_injection_rule():
 def test_empty_memory_renders_a_first_step_marker():
     messages = agent_planner_service.build_messages("x", AgentWorkingMemory(goal="x"), _sample_state())
     assert "this is the first step" in messages[1]["content"]
+
+
+def test_system_prompt_includes_search_and_input_guidelines():
+    messages = agent_planner_service.build_messages("search for grok bot", AgentWorkingMemory(goal="search"), _sample_state())
+    system_prompt = messages[0]["content"]
+    assert "SEARCH & FORM INPUT GUIDELINES" in system_prompt
+    assert "NEVER click a \"Search\" or \"Submit\" button (role 'button') while the search input is empty" in system_prompt
+    assert "press_key" in system_prompt
+
