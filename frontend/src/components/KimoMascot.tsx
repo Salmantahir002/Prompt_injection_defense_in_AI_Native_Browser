@@ -4,49 +4,49 @@ import '../styles/kimo-mascot.css'
 /**
  * Kimo — the assistant's mascot.
  *
- * A vector rebuild of the KIMO character render: glass-domed head over a
- * screen face, glossy white shell with orange trim, and two detached floating
- * arms. It is drawn as layered SVG rather than shipped as an image so the
- * arms, head and face are separate nodes that can be animated independently —
- * an image can bob, but it can never wave.
+ * A minimalist, ultra-clean floating spherical companion orb with expressive,
+ * animated slanted capsule eyes. Built with layered vector SVG and 3D-styled
+ * gradients, specular highlights, and soft ambient depth.
  *
- * Motion is driven by a small routine: the component cycles through "acts"
- * (idle → wave → think → look → cheer) on a timer, and CSS reacts to the
- * `data-act` attribute. Every act's keyframes resolve back to the rest pose so
- * an act can end at any moment without the character snapping. Hovering the
- * full-size mascot interrupts the routine with a wave, then resumes it.
+ * Motion is driven by an act loop ('idle' | 'wave' | 'think' | 'look' | 'cheer' |
+ * 'nod' | 'shake' | 'spin' | 'point') and reactive CSS keyframe animations.
  */
 
-type Act = 'idle' | 'wave' | 'think' | 'look' | 'cheer' | 'nod' | 'shake' | 'spin' | 'point'
+type Act =
+  | 'idle'
+  | 'wave'
+  | 'bounce'
+  | 'think'
+  | 'curious'
+  | 'look'
+  | 'cheer'
+  | 'nod'
+  | 'shake'
+  | 'spin'
+  | 'peek'
+  | 'glide'
+  | 'pulse'
+  | 'squint'
 
-/**
- * The performance loop: [act, how long it holds]. Idle beats are kept short
- * so the character reads as lively rather than static — the routine cycles
- * through a gesture every couple of seconds.
- * Durations are whole multiples of each act's keyframe cycle (see
- * kimo-mascot.css) so the gesture completes instead of being cut mid-swing.
- */
 const ROUTINE: ReadonlyArray<readonly [Act, number]> = [
-  ['idle', 2200],
-  ['wave', 2400],
-  ['idle', 1800],
-  ['nod', 1400],
   ['idle', 2000],
-  ['think', 3600],
-  ['idle', 1800],
-  ['point', 1800],
-  ['idle', 2000],
-  ['look', 2800],
-  ['idle', 1800],
-  ['shake', 1400],
-  ['idle', 2000],
-  ['spin', 1600],
-  ['idle', 2200],
-  ['cheer', 2200],
+  ['bounce', 2000],
+  ['wave', 2000],
+  ['curious', 2000],
+  ['think', 2000],
+  ['nod', 2000],
+  ['glide', 2000],
+  ['look', 2000],
+  ['squint', 2000],
+  ['shake', 2000],
+  ['spin', 2000],
+  ['peek', 2000],
+  ['pulse', 2000],
+  ['cheer', 2000],
 ]
 
-const WAVE_MS = 2400
-const ENTRY_MS = 900
+const WAVE_MS = 2000
+const ENTRY_MS = 800
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -65,60 +65,23 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-/**
- * One arm, drawn for the right-hand side of the body. The left arm reuses the
- * same geometry through a mirroring transform, so both stay identical.
- *
- * Note the mirror lives on an inner <g>: the outer arm group is the one CSS
- * rotates, and a CSS transform would otherwise replace the mirror attribute.
- */
-function KimoArm({ uid }: { uid: string }) {
-  return (
-    <g>
-      {/* Shoulder ball — the arm floats free of the body, held by the joint glow. */}
-      <circle cx="158" cy="120" r="11.5" fill={`url(#${uid}-shell)`} stroke="#ffb057" strokeWidth="1.8" />
-      <circle cx="158" cy="120" r="5" fill="#2b1608" stroke="#ffc178" strokeWidth="1.3" />
-
-      {/* Upper arm into the elbow joint. */}
-      <path d="M159 130l5 10" stroke={`url(#${uid}-shell)`} strokeWidth="14" strokeLinecap="round" />
-      <path d="M159 130l5 10" stroke="#ff9f2d" strokeWidth="14" strokeLinecap="round" opacity="0.14" />
-      <circle cx="164" cy="144" r="8.4" fill={`url(#${uid}-shell)`} stroke="#ff9f2d" strokeWidth="1.9" />
-
-      {/* Forearm. */}
-      <path d="M165 151l1.5 7" stroke={`url(#${uid}-shell)`} strokeWidth="12.5" strokeLinecap="round" />
-
-      {/* Open hand: palm, three fingers and a thumb, as in the render. */}
-      <ellipse cx="167" cy="166" rx="9.8" ry="10.4" fill={`url(#${uid}-shell)`} stroke="#ffbe74" strokeWidth="1.3" />
-      <g stroke={`url(#${uid}-shell)`} strokeWidth="4.4" strokeLinecap="round">
-        <path d="M161.4 173.6l-1.6 5.6" />
-        <path d="M167 175.4l0.4 6" />
-        <path d="M172.4 173l2 5" />
-      </g>
-      <g stroke="#ff9f2d" strokeWidth="1.2" strokeLinecap="round" opacity="0.8">
-        <path d="M161.4 175l-1.2 4" />
-        <path d="M167 177l0.3 4.4" />
-        <path d="M172.2 174.6l1.4 3.4" />
-        <path d="M159.4 161.6a5.4 5.4 0 0 1 1.8-4.2" />
-      </g>
-      <path d="M158.6 164.6l-6 2.4" stroke={`url(#${uid}-shell)`} strokeWidth="5" strokeLinecap="round" />
-    </g>
-  )
-}
-
-export function KimoMascot({ compact = false }: { compact?: boolean }) {
+export function KimoMascot({
+  compact = false,
+  act: forcedAct,
+}: {
+  compact?: boolean
+  act?: Act
+}) {
   const uid = useId().replace(/:/g, '')
   const reduced = usePrefersReducedMotion()
-  const [act, setAct] = useState<Act>('idle')
+  const [act, setAct] = useState<Act>(forcedAct ?? 'idle')
   const timerRef = useRef<number | null>(null)
   const indexRef = useRef(0)
-  // Lets the hover gesture hand control back to the routine when it finishes.
   const resumeRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    if (reduced) return
+    if (reduced || forcedAct) return
 
-    // Each mascot on screen enters the routine at a different point, so the
-    // header and the welcome character never gesture in lockstep.
     indexRef.current = Math.floor(Math.random() * ROUTINE.length)
 
     function advance() {
@@ -129,27 +92,28 @@ export function KimoMascot({ compact = false }: { compact?: boolean }) {
     }
 
     resumeRef.current = advance
-    // A beat of stillness first, so the character settles in before it acts.
     timerRef.current = window.setTimeout(advance, ENTRY_MS)
 
     return () => {
       resumeRef.current = null
       if (timerRef.current !== null) window.clearTimeout(timerRef.current)
     }
-  }, [reduced])
+  }, [reduced, forcedAct])
 
   const handlePointerEnter = () => {
     const resume = resumeRef.current
-    if (reduced || compact || !resume) return
+    if (reduced || compact || forcedAct || !resume) return
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
     setAct('wave')
     timerRef.current = window.setTimeout(resume, WAVE_MS)
   }
 
+  const effectiveAct = forcedAct ?? act
+
   return (
     <svg
       className={`kimo ${compact ? 'kimo--compact' : ''}`}
-      data-act={reduced ? 'idle' : act}
+      data-act={reduced ? 'idle' : effectiveAct}
       viewBox="0 0 200 200"
       fill="none"
       role="img"
@@ -157,202 +121,270 @@ export function KimoMascot({ compact = false }: { compact?: boolean }) {
       onPointerEnter={handlePointerEnter}
     >
       <defs>
-        {/* Glossy white shell: lit from the upper left, shading to warm grey. */}
-        <linearGradient id={`${uid}-shell`} x1="58" y1="86" x2="150" y2="190" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffffff" />
-          <stop offset="0.52" stopColor="#f2f4f7" />
-          <stop offset="1" stopColor="#c9ced6" />
-        </linearGradient>
-        <linearGradient id={`${uid}-shell-soft`} x1="70" y1="96" x2="132" y2="188" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffffff" />
-          <stop offset="1" stopColor="#dde1e8" />
-        </linearGradient>
-        {/* Signature orange, matching the product's amber accents. */}
-        <linearGradient id={`${uid}-orange`} x1="60" y1="100" x2="140" y2="186" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffb443" />
-          <stop offset="0.5" stopColor="#ff8b1f" />
-          <stop offset="1" stopColor="#e8630c" />
-        </linearGradient>
-        <linearGradient id={`${uid}-screen`} x1="74" y1="52" x2="126" y2="94" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2a1608" />
-          <stop offset="1" stopColor="#0b0503" />
-        </linearGradient>
-        {/* The dome reads as glass: a bright rim, almost nothing in the middle. */}
-        <linearGradient id={`${uid}-glass`} x1="76" y1="36" x2="128" y2="98" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffffff" stopOpacity="0.2" />
-          <stop offset="0.42" stopColor="#ffffff" stopOpacity="0.03" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0.12" />
-        </linearGradient>
-        {/* Glossy eye fill: a bright amber core falling off to a deep rim, so
-            the eye reads as a lit dome rather than a flat dot. */}
-        <radialGradient id={`${uid}-eye`} cx="0.35" cy="0.3" r="0.85">
-          <stop offset="0" stopColor="#ffd28a" />
-          <stop offset="0.5" stopColor="#ff9f2d" />
-          <stop offset="1" stopColor="#e8630c" />
-        </radialGradient>
-        <radialGradient id={`${uid}-thruster`} cx="0.5" cy="0.5" r="0.5">
-          <stop stopColor="#bfe6ff" stopOpacity="0.95" />
-          <stop offset="0.55" stopColor="#63b8ff" stopOpacity="0.5" />
-          <stop offset="1" stopColor="#3b9dff" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`${uid}-aura`} cx="0.5" cy="0.5" r="0.5">
-          <stop stopColor="#ff9f2d" stopOpacity="0.26" />
-          <stop offset="1" stopColor="#ff9f2d" stopOpacity="0" />
+        {/* Soft 3D spherical orb body gradient: light source top-left */}
+        <radialGradient id={`${uid}-orb-body`} cx="36%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="45%" stopColor="#f8fafc" />
+          <stop offset="78%" stopColor="#e2e8f0" />
+          <stop offset="100%" stopColor="#cbd5e1" />
         </radialGradient>
 
-        {/* Trim and screen graphics are painted wide, then clipped to the shell
-            so they hug the silhouette exactly instead of spilling past it. */}
-        <clipPath id={`${uid}-body-clip`}>
-          <path d="M100 92c24 0 40 7 40 20v10c7 10 10 24 10 34 0 18-18 32-50 32s-50-14-50-32c0-10 3-24 10-34V112c0-13 16-20 40-20z" />
-        </clipPath>
-        <clipPath id={`${uid}-screen-clip`}>
-          <rect x="72" y="50" width="56" height="44" rx="10" />
+        {/* Ambient bottom rim reflection (bounce light from ground) */}
+        <linearGradient id={`${uid}-orb-rim`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="70%" stopColor="#ffffff" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.85" />
+        </linearGradient>
+
+        {/* Top-left specular gloss sheen */}
+        <linearGradient id={`${uid}-orb-gloss`} x1="20%" y1="10%" x2="60%" y2="80%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="35%" stopColor="#ffffff" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+
+        {/* Deep sleek capsule eyes gradient */}
+        <linearGradient id={`${uid}-eye-grad`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#1e293b" />
+          <stop offset="45%" stopColor="#0f172a" />
+          <stop offset="100%" stopColor="#020617" />
+        </linearGradient>
+
+        {/* Floor floating drop shadow */}
+        <radialGradient id={`${uid}-floor-shadow`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#020617" stopOpacity="0.45" />
+          <stop offset="50%" stopColor="#020617" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Ambient aura glow */}
+        <radialGradient id={`${uid}-aura-glow`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#93c5fd" stopOpacity="0.32" />
+          <stop offset="60%" stopColor="#60a5fa" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Soft blush radial gradient */}
+        <radialGradient id={`${uid}-blush`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fb7185" stopOpacity="0.55" />
+          <stop offset="60%" stopColor="#fb7185" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#fb7185" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Orb clipping mask to keep gloss and shadows perfectly round */}
+        <clipPath id={`${uid}-orb-clip`}>
+          <circle cx="100" cy="96" r="58" />
         </clipPath>
       </defs>
 
-      {!compact ? <ellipse className="kimo__aura" cx="100" cy="110" rx="96" ry="88" fill={`url(#${uid}-aura)`} /> : null}
-      {!compact ? <ellipse className="kimo__floor" cx="100" cy="193" rx="48" ry="9" fill={`url(#${uid}-thruster)`} /> : null}
+      {/* Floating Floor Shadow */}
+      {!compact ? (
+        <ellipse
+          className="kimo__floor"
+          cx="100"
+          cy="176"
+          rx="44"
+          ry="7.5"
+          fill={`url(#${uid}-floor-shadow)`}
+        />
+      ) : null}
 
+      {/* Ambient Halo Aura */}
+      {!compact ? (
+        <ellipse
+          className="kimo__aura"
+          cx="100"
+          cy="96"
+          rx="76"
+          ry="74"
+          fill={`url(#${uid}-aura-glow)`}
+        />
+      ) : null}
+
+      {/* Main Floating Group */}
       <g className="kimo__float">
-        {/* Arms sit behind the shell so a raised arm sweeps cleanly past it. */}
-        <g className="kimo__arm kimo__arm--left">
-          <g transform="translate(200, 0) scale(-1, 1)">
-            <KimoArm uid={uid} />
-          </g>
-        </g>
-        <g className="kimo__arm kimo__arm--right">
-          <KimoArm uid={uid} />
-        </g>
-
-        <g className="kimo__body">
-          <path
-            d="M100 92c24 0 40 7 40 20v10c7 10 10 24 10 34 0 18-18 32-50 32s-50-14-50-32c0-10 3-24 10-34V112c0-13 16-20 40-20z"
-            fill={`url(#${uid}-shell)`}
-          />
-
-          <g clipPath={`url(#${uid}-body-clip)`}>
-            {/* Curved orange side panels. */}
-            <path d="M63 108c-9 15-12 33-8 50 2 9 6 16 11 22" stroke={`url(#${uid}-orange)`} strokeWidth="13" strokeLinecap="round" />
-            <path d="M137 108c9 15 12 33 8 50-2 9-6 16-11 22" stroke={`url(#${uid}-orange)`} strokeWidth="13" strokeLinecap="round" />
-            <path d="M69 110c-8 15-11 32-7 48" stroke="#ffd9a8" strokeWidth="2.2" strokeLinecap="round" opacity="0.85" />
-            <path d="M131 110c8 15 11 32 7 48" stroke="#ffd9a8" strokeWidth="2.2" strokeLinecap="round" opacity="0.85" />
-
-            {/* Shell seams — thin glowing panel gaps. */}
-            <path d="M70 106h60" stroke="#ff9f2d" strokeWidth="1.6" strokeLinecap="round" opacity="0.55" />
-            <path d="M64 174q36 14 72 0" stroke={`url(#${uid}-orange)`} strokeWidth="5" strokeLinecap="round" />
-            <path d="M62 182q38 12 76 0" stroke="#ff9f2d" strokeWidth="1.4" strokeLinecap="round" opacity="0.5" />
-
-            {/* Chest plate. */}
-            <rect x="90" y="102" width="20" height="7" rx="3.5" fill={`url(#${uid}-orange)`} />
-            <rect x="75" y="112" width="50" height="54" rx="14" fill={`url(#${uid}-shell-soft)`} stroke="#ff9f2d" strokeWidth="1.3" strokeOpacity="0.5" />
-            <path d="M82 118h36" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-
-            {/* K badge. */}
-            <rect className="kimo__badge" x="92" y="120" width="16" height="16" rx="5.5" fill={`url(#${uid}-orange)`} />
-            <g stroke="#fff7ec" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M97 124.5v7" />
-              <path d="M97 128l4.6-3.5" />
-              <path d="M97 128l4.6 3.6" />
-            </g>
-
-            {/* KIMO wordmark, drawn as strokes so it never depends on a font. */}
-            <g className="kimo__detail" stroke={`url(#${uid}-orange)`} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M80 144v10M80 149l5.6-5M80 149l5.6 5" />
-              <path d="M90.5 144v10" />
-              <path d="M95 154v-10l4.6 6 4.6-6v10" />
-              <rect x="109" y="144" width="8.4" height="10" rx="4.2" />
-            </g>
-
-            {/* Status lamps. */}
-            <g className="kimo__detail">
-              <circle cx="82" cy="171" r="5.4" fill="#33200e" stroke={`url(#${uid}-orange)`} strokeWidth="1.8" />
-              <circle cx="118" cy="171" r="5.4" fill="#33200e" stroke={`url(#${uid}-orange)`} strokeWidth="1.8" />
-              <path d="M69 128v10" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" opacity="0.55" />
-            </g>
-
-            {/* Specular highlight down the left of the shell. */}
-            <path d="M74 104c-8 18-11 40-7 60" stroke="#ffffff" strokeWidth="7" strokeLinecap="round" opacity="0.5" />
-          </g>
-
-          {/* Underside thruster glow. */}
-          <ellipse className="kimo__thruster" cx="100" cy="186" rx="24" ry="7" fill={`url(#${uid}-thruster)`} />
-        </g>
-
+        {/* Head / Spherical Body */}
         <g className="kimo__head">
-          {/* Collar ring where the dome meets the shell. */}
-          <rect x="62" y="88" width="76" height="14" rx="7" fill={`url(#${uid}-shell)`} stroke="#ffb057" strokeWidth="1.4" />
-          <path d="M66 92q34-7 68 0" stroke={`url(#${uid}-orange)`} strokeWidth="3.4" strokeLinecap="round" />
-
-          {/* Screen face inside the glass. */}
-          <rect x="70" y="48" width="60" height="48" rx="12" fill="#1b0e05" opacity="0.9" />
-          <rect x="72" y="50" width="56" height="44" rx="10" fill={`url(#${uid}-screen)`} stroke="#ffb057" strokeWidth="1.2" strokeOpacity="0.45" />
-
-          <g clipPath={`url(#${uid}-screen-clip)`}>
-            {/* Faint circuitry, as on the render's display. Kept to two clean
-                traces — anything finer turns to noise at sidebar sizes. */}
-            <g className="kimo__detail" stroke="#ff9f2d" strokeWidth="1" opacity="0.32" strokeLinecap="round" fill="none">
-              <path d="M103 89h9l4-4h9" />
-              <path d="M112 89v-4" />
-            </g>
-            <rect className="kimo__shine" x="-30" y="44" width="16" height="60" fill="#ffffff" opacity="0.06" transform="skewX(-16)" />
-          </g>
-
-          <g className="kimo__face">
-            {/* Resting expression: glossy almond eyes with a specular highlight,
-                blinked via kimo-blink. */}
-            <g className="kimo__eyes kimo__eyes--rest">
-              <circle cx="86" cy="68" r="7.4" fill={`url(#${uid}-eye)`} />
-              <circle cx="114" cy="68" r="7.4" fill={`url(#${uid}-eye)`} />
-              {/* Pupils drift independently of the iris so the face reads as
-                  glancing around rather than just blinking. */}
-              <g className="kimo__pupils">
-                <circle cx="87.4" cy="70" r="2.6" fill="#1b0e05" />
-                <circle cx="115.4" cy="70" r="2.6" fill="#1b0e05" />
-              </g>
-              <circle cx="83" cy="64.4" r="1.9" fill="#fff7ec" opacity="0.9" />
-              <circle cx="111" cy="64.4" r="1.9" fill="#fff7ec" opacity="0.9" />
-            </g>
-            {/* Alert expression, used while thinking and looking around. */}
-            <g className="kimo__eyes kimo__eyes--wide" fill="#ff9f2d">
-              <rect x="80" y="62" width="12" height="13" rx="6" />
-              <rect x="108" y="62" width="12" height="13" rx="6" />
-            </g>
-            <path className="kimo__mouth kimo__mouth--rest" d="M92 83q8 6 16 0" stroke="#ff9f2d" strokeWidth="3.6" strokeLinecap="round" />
-            <ellipse className="kimo__mouth kimo__mouth--think" cx="100" cy="84" rx="4" ry="4.6" stroke="#ff9f2d" strokeWidth="2.6" />
-          </g>
-
-          {/* Glass dome over the face: nearly clear, carried by its rim and two
-              specular streaks rather than by fill. */}
-          <path
-            d="M64.2 96a42 42 0 1 1 71.6 0z"
-            fill={`url(#${uid}-glass)`}
-            stroke="#ffffff"
-            strokeOpacity="0.5"
-            strokeWidth="1.8"
+          {/* Main 3D Sphere */}
+          <circle
+            className="kimo__sphere"
+            cx="100"
+            cy="96"
+            r="58"
+            fill={`url(#${uid}-orb-body)`}
           />
-          <path d="M76 82a32 32 0 0 1 13-30" stroke="#ffffff" strokeOpacity="0.72" strokeWidth="3.6" strokeLinecap="round" fill="none" />
-          <path d="M118 42a31 31 0 0 1 10 16" stroke="#ffffff" strokeOpacity="0.4" strokeWidth="2.6" strokeLinecap="round" fill="none" />
-          {/* Light bouncing up off the white shell into the base of the glass. */}
-          <path d="M67 92a40 40 0 0 0 66 0" stroke="#ffffff" strokeOpacity="0.22" strokeWidth="3" strokeLinecap="round" fill="none" />
+
+          {/* Shading, Specular Sheen and Rim Light (Clipped to Sphere) */}
+          <g clipPath={`url(#${uid}-orb-clip)`}>
+            {/* Ambient Occlusion Shadow on lower right contour */}
+            <path
+              d="M42 96a58 58 0 0 0 116 0c0 32-26 58-58 58s-58-26-58-58z"
+              fill="#0f172a"
+              opacity="0.09"
+            />
+            {/* Inner bottom rim reflection */}
+            <circle cx="100" cy="96" r="58" fill={`url(#${uid}-orb-rim)`} />
+
+            {/* Glossy top-left highlight streak */}
+            <ellipse
+              cx="76"
+              cy="64"
+              rx="34"
+              ry="18"
+              transform="rotate(-28 76 64)"
+              fill={`url(#${uid}-orb-gloss)`}
+            />
+
+            {/* Specular pinpoint gleam */}
+            <circle cx="68" cy="56" r="5" fill="#ffffff" opacity="0.95" />
+
+            {/* Soft cheek blush (shows in happy/squint/peek acts) */}
+            {!compact ? (
+              <g className="kimo__blush">
+                <ellipse cx="74" cy="98" rx="10" ry="6" fill={`url(#${uid}-blush)`} />
+                <ellipse cx="132" cy="86" rx="10" ry="6" fill={`url(#${uid}-blush)`} />
+              </g>
+            ) : null}
+          </g>
+
+          {/* Eyes & Face Features */}
+          <g className="kimo__face">
+            {/* Standard Slanted Capsule Eyes (matching reference image) */}
+            <g className="kimo__eyes kimo__eyes--rest">
+              <g className="kimo__pupils">
+                {/* Left capsule eye (tilted ~35deg) */}
+                <g className="kimo__eye kimo__eye--left" transform="translate(92, 80) rotate(-35)">
+                  <rect
+                    x="-6.5"
+                    y="-15"
+                    width="13"
+                    height="30"
+                    rx="6.5"
+                    fill={`url(#${uid}-eye-grad)`}
+                  />
+                  {/* Subtle inner eye catchlight */}
+                  <circle cx="0.5" cy="-6" r="2.2" fill="#ffffff" opacity="0.8" />
+                  <circle cx="-1" cy="7" r="1.3" fill="#60a5fa" opacity="0.5" />
+                </g>
+
+                {/* Right capsule eye (tilted ~35deg, elevated playfully) */}
+                <g className="kimo__eye kimo__eye--right" transform="translate(122, 65) rotate(-35)">
+                  <rect
+                    x="-6"
+                    y="-14"
+                    width="12"
+                    height="28"
+                    rx="6"
+                    fill={`url(#${uid}-eye-grad)`}
+                  />
+                  {/* Subtle inner eye catchlight */}
+                  <circle cx="0.5" cy="-5.5" r="2" fill="#ffffff" opacity="0.8" />
+                  <circle cx="-1" cy="6.5" r="1.2" fill="#60a5fa" opacity="0.5" />
+                </g>
+              </g>
+            </g>
+
+            {/* Alert / Thinking Eyes (slightly rounded wide capsules) */}
+            <g className="kimo__eyes kimo__eyes--wide">
+              <g className="kimo__eye" transform="translate(90, 78) rotate(-18)">
+                <rect
+                  x="-7.5"
+                  y="-14"
+                  width="15"
+                  height="28"
+                  rx="7.5"
+                  fill={`url(#${uid}-eye-grad)`}
+                />
+                <circle cx="0" cy="-5" r="2.8" fill="#ffffff" opacity="0.85" />
+              </g>
+              <g className="kimo__eye" transform="translate(122, 65) rotate(-18)">
+                <rect
+                  x="-7.5"
+                  y="-14"
+                  width="15"
+                  height="28"
+                  rx="7.5"
+                  fill={`url(#${uid}-eye-grad)`}
+                />
+                <circle cx="0" cy="-5" r="2.8" fill="#ffffff" opacity="0.85" />
+              </g>
+            </g>
+
+            {/* Happy / Cheerful Arched Eyes (for cheer & wave acts) */}
+            <g className="kimo__eyes kimo__eyes--happy">
+              <path
+                d="M82 82c2-10 12-12 18-2"
+                stroke="#0f172a"
+                strokeWidth="4.8"
+                strokeLinecap="round"
+                fill="none"
+              />
+              <path
+                d="M112 68c2-10 12-12 18-2"
+                stroke="#0f172a"
+                strokeWidth="4.8"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </g>
+
+            {/* Squint / Playful Eyes (for squint & peek acts) */}
+            <g className="kimo__eyes kimo__eyes--squint">
+              <g transform="translate(92, 80) rotate(-35)">
+                <line
+                  x1="-7"
+                  y1="0"
+                  x2="7"
+                  y2="0"
+                  stroke="#0f172a"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                />
+              </g>
+              <g transform="translate(122, 65) rotate(-35)">
+                <line
+                  x1="-7"
+                  y1="0"
+                  x2="7"
+                  y2="0"
+                  stroke="#0f172a"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                />
+              </g>
+            </g>
+          </g>
         </g>
 
-        {/* Thought bubbles, shown only while thinking. */}
+
+        {/* Thought bubbles (shown while thinking) */}
         {!compact ? (
-          <g className="kimo__thought" fill="#ffc178">
-            <circle className="kimo__thought-dot" cx="146" cy="52" r="3" />
-            <circle className="kimo__thought-dot" cx="156" cy="40" r="4.2" />
-            <circle className="kimo__thought-dot" cx="169" cy="26" r="5.6" />
+          <g className="kimo__thought" fill="#60a5fa">
+            <circle className="kimo__thought-dot" cx="146" cy="46" r="3.2" />
+            <circle className="kimo__thought-dot" cx="157" cy="33" r="4.6" />
+            <circle className="kimo__thought-dot" cx="170" cy="18" r="6.2" />
           </g>
         ) : null}
       </g>
 
+      {/* Sparkles around mascot (shown during cheer & wave) */}
       {!compact ? (
         <g className="kimo__sparks">
-          <path className="kimo__spark" d="M26 62l2.4 5.6L34 70l-5.6 2.4L26 78l-2.4-5.6L18 70l5.6-2.4L26 62z" fill="#ffd08a" />
-          <circle className="kimo__spark" cx="174" cy="96" r="2.8" fill="#ff9f2d" />
-          <circle className="kimo__spark" cx="34" cy="140" r="2.2" fill="#ffe1b5" />
+          <path
+            className="kimo__spark"
+            d="M26 62l2.4 5.6L34 70l-5.6 2.4L26 78l-2.4-5.6L18 70l5.6-2.4L26 62z"
+            fill="#93c5fd"
+          />
+          <circle className="kimo__spark" cx="174" cy="92" r="3" fill="#60a5fa" />
+          <circle className="kimo__spark" cx="36" cy="136" r="2.4" fill="#bfdbfe" />
+          <path
+            className="kimo__spark"
+            d="M166 42l1.6 3.8L171 47l-3.8 1.6L166 52l-1.6-3.8L161 47l3.8-1.6L166 42z"
+            fill="#60a5fa"
+          />
         </g>
       ) : null}
     </svg>
   )
 }
+

@@ -1108,7 +1108,7 @@
 .assistant-header-left {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1116,16 +1116,16 @@
    character reads as floating next to "Kimo" rather than sitting in a button.
    Sizing for .kimo itself lives in kimo-mascot.css. */
 .assistant-logo {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
 
 .assistant-logo .kimo {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
 }
 
 .assistant-header h2 {
@@ -1167,38 +1167,41 @@
   align-items: center;
   justify-content: center;
   padding: 36px 26px;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
 }
 
 .assistant-welcome-header {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 9px;
   margin: 0 0 2px;
+  width: 100%;
 }
 
 .assistant-welcome-logo {
-  width: 128px;
-  height: 128px;
+  width: 60px;
+  height: 60px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
 
 .assistant-welcome-logo .kimo {
-  width: 128px;
-  height: 128px;
+  width: 60px;
+  height: 60px;
 }
 
 .assistant-welcome h3 {
-  font-family: var(--font-assistant-serif);
+  font-family: var(--font-assistant), var(--font-ui), system-ui, sans-serif;
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: rgba(255, 255, 255, 0.94);
+  color: rgba(255, 255, 255, 0.96);
   margin: 0;
+  line-height: 1;
 }
 
 .assistant-welcome p {

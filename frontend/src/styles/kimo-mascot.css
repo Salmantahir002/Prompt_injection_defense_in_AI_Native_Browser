@@ -17,6 +17,7 @@
   flex-shrink: 0;
   -webkit-user-select: none;
   user-select: none;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .kimo--compact {
@@ -24,9 +25,10 @@
   height: 26px;
 }
 
-/* Detail that turns to mush below ~40px: wordmark, lamps, circuitry, dots. */
-.kimo--compact .kimo__detail,
-.kimo--compact .kimo__thought {
+/* Hide detail below ~40px: thoughts, sparks, blush */
+.kimo--compact .kimo__thought,
+.kimo--compact .kimo__sparks,
+.kimo--compact .kimo__blush {
   display: none;
 }
 
@@ -34,35 +36,28 @@
   cursor: pointer;
 }
 
-.kimo:not(.kimo--compact) .kimo__body {
-  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.45));
+.kimo:not(.kimo--compact):hover {
+  transform: scale(1.06);
 }
 
-/* The belly's drawn silhouette bulges noticeably wider than the head/collar.
-   Narrow it in place so the two read as the same scale, without having to
-   redraw the hand-tuned panels/badge/wordmark that are clipped to it. */
-.kimo__body {
-  transform-box: view-box;
-  transform-origin: 100px 92px;
-  transform: scaleX(0.85);
+.kimo:not(.kimo--compact) .kimo__sphere {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
 .kimo:not(.kimo--compact) .kimo__face {
-  filter: drop-shadow(0 0 5px rgba(255, 159, 45, 0.65));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
 }
 
-/* Every animated group rotates about a point in view-box units. */
+/* Animated groups rotate about points in view-box units */
 .kimo__float,
 .kimo__head,
-.kimo__arm,
+.kimo__sphere,
 .kimo__eyes,
-.kimo__thruster,
 .kimo__aura,
 .kimo__floor,
 .kimo__spark,
-.kimo__shine,
-.kimo__badge,
 .kimo__thought-dot,
+.kimo__blush,
 .kimo__pupils {
   transform-box: view-box;
 }
@@ -70,136 +65,142 @@
 /* ── Rest pose and expression swapping ── */
 
 .kimo__float {
-  transform-origin: 100px 120px;
-  animation: kimo-float 4600ms ease-in-out infinite;
+  transform-origin: 100px 96px;
+  animation: kimo-float 2000ms ease-in-out infinite;
 }
 
 .kimo__head {
   transform-origin: 100px 96px;
 }
 
-/* Pivots sit on the shoulder balls; keep them in step with KimoArm's geometry
-   (the left arm is the same drawing mirrored, so its pivot is 200 - 158). */
-.kimo__arm--right {
-  transform-origin: 158px 120px;
-  animation: kimo-sway-right 4600ms ease-in-out infinite;
-}
-
-.kimo__arm--left {
-  transform-origin: 42px 120px;
-  animation: kimo-sway-left 4600ms ease-in-out infinite;
-}
-
-.kimo__eyes,
-.kimo__mouth {
-  transition: opacity 140ms ease;
-}
-
-.kimo__eyes--rest {
-  transform-origin: 100px 68px;
+.kimo__eyes {
+  transform-origin: 100px 80px;
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .kimo__pupils {
-  transform-origin: 100px 70px;
+  transform-origin: 100px 80px;
 }
 
 .kimo__eyes--wide,
-.kimo__mouth--think {
+.kimo__eyes--happy,
+.kimo__eyes--squint {
   opacity: 0;
-}
-
-/* The alert face is worn only while thinking; looking around keeps the
-   round pupil eyes so they can visibly glance side to side instead. */
-.kimo[data-act='think'] .kimo__eyes--rest,
-.kimo[data-act='think'] .kimo__mouth--rest {
-  opacity: 0;
-}
-
-.kimo[data-act='think'] .kimo__eyes--wide,
-.kimo[data-act='think'] .kimo__mouth--think {
-  opacity: 1;
-}
-
-/* ── Ambient motion ── */
-
-.kimo__thruster {
-  transform-origin: 100px 186px;
-  animation: kimo-thruster 2600ms ease-in-out infinite;
-}
-
-.kimo__floor {
-  transform-origin: 100px 193px;
-  animation: kimo-floor 4600ms ease-in-out infinite;
-}
-
-.kimo__aura {
-  transform-origin: 100px 110px;
-  animation: kimo-aura 6200ms ease-in-out infinite;
-}
-
-.kimo__badge {
-  transform-origin: 100px 128px;
-  animation: kimo-badge 3200ms ease-in-out infinite;
-}
-
-/* Light sweeping across the display, clipped to the screen. */
-.kimo__shine {
-  animation: kimo-shine 5200ms ease-in-out infinite;
-}
-
-.kimo__spark {
-  transform-origin: center;
-  animation: kimo-spark 3400ms ease-in-out infinite;
-  opacity: 0;
-}
-
-.kimo__spark:nth-child(2) {
-  animation-delay: -1200ms;
-}
-
-.kimo__spark:nth-child(3) {
-  animation-delay: -2300ms;
-}
-
-/* ── Act: idle — an occasional blink, nothing more ── */
-
-.kimo[data-act='idle'] .kimo__eyes--rest {
-  animation: kimo-blink 1700ms ease-in-out infinite;
-}
-
-.kimo[data-act='idle'] .kimo__pupils {
-  animation: kimo-pupil-wander 1600ms ease-in-out infinite;
-}
-
-/* ── Act: wave — raise the (character's) right arm, wave four times, lower it.
-   The right arm is the mirrored one, drawn on the left of the viewBox, so it
-   uses the sign-flipped kimo-wave-left keyframes. ── */
-
-.kimo[data-act='wave'] .kimo__arm--left {
-  animation: kimo-wave-left 2400ms ease-in-out;
-}
-
-.kimo[data-act='wave'] .kimo__head {
-  animation: kimo-tilt-happy 2400ms ease-in-out;
-}
-
-/* ── Act: think — hand up, head cocked, thought bubbles ── */
-
-.kimo[data-act='think'] .kimo__arm--right {
-  animation: kimo-think-arm 3600ms ease-in-out;
-}
-
-.kimo[data-act='think'] .kimo__head {
-  animation: kimo-think-head 3600ms ease-in-out;
-}
-
-.kimo[data-act='think'] .kimo__eyes--wide {
-  transform-origin: 100px 68px;
-  animation: kimo-think-eyes 1800ms ease-in-out infinite;
+  pointer-events: none;
 }
 
 .kimo__thought {
   opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.kimo__sparks {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.kimo__blush {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+/* ── Act: idle ── */
+.kimo__eye {
+  transform-box: view-box;
+}
+
+.kimo__eye rect {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.kimo__eye circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 120ms ease;
+}
+
+.kimo[data-act='idle'] .kimo__eye rect {
+  animation: kimo-blink 2000ms ease-in-out infinite;
+}
+
+.kimo[data-act='idle'] .kimo__eye circle {
+  animation: kimo-blink-catchlight 2000ms ease-in-out infinite;
+}
+
+.kimo[data-act='idle'] .kimo__pupils {
+  animation: kimo-pupil-wander 2000ms ease-in-out infinite;
+}
+
+/* ── Act: bounce ── */
+.kimo[data-act='bounce'] .kimo__eyes--rest {
+  opacity: 0;
+}
+
+.kimo[data-act='bounce'] .kimo__eyes--happy {
+  opacity: 1;
+}
+
+.kimo[data-act='bounce'] .kimo__float {
+  animation: kimo-bounce 2000ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kimo[data-act='bounce'] .kimo__sparks {
+  opacity: 1;
+}
+
+.kimo[data-act='bounce'] .kimo__spark {
+  animation: kimo-spark 1000ms ease-in-out infinite;
+}
+
+.kimo[data-act='bounce'] .kimo__blush {
+  opacity: 0.8;
+}
+
+/* ── Act: wave / greeting ── */
+.kimo[data-act='wave'] .kimo__head {
+  animation: kimo-wave-tilt 2000ms ease-in-out;
+}
+
+.kimo[data-act='wave'] .kimo__eyes--rest {
+  animation: kimo-wink 2000ms ease-in-out;
+}
+
+.kimo[data-act='wave'] .kimo__sparks {
+  opacity: 1;
+}
+
+.kimo[data-act='wave'] .kimo__spark {
+  animation: kimo-spark 2000ms ease-in-out;
+}
+
+/* ── Act: curious ── */
+.kimo[data-act='curious'] .kimo__head {
+  animation: kimo-curious-tilt 2000ms ease-in-out;
+}
+
+.kimo[data-act='curious'] .kimo__eyes--rest {
+  opacity: 0;
+}
+
+.kimo[data-act='curious'] .kimo__eyes--wide {
+  opacity: 1;
+  animation: kimo-curious-eyes 2000ms ease-in-out;
+}
+
+/* ── Act: think ── */
+.kimo[data-act='think'] .kimo__eyes--rest {
+  opacity: 0;
+}
+
+.kimo[data-act='think'] .kimo__eyes--wide {
+  opacity: 1;
+  transform-origin: 100px 80px;
+  animation: kimo-think-eyes 1000ms ease-in-out 2;
+}
+
+.kimo[data-act='think'] .kimo__head {
+  animation: kimo-think-head 2000ms ease-in-out;
 }
 
 .kimo[data-act='think'] .kimo__thought {
@@ -208,284 +209,332 @@
 
 .kimo[data-act='think'] .kimo__thought-dot {
   transform-origin: center;
-  animation: kimo-thought 1200ms ease-out infinite;
+  animation: kimo-thought 1000ms ease-out infinite;
 }
 
 .kimo[data-act='think'] .kimo__thought-dot:nth-child(2) {
-  animation-delay: 160ms;
+  animation-delay: 140ms;
 }
 
 .kimo[data-act='think'] .kimo__thought-dot:nth-child(3) {
-  animation-delay: 320ms;
+  animation-delay: 280ms;
 }
 
-/* ── Act: look — scanning the room ── */
+/* ── Act: nod ── */
+.kimo[data-act='nod'] .kimo__head {
+  animation: kimo-nod 2000ms ease-in-out;
+}
 
+/* ── Act: glide ── */
+.kimo[data-act='glide'] .kimo__float {
+  animation: kimo-glide 2000ms ease-in-out;
+}
+
+/* ── Act: look ── */
 .kimo[data-act='look'] .kimo__head {
-  animation: kimo-look-head 2800ms ease-in-out;
+  animation: kimo-look-head 2000ms ease-in-out;
 }
 
 .kimo[data-act='look'] .kimo__pupils {
-  animation: kimo-look-pupils 2800ms ease-in-out;
+  animation: kimo-look-pupils 2000ms ease-in-out;
 }
 
-/* ── Act: nod — a quick "yes" bob ── */
-
-.kimo[data-act='nod'] .kimo__head {
-  animation: kimo-nod 1400ms ease-in-out;
+/* ── Act: squint / smile ── */
+.kimo[data-act='squint'] .kimo__eyes--rest {
+  opacity: 0;
 }
 
-/* ── Act: shake — a quick "no" ── */
+.kimo[data-act='squint'] .kimo__eyes--squint {
+  opacity: 1;
+}
 
+.kimo[data-act='squint'] .kimo__blush {
+  opacity: 1;
+}
+
+.kimo[data-act='squint'] .kimo__head {
+  animation: kimo-squint-body 2000ms ease-in-out;
+}
+
+.kimo[data-act='squint'] .kimo__sparks {
+  opacity: 1;
+}
+
+.kimo[data-act='squint'] .kimo__spark {
+  animation: kimo-spark 1000ms ease-in-out infinite;
+}
+
+/* ── Act: shake ── */
 .kimo[data-act='shake'] .kimo__head {
-  animation: kimo-shake 1400ms ease-in-out;
+  animation: kimo-shake 2000ms ease-in-out;
 }
 
-/* ── Act: spin — a playful full turn, replacing the idle float for one beat ── */
-
+/* ── Act: spin ── */
 .kimo[data-act='spin'] .kimo__float {
-  animation: kimo-spin 1600ms ease-in-out;
+  animation: kimo-spin 2000ms ease-in-out;
 }
 
-/* ── Act: point — the other arm (character's left hand) raises to point ── */
-
-.kimo[data-act='point'] .kimo__arm--right {
-  animation: kimo-point 1800ms ease-in-out;
+/* ── Act: peek ── */
+.kimo[data-act='peek'] .kimo__head {
+  animation: kimo-peek 2000ms ease-in-out;
 }
 
-.kimo[data-act='point'] .kimo__head {
-  animation: kimo-look-head 1800ms ease-in-out;
+.kimo[data-act='peek'] .kimo__blush {
+  opacity: 0.9;
 }
 
-/* ── Act: cheer — both arms up, twice ── */
-
-.kimo[data-act='cheer'] .kimo__arm--right {
-  animation: kimo-cheer-right 1100ms ease-in-out 2;
+/* ── Act: pulse / glow ── */
+.kimo[data-act='pulse'] .kimo__float {
+  animation: kimo-pulse 2000ms ease-in-out;
 }
 
-.kimo[data-act='cheer'] .kimo__arm--left {
-  animation: kimo-cheer-left 1100ms ease-in-out 2;
+.kimo[data-act='pulse'] .kimo__aura {
+  animation: kimo-aura-burst 2000ms ease-out;
+}
+
+.kimo[data-act='pulse'] .kimo__sparks {
+  opacity: 1;
+}
+
+.kimo[data-act='pulse'] .kimo__spark {
+  animation: kimo-spark 1000ms ease-in-out infinite;
+}
+
+/* ── Act: cheer ── */
+.kimo[data-act='cheer'] .kimo__eyes--rest {
+  opacity: 0;
+}
+
+.kimo[data-act='cheer'] .kimo__eyes--happy {
+  opacity: 1;
 }
 
 .kimo[data-act='cheer'] .kimo__float {
-  animation: kimo-hop 1100ms ease-in-out 2;
+  animation: kimo-hop 1000ms ease-in-out 2;
+}
+
+.kimo[data-act='cheer'] .kimo__sparks {
+  opacity: 1;
 }
 
 .kimo[data-act='cheer'] .kimo__spark {
-  animation-duration: 1100ms;
+  animation: kimo-spark 1000ms ease-in-out infinite;
 }
 
-/* ── Keyframes ── */
+.kimo[data-act='cheer'] .kimo__blush {
+  opacity: 0.9;
+}
+
+/* ── Ambient motion ── */
+
+.kimo__floor {
+  transform-origin: 100px 176px;
+  animation: kimo-floor 2000ms ease-in-out infinite;
+}
+
+.kimo__aura {
+  transform-origin: 100px 96px;
+  animation: kimo-aura 2000ms ease-in-out infinite;
+}
+
+.kimo__spark {
+  transform-origin: center;
+  animation: kimo-spark 2000ms ease-in-out infinite;
+  opacity: 0;
+}
+
+.kimo__spark:nth-child(2) {
+  animation-delay: -500ms;
+}
+
+.kimo__spark:nth-child(3) {
+  animation-delay: -1000ms;
+}
+
+.kimo__spark:nth-child(4) {
+  animation-delay: -1500ms;
+}
+
+/* ── Keyframes (all normalized to 2000ms or 1000ms cycles) ── */
 
 @keyframes kimo-float {
-  0%, 100% { transform: translateY(3px) rotate(-0.6deg); }
-  50% { transform: translateY(-5px) rotate(0.6deg); }
+  0%, 100% { transform: translateY(3px) rotate(-0.5deg); }
+  50% { transform: translateY(-7px) rotate(0.8deg); }
+}
+
+@keyframes kimo-bounce {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  15% { transform: translateY(-16px) scale(1.05, 0.95); }
+  35% { transform: translateY(4px) scale(0.96, 1.04); }
+  50% { transform: translateY(-8px) scale(1.02, 0.98); }
+  70% { transform: translateY(2px) scale(0.98, 1.02); }
+  85% { transform: translateY(-3px) scale(1.01); }
 }
 
 @keyframes kimo-hop {
   0%, 100% { transform: translateY(0) scale(1); }
-  22% { transform: translateY(-12px) scale(1.03); }
-  55% { transform: translateY(2px) scale(0.985); }
+  25% { transform: translateY(-14px) scale(1.03, 0.97); }
+  60% { transform: translateY(2px) scale(0.98, 1.02); }
   80% { transform: translateY(-4px) scale(1.01); }
 }
 
-@keyframes kimo-sway-right {
-  0%, 100% { transform: rotate(3deg); }
-  50% { transform: rotate(-4deg); }
-}
-
-@keyframes kimo-sway-left {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(4deg); }
-}
-
-/* The arm hangs ~11deg off vertical at rest, so it takes about -150deg to
-   bring the hand up beside the head. Anything shallower reads as pointing. */
-@keyframes kimo-wave {
-  0% { transform: rotate(0deg); }
-  10% { transform: rotate(-150deg); }
-  22% { transform: rotate(-132deg); }
-  36% { transform: rotate(-161deg); }
-  50% { transform: rotate(-135deg); }
-  64% { transform: rotate(-161deg); }
-  78% { transform: rotate(-137deg); }
-  88% { transform: rotate(-151deg); }
-  100% { transform: rotate(0deg); }
-}
-
-/* Sign-flipped mirror of kimo-wave, for the mirrored left-side arm group. */
-@keyframes kimo-wave-left {
-  0% { transform: rotate(0deg); }
-  10% { transform: rotate(150deg); }
-  22% { transform: rotate(132deg); }
-  36% { transform: rotate(161deg); }
-  50% { transform: rotate(135deg); }
-  64% { transform: rotate(161deg); }
-  78% { transform: rotate(137deg); }
-  88% { transform: rotate(151deg); }
-  100% { transform: rotate(0deg); }
-}
-
-@keyframes kimo-tilt-happy {
+@keyframes kimo-wave-tilt {
   0%, 100% { transform: rotate(0deg) translateY(0); }
-  20%, 80% { transform: rotate(4deg) translateY(-1px); }
-  50% { transform: rotate(2deg) translateY(-2px); }
+  20% { transform: rotate(-12deg) translateY(-5px); }
+  40% { transform: rotate(10deg) translateY(-4px); }
+  60% { transform: rotate(-8deg) translateY(-4px); }
+  80% { transform: rotate(6deg) translateY(-2px); }
+  90% { transform: rotate(-2deg) translateY(-1px); }
 }
 
-/* Hand up beside the head, with a slow tap while it ponders. */
-@keyframes kimo-think-arm {
-  0% { transform: rotate(0deg); }
-  12% { transform: rotate(-132deg); }
-  24% { transform: rotate(-123deg); }
-  36% { transform: rotate(-136deg); }
-  48% { transform: rotate(-123deg); }
-  60% { transform: rotate(-136deg); }
-  74% { transform: rotate(-127deg); }
-  88% { transform: rotate(-130deg); }
-  100% { transform: rotate(0deg); }
+@keyframes kimo-curious-tilt {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25%, 75% { transform: rotate(-16deg) translateY(-4px) scale(1.03); }
+}
+
+@keyframes kimo-curious-eyes {
+  0%, 100% { transform: translate(0, 0); }
+  25%, 75% { transform: translate(2px, -3px) scale(1.08); }
 }
 
 @keyframes kimo-think-head {
   0%, 100% { transform: rotate(0deg) translateY(0); }
-  14%, 86% { transform: rotate(-7deg) translateY(-2px); }
-  50% { transform: rotate(-5deg) translateY(-3px); }
+  20%, 80% { transform: rotate(-9deg) translateY(-4px); }
+  50% { transform: rotate(-6deg) translateY(-5px); }
 }
 
 @keyframes kimo-think-eyes {
   0%, 100% { transform: translate(-2px, -3px); }
-  50% { transform: translate(1px, -4px); }
+  50% { transform: translate(2px, -4px); }
+}
+
+@keyframes kimo-glide {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(-14px, -10px) rotate(-6deg); }
+  70% { transform: translate(14px, -6px) rotate(6deg); }
 }
 
 @keyframes kimo-look-head {
   0%, 100% { transform: rotate(0deg); }
-  22% { transform: rotate(-8deg); }
-  46% { transform: rotate(-6deg); }
-  70% { transform: rotate(8deg); }
-  88% { transform: rotate(3deg); }
+  25% { transform: rotate(-10deg) translateX(-3px); }
+  50% { transform: rotate(-4deg) translateX(-1px); }
+  75% { transform: rotate(10deg) translateX(4px); }
+  90% { transform: rotate(3deg) translateX(1px); }
 }
 
-@keyframes kimo-look-eyes {
+@keyframes kimo-look-pupils {
   0%, 100% { transform: translateX(0); }
-  22% { transform: translateX(-4px); }
-  46% { transform: translateX(-3px); }
-  70% { transform: translateX(4px); }
-  88% { transform: translateX(2px); }
+  25% { transform: translateX(-5px) translateY(-1px); }
+  50% { transform: translateX(-2px); }
+  75% { transform: translateX(5px) translateY(1px); }
+  90% { transform: translateX(2px); }
 }
 
-@keyframes kimo-cheer-right {
-  0%, 100% { transform: rotate(0deg); }
-  30% { transform: rotate(-158deg); }
-  55% { transform: rotate(-142deg); }
-  78% { transform: rotate(-156deg); }
-}
-
-@keyframes kimo-cheer-left {
-  0%, 100% { transform: rotate(0deg); }
-  30% { transform: rotate(158deg); }
-  55% { transform: rotate(142deg); }
-  78% { transform: rotate(156deg); }
-}
-
-/* Front-on 2D view can't tilt a head forward/back, so the "yes" nod is
-   approximated as a quick vertical bob. */
 @keyframes kimo-nod {
   0%, 100% { transform: translateY(0); }
-  20% { transform: translateY(4px); }
-  40% { transform: translateY(-2px); }
-  60% { transform: translateY(3px); }
-  80% { transform: translateY(-1px); }
+  15% { transform: translateY(7px); }
+  30% { transform: translateY(-4px); }
+  45% { transform: translateY(6px); }
+  60% { transform: translateY(-3px); }
+  75% { transform: translateY(4px); }
+  90% { transform: translateY(-1px); }
 }
 
 @keyframes kimo-shake {
   0%, 100% { transform: rotate(0deg); }
-  15% { transform: rotate(10deg); }
-  35% { transform: rotate(-10deg); }
-  55% { transform: rotate(8deg); }
-  75% { transform: rotate(-6deg); }
-  90% { transform: rotate(2deg); }
+  15% { transform: rotate(12deg); }
+  35% { transform: rotate(-12deg); }
+  55% { transform: rotate(10deg); }
+  75% { transform: rotate(-8deg); }
+  90% { transform: rotate(3deg); }
 }
 
 @keyframes kimo-spin {
-  0% { transform: translateY(3px) rotate(-0.6deg) scale(1); }
-  50% { transform: translateY(-7px) rotate(180deg) scale(0.94); }
+  0% { transform: translateY(3px) rotate(0deg) scale(1); }
+  50% { transform: translateY(-12px) rotate(180deg) scale(0.92); }
   100% { transform: translateY(3px) rotate(360deg) scale(1); }
 }
 
-/* Arm rotates up and holds, unlike the wave's repeated swing. */
-@keyframes kimo-point {
-  0% { transform: rotate(0deg); }
-  18% { transform: rotate(-140deg); }
-  82% { transform: rotate(-140deg); }
-  100% { transform: rotate(0deg); }
+@keyframes kimo-peek {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(12px) rotate(4deg) scale(0.96); }
+  55% { transform: translateY(-6px) rotate(-6deg) scale(1.02); }
+  80% { transform: translateY(2px) rotate(1deg); }
 }
 
-/* Small idle saccades so the pupils drift like a person's do even when
-   nothing else is happening — kept well inside the iris radius. */
+@keyframes kimo-pulse {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.12) translateY(-6px); }
+  60% { transform: scale(0.97) translateY(2px); }
+  80% { transform: scale(1.04) translateY(-2px); }
+}
+
+@keyframes kimo-squint-body {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25%, 75% { transform: rotate(6deg) scale(1.04) translateY(-3px); }
+}
+
 @keyframes kimo-pupil-wander {
   0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(1.6px, -0.6px); }
-  45% { transform: translate(-1.4px, 0.4px); }
-  70% { transform: translate(0.8px, 0.9px); }
-  85% { transform: translate(-0.7px, -0.5px); }
-}
-
-/* Bigger deliberate glance for the "look" act, scaled to stay inside the
-   iris (unlike kimo-look-eyes, which was sized for the old alert eyes). */
-@keyframes kimo-look-pupils {
-  0%, 100% { transform: translateX(0); }
-  22% { transform: translateX(-3.2px); }
-  46% { transform: translateX(-2.4px); }
-  70% { transform: translateX(3.2px); }
-  88% { transform: translateX(1.6px); }
+  20% { transform: translate(2px, -1px); }
+  45% { transform: translate(-2.4px, 0.8px); }
+  70% { transform: translate(1.2px, 1.4px); }
+  85% { transform: translate(-1.2px, -0.6px); }
 }
 
 @keyframes kimo-blink {
-  0%, 88%, 100% { transform: scaleY(1); }
-  92% { transform: scaleY(0.35); }
-  96% { transform: scaleY(1); }
+  0%, 85%, 100% { transform: scaleY(1); }
+  90% { transform: scaleY(0.08); }
+  95% { transform: scaleY(1); }
+}
+
+@keyframes kimo-blink-catchlight {
+  0%, 85%, 100% { opacity: 0.85; transform: scaleY(1); }
+  90% { opacity: 0; transform: scaleY(0.08); }
+  95% { opacity: 0.85; transform: scaleY(1); }
+}
+
+@keyframes kimo-wink {
+  0%, 100% { transform: scaleY(1); }
+  25%, 45% { transform: scaleY(0.1) scaleX(1.08); }
+  55%, 100% { transform: scaleY(1); }
 }
 
 @keyframes kimo-thought {
   0% { opacity: 0; transform: scale(0.4) translateY(6px); }
   35% { opacity: 1; transform: scale(1) translateY(0); }
-  75% { opacity: 0.85; transform: scale(1) translateY(-2px); }
-  100% { opacity: 0; transform: scale(0.7) translateY(-6px); }
-}
-
-@keyframes kimo-thruster {
-  0%, 100% { opacity: 0.75; transform: scaleX(0.94); }
-  50% { opacity: 1; transform: scaleX(1.08); }
+  75% { opacity: 0.85; transform: scale(1) translateY(-3px); }
+  100% { opacity: 0; transform: scale(0.7) translateY(-8px); }
 }
 
 @keyframes kimo-floor {
-  0%, 100% { opacity: 0.5; transform: scale(1.04); }
-  50% { opacity: 0.85; transform: scale(0.9); }
+  0%, 100% { opacity: 0.45; transform: scale(1.04); }
+  50% { opacity: 0.8; transform: scale(0.88); }
 }
 
 @keyframes kimo-aura {
-  0%, 100% { opacity: 0.6; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1.04); }
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50% { opacity: 0.85; transform: scale(1.05); }
 }
 
-@keyframes kimo-badge {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
-}
-
-@keyframes kimo-shine {
-  0%, 62% { transform: translateX(0); }
-  100% { transform: translateX(210px); }
+@keyframes kimo-aura-burst {
+  0% { opacity: 0.5; transform: scale(0.9); }
+  40% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 0.55; transform: scale(1); }
 }
 
 @keyframes kimo-spark {
-  0%, 100% { opacity: 0; transform: scale(0.5) rotate(-18deg); }
-  45% { opacity: 1; transform: scale(1.1) rotate(14deg); }
-  70% { opacity: 0.4; transform: scale(0.8) rotate(0deg); }
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(-20deg); }
+  40% { opacity: 1; transform: scale(1.15) rotate(15deg); }
+  75% { opacity: 0.45; transform: scale(0.8) rotate(0deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .kimo *,
   .kimo {
     animation: none !important;
+    transition: none !important;
   }
 }
+
+
