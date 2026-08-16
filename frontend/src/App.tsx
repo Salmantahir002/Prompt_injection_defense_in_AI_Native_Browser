@@ -655,6 +655,8 @@ function BrowserShell() {
           {assistantOpen ? (
             <AiAssistantSidebar
               activeTargetId={activeTargetId}
+              activeTabTitle={tabs.find((tab) => tab.id === activeTabId)?.title}
+              activeWebviewHandle={webviewHandlesRef.current.get(activeTabId) ?? null}
               currentUrl={currentUrl}
               onOpenTab={handleAgentOpenTab}
               onResizingChange={setIsResizingAssistant}

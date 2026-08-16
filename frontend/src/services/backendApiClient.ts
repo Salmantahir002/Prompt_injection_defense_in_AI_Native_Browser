@@ -57,9 +57,20 @@ export function getHealth(): Promise<HealthResponse> {
   return requestJson<HealthResponse>('/health')
 }
 
-export function chatWithLlm(prompt: string): Promise<LlmResponse> {
+export type ChatPageContext = {
+  page_url?: string
+  page_title?: string
+  page_content?: string
+}
+
+export function chatWithLlm(prompt: string, pageContext?: ChatPageContext): Promise<LlmResponse> {
   return requestJson<LlmResponse>('/llm/chat', {
     method: 'POST',
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({
+      prompt,
+      page_url: pageContext?.page_url,
+      page_title: pageContext?.page_title,
+      page_content: pageContext?.page_content,
+    }),
   })
 }

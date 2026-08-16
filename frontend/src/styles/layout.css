@@ -1428,6 +1428,122 @@
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.32), 0 0 0 3px rgba(138, 180, 248, 0.08);
 }
 
+/* Page Context Pill & Badge */
+.prompt-context-container {
+  padding: 8px 12px 2px;
+  display: flex;
+  align-items: center;
+}
+
+.chat-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px 4px 9px;
+  border-radius: 9999px;
+  background: rgba(234, 134, 89, 0.12);
+  border: 1px solid rgba(234, 134, 89, 0.28);
+  color: #ffb088;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  user-select: none;
+  animation: contextFadeIn 0.2s ease;
+}
+
+@keyframes contextFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-context-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff9e6b;
+  flex-shrink: 0;
+}
+
+.chat-context-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.chat-context-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 176, 136, 0.6);
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.chat-context-dismiss:hover {
+  background: rgba(255, 176, 136, 0.2);
+  color: #ffffff;
+}
+
+.chat-context-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chat-context-attach-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(234, 134, 89, 0.35);
+  color: #ffb088;
+}
+
+.chat-user-message-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.chat-message-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: rgba(255, 176, 136, 0.85);
+  background: rgba(234, 134, 89, 0.08);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(234, 134, 89, 0.2);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .prompt-textarea {
   width: 100%;
   min-height: 44px;

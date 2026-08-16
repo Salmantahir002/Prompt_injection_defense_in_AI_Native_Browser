@@ -157,7 +157,7 @@ def test_empty_memory_renders_a_first_step_marker():
 def test_system_prompt_includes_search_and_input_guidelines():
     messages = agent_planner_service.build_messages("search for grok bot", AgentWorkingMemory(goal="search"), _sample_state())
     system_prompt = messages[0]["content"]
-    assert "SEARCH & FORM INPUT GUIDELINES" in system_prompt
-    assert "NEVER click a \"Search\" or \"Submit\" button (role 'button') while the search input is empty" in system_prompt
+    assert "CROSS-WEBSITE AUTOMATION GUIDELINES" in system_prompt
+    assert "NEVER click a search button while the search box is empty" in system_prompt
     assert "press_key" in system_prompt
 

@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { checkPrompt, chatWithLlm } from '../services/backendApiClient'
+import { checkPrompt, chatWithLlm, type ChatPageContext } from '../services/backendApiClient'
+import { extractPageContent } from '../services/pageContentExtractor'
+import type { BrowserWebViewHandle } from './BrowserWebView'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
 import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
 import { AgentModePanel } from './AgentModePanel'
@@ -18,6 +20,8 @@ type ChatMessage = {
   llmResponse?: LlmResponse
   errorMessage?: string
   isChecking?: boolean
+  pageContextAttached?: boolean
+  pageTitle?: string
 }
 
 type AiAssistantSidebarProps = {
@@ -25,6 +29,8 @@ type AiAssistantSidebarProps = {
   /** Browser Runtime target id for the active tab, for agent mode. */
   activeTargetId?: number | null
   currentUrl?: string
+  activeTabTitle?: string
+  activeWebviewHandle?: BrowserWebViewHandle | null
   /** Opens a tab for the agent's `open_tab` tool; resolves to its target id. */
   onOpenTab?: (url?: string) => Promise<number | null>
   /** Current panel width in px; owned by the shell, which sets the grid column. */
@@ -56,6 +62,14 @@ function ShieldXIcon() {
   )
 }
 
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}>
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+    </svg>
+  )
+}
+
 function NewSessionIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -69,6 +83,8 @@ export function AiAssistantSidebar({
   onViewDetails,
   activeTargetId = null,
   currentUrl = '',
+  activeTabTitle = '',
+  activeWebviewHandle = null,
   onOpenTab,
   width = 400,
   onWidthChange,
@@ -77,6 +93,7 @@ export function AiAssistantSidebar({
   const [mode, setMode] = useState<SidebarMode>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
+  const [detachedUrl, setDetachedUrl] = useState<string | null>(null)
   // Bumped to remount the agent panel, which is how "new task" discards a
   // running task and its transcript in one step.
   const [agentSessionId, setAgentSessionId] = useState(0)
@@ -84,6 +101,9 @@ export function AiAssistantSidebar({
 
   const prevMsgCountRef = useRef<number>(0)
   const [clearSignal, setClearSignal] = useState(0)
+
+  const hasActivePage = Boolean(currentUrl && currentUrl !== 'about:blank' && !currentUrl.startsWith('about:'))
+  const isPageContextAttached = hasActivePage && detachedUrl !== currentUrl
 
   useEffect(() => {
     const nextCount = messages.length
@@ -104,7 +124,13 @@ export function AiAssistantSidebar({
     // Add user message
     setMessages((prev) => [
       ...prev,
-      { id: userMsgId, sender: 'user', text: prompt },
+      {
+        id: userMsgId,
+        sender: 'user',
+        text: prompt,
+        pageContextAttached: isPageContextAttached,
+        pageTitle: isPageContextAttached ? (activeTabTitle || 'Current Page') : undefined,
+      },
       { id: assistantMsgId, sender: 'assistant', isChecking: true },
     ])
 
@@ -112,12 +138,28 @@ export function AiAssistantSidebar({
     // Trigger PromptInputBox clear immediately when submit starts.
     setClearSignal((v) => v + 1)
 
+    let pageContext: ChatPageContext | undefined = undefined
+    if (isPageContextAttached && activeWebviewHandle) {
+      try {
+        const extracted = await extractPageContent(activeWebviewHandle)
+        if (extracted) {
+          pageContext = {
+            page_url: extracted.url || currentUrl,
+            page_title: extracted.page_title || activeTabTitle,
+            page_content: extracted.visible_text,
+          }
+        }
+      } catch {
+        // Fallback gracefully without page content
+      }
+    }
+
     try {
       const result = await checkPrompt(prompt)
 
       let llmResp: LlmResponse | undefined
       if (result.allowed) {
-        llmResp = await chatWithLlm(prompt)
+        llmResp = await chatWithLlm(prompt, pageContext)
       }
 
       // Update assistant message with result
@@ -150,6 +192,7 @@ export function AiAssistantSidebar({
     if (mode === 'chat') {
       setMessages([])
       setIsChecking(false)
+      setDetachedUrl(null)
       setClearSignal((v) => v + 1)
       return
     }
@@ -276,14 +319,22 @@ export function AiAssistantSidebar({
             </div>
             <h3>Kimo</h3>
           </div>
-          <p>Your prompt-defense assistant. Every message is checked for injection before it reaches the model.</p>
+          <p>Your personal prompt-defense assistant. Every message is checked for injection before it reaches the model.</p>
         </div>
       ) : (
         <div className="chat-messages">
           {messages.map((msg) => (
             <div key={msg.id} className={`chat-message chat-message--${msg.sender}`}>
               {msg.sender === 'user' && msg.text ? (
-                <div className="chat-bubble chat-bubble--user">{msg.text}</div>
+                <div className="chat-user-message-container">
+                  {msg.pageContextAttached ? (
+                    <div className="chat-message-context-badge">
+                      <SparkIcon />
+                      <span>{msg.pageTitle || 'Page Context'}</span>
+                    </div>
+                  ) : null}
+                  <div className="chat-bubble chat-bubble--user">{msg.text}</div>
+                </div>
               ) : null}
 
               {msg.sender === 'assistant' && msg.isChecking ? (
@@ -362,6 +413,38 @@ export function AiAssistantSidebar({
           disabled={isChecking}
           onSubmit={handlePromptSubmit}
           clearSignal={clearSignal}
+          placeholder={isPageContextAttached ? `Ask anything about this page...` : `Write a message...`}
+          contextBadge={
+            isPageContextAttached ? (
+              <div className="chat-context-pill" title={`Kimo has context from ${activeTabTitle || 'this page'}`}>
+                <span className="chat-context-icon">
+                  <SparkIcon />
+                </span>
+                <span className="chat-context-text">
+                  Sharing '{activeTabTitle || 'Current Page'}'
+                </span>
+                <button
+                  type="button"
+                  className="chat-context-dismiss"
+                  title="Don't share page context with this message"
+                  aria-label="Remove page context"
+                  onClick={() => setDetachedUrl(currentUrl)}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : hasActivePage ? (
+              <button
+                type="button"
+                className="chat-context-attach-btn"
+                title="Attach current page context to chat"
+                onClick={() => setDetachedUrl(null)}
+              >
+                <SparkIcon />
+                <span>+ Share '{activeTabTitle || 'current page'}'</span>
+              </button>
+            ) : null
+          }
         />
       </div>
         </div>

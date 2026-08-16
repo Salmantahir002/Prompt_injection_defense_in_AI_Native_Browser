@@ -35,8 +35,13 @@ async def llm_chat(request: LlmChatRequest):
             detail="Prompt blocked by security pipeline. Malicious content detected — not forwarding to LLM.",
         )
 
-    # Forward to LLM
-    result = await llm_opencode_zen_service.chat(request.prompt)
+    # Forward to LLM with optional page context
+    result = await llm_opencode_zen_service.chat(
+        prompt=request.prompt,
+        page_url=request.page_url,
+        page_title=request.page_title,
+        page_content=request.page_content,
+    )
 
     return LlmChatResponse(
         response=result["response"],

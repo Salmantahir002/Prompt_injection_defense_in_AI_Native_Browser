@@ -13,6 +13,9 @@ class LlmChatRequest(BaseModel):
     """Request body for POST /api/v1/llm/chat."""
     prompt: str
     security_check_id: Optional[str] = None
+    page_url: Optional[str] = None
+    page_title: Optional[str] = None
+    page_content: Optional[str] = None
 
 
 class LlmUsage(BaseModel):

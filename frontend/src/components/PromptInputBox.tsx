@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 type PromptInputBoxProps = {
   disabled: boolean
   onSubmit: (prompt: string) => Promise<void>
   clearSignal: number
+  contextBadge?: ReactNode
+  placeholder?: string
 }
 
 function SendIcon() {
@@ -14,7 +16,7 @@ function SendIcon() {
   )
 }
 
-export function PromptInputBox({ disabled, onSubmit, clearSignal }: PromptInputBoxProps) {
+export function PromptInputBox({ disabled, onSubmit, clearSignal, contextBadge, placeholder }: PromptInputBoxProps) {
   const [prompt, setPrompt] = useState('')
 
   useEffect(() => {
@@ -45,10 +47,11 @@ export function PromptInputBox({ disabled, onSubmit, clearSignal }: PromptInputB
 
   return (
     <form className="prompt-form" onSubmit={handleSubmit}>
+      {contextBadge ? <div className="prompt-context-container">{contextBadge}</div> : null}
       <textarea
         className="prompt-textarea"
         disabled={disabled}
-        placeholder="Write a message..."
+        placeholder={placeholder || "Write a message..."}
         rows={1}
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
@@ -56,7 +59,7 @@ export function PromptInputBox({ disabled, onSubmit, clearSignal }: PromptInputB
       />
       <div className="prompt-form-footer">
         <div className="prompt-form-actions">
-          {/* Placeholder action buttons for future features */}
+          {/* Action buttons / indicators */}
         </div>
         <button className="prompt-submit" type="submit" disabled={disabled || !prompt.trim()} aria-label="Send">
           <SendIcon />
