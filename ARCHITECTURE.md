@@ -59,6 +59,7 @@ The frontend is built as a hardened desktop application using **Electron 42**, *
 | Technology | What It Is | Why We Use It |
 | :--- | :--- | :--- |
 | **Electron 42** | Desktop runtime hosting Chromium & Node.js | Provides native OS windows, webview containers, and access to the Chrome DevTools Protocol (CDP). |
+| **Stagehand 4.0** | Browser automation runtime | Powers natural-language browser actions (`act`, `observe`, `extract`) connected directly to the active Electron CDP port (`9222`). |
 | **React 19** | Modern UI component library | Powers reactive UI elements: tabs, toolbar, assistant chat, agent console, and analysis drawers. |
 | **TypeScript 6** | Typed JavaScript superset | Enforces strict compile-time type safety across IPC bridges, API payloads, and runtime contracts. |
 | **Vite 8** | Next-generation frontend build tool | Delivers instant Hot Module Replacement (HMR) and optimized client bundle packaging. |
@@ -68,17 +69,21 @@ The frontend is built as a hardened desktop application using **Electron 42**, *
 
 | File Path | Subsystem | Description |
 | :--- | :--- | :--- |
-| `frontend/electron/main.ts` | Electron Main | Application entry point; manages windows, webview lifecycle, IPC channels, and CDP attachments. |
-| `frontend/electron/preload.ts` | Security Bridge | Context-isolated bridge exposing the secure, typed `electronAPI` to the renderer process. |
+| `frontend/electron/main.ts` | Electron Main | Application entry point; configures `--remote-debugging-port 9222`, loads Stagehand extension, manages windows, and binds IPC. |
+| `frontend/electron/config.ts` | Configuration | Centralized settings module loading CDP port, LLM endpoints, and extension paths. |
+| `frontend/electron/preload.ts` | Security Bridge | Context-isolated bridge exposing `electronAPI` (`agentStartTask`, `agentStopTask`, `onAgentRequestOpenTab`). |
 | `frontend/electron/electronSecurityConfig.ts` | Security Config | Hardens the desktop shell (`contextIsolation: true`, `nodeIntegration: false`, navigation restrictions). |
 | `frontend/electron/cdpInspectionService.ts` | Deep Extractor | Low-level CDP inspection service extracting 14 distinct content channels from live pages. |
-| `frontend/electron/browserRuntime/` | Browser Runtime | CDP automation engine containing `pageInspector.ts`, `nativeInput.ts`, `stateBuilder.ts`, and `verificationEngine.ts`. |
+| `frontend/electron/stagehand/stagehandClient.ts` | Stagehand Adapter | Custom OpenAI-compatible `ClientLLM` adapter and local CDP connection manager for Stagehand. |
+| `frontend/electron/stagehand/stagehandAgent.ts` | Agent Orchestrator | Autonomous agent orchestrator with pre-action prompt injection gating, in-memory hash caching, and `open_tab` support. |
+| `frontend/electron/stagehand/visualOverlay.ts` | Visual Feedback | Injected Web Animations overlay providing a white virtual cursor, click ripples, and left-to-right laser scan sweep beam. |
 | `frontend/src/App.tsx` | UI Shell | Main browser shell orchestrating tabs, address bar, navigation controls, and sidebars. |
 | `frontend/src/components/BrowserToolbar.tsx` | Toolbar | Navigation controls, normalized URL bar, and the **"🛡️ Scan Page"** button. |
 | `frontend/src/components/Sidebar.tsx` | Sidebar Hub | Host for the **"Kimo" AI Chat Assistant** and **Autonomous Agent Console**. |
+| `frontend/src/components/AgentModePanel.tsx` | Agent Console | Interactive console for agent goal execution, streaming step timeline, threat alerts, and cancellation. |
 | `frontend/src/components/AnalysisPanel.tsx` | Explainability | Displays security verdict badges, chunk-by-chunk confidence scores, and matched indicators. |
 | `frontend/src/services/backendApiClient.ts` | REST Client | Sole HTTP client communicating with the FastAPI backend server on port 8000. |
-| `frontend/src/services/agentRuntimeCore.ts` | Agent Loop | Client-side autonomous agent orchestrator running planning and parallel security checks. |
+| `frontend/src/services/agentRuntimeCore.ts` | Agent Loop | Bridges UI tasks to Electron Stagehand streaming IPC with live status, security blocking, and tab requests. |
 
 ## 1.3 14-Channel Webpage Content Extraction (CDP)
 
@@ -104,7 +109,11 @@ When an on-demand scan or agent safety check runs, PromptGuard uses the **Chrome
 | IPC Channel | Direction | What It Does |
 | :--- | :--- | :--- |
 | `security:scan-webview` | Renderer ➔ Main | Tells the main process to execute a 14-channel CDP capture on the active webview. |
-| `agent:runtime:invoke` | Renderer ➔ Main | Dispatches a native browser runtime command (`click`, `fill`, `navigate`, `extract`). |
+| `agent:start-task` | Renderer ➔ Main | Launches an autonomous Stagehand agent task on the targeted webview. |
+| `agent:stop-task` | Renderer ➔ Main | Immediately halts running agent tasks and tears down visual overlays. |
+| `agent:task-event` | Main ➔ Renderer | Streams real-time progress events (`status`, `step`, `security_block`, `result`) to the UI. |
+| `agent:request-open-tab` | Main ➔ Renderer | Requests the browser shell to create and focus a new tab in the tab strip. |
+| `agent:response-open-tab`| Renderer ➔ Main | Replies with the newly created tab's `targetId` to resume automation on the new tab. |
 | `app:get-version` | Renderer ➔ Main | Returns desktop shell runtime versions (Electron, Chromium, Node.js, V8). |
 
 ---
@@ -441,74 +450,70 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 ## 4.1 Autonomous Agentic Task Performance
 
 Browser Automation in PromptGuard allows an AI agent to operate the desktop browser autonomously:
-1. The user provides a plain-English goal (e.g., *"Search for flight prices from JFK to LHR"*).
-2. The agent perceives the page structure using **Chrome DevTools Protocol Accessibility Trees (AXTree)**.
-3. The agent plans an action, verifies security in parallel, and executes real hardware-level mouse clicks and keystrokes.
+1. The user provides a plain-English goal (e.g., *"Open a new tab, go to YouTube, and search for Digiskills"*).
+2. The agent connects directly to the active Electron browser window over the Chrome DevTools Protocol debug port (`9222`) using **Stagehand**.
+3. Every single action passes through a **mandatory prompt injection security checkpoint** (`POST /api/v1/agent/scan-active-page`) that immediately halts the task if threats are detected.
+4. The agent executes natural language actions (`open_tab`, `click`, `type`, `navigate`, `scroll`, `wait`, `finish`) accompanied by a real-time white virtual cursor and laser scan sweep visual overlay.
 
 ## 4.2 Key Technologies in Browser Automation
 
 | Technology | Role in Automation | Why It Is Used |
 | :--- | :--- | :--- |
-| **CDP Debugger Session** | Low-Level Automation Gateway | Direct debugger session attached to the Electron webContents. |
-| **Accessibility Tree (`AXTree`)** | Semantic Page Perception | Reads `Accessibility.getFullAXTree()` to map clickable buttons and inputs without messy HTML. |
-| **Native Input Dispatcher** | Hardware-Level Interaction | Uses `Input.dispatchMouseEvent` and `Input.dispatchKeyEvent` (never uses `element.click()`). |
-| **State Builder** | Semantic State Formatter | Translates raw accessibility nodes into a compact JSON element map with coordinates. |
-| **Verification Engine** | Action Validation | Compares DOM signatures before and after an action to confirm success. |
-| **Circuit Breaker** | Execution Guardrail | Halts execution immediately if the security scanner detects an indirect injection. |
+| **Stagehand 4.0** | Browser Automation Engine | Direct CDP-driven automation library executing natural language browser control without launching external browser instances. |
+| **CDP Debug Port (`9222`)** | Direct Connection Gateway | Electron is launched with `--remote-debugging-port 9222`, allowing Stagehand to drive the user's active window. |
+| **Pre-Action Security Checkpoint** | Prompt Injection Gate | Scans active page content across 14 channels before every action to catch indirect prompt injections before execution. |
+| **In-Memory Security Hash Cache** | Latency Optimization | Caches `(url, pageHash) -> verdict` tuples, providing instant (< 1ms) clearance for consecutive actions on the same page. |
+| **Visual Feedback Overlay** | User Visibility | Injected Web Animations layer displaying a white virtual cursor with dark contrast border, click pulse ripples, and left-to-right laser scan sweep beams (`pointer-events: none`). |
+| **Dynamic Tab Strip Bridge** | Multi-Tab Orchestration | Two-way IPC (`agent:request-open-tab` / `agent:response-open-tab`) enabling the agent to create, focus, and navigate new browser tabs. |
 
 ## 4.3 Key Files in the Automation Subsystem
 
-- `frontend/electron/browserRuntime/browserRuntime.ts`: Central gateway for all browser actions.
-- `frontend/electron/browserRuntime/pageInspector.ts`: Extracts AXTree and captures screenshots.
-- `frontend/electron/browserRuntime/stateBuilder.ts`: Converts raw accessibility trees into clean semantic states.
-- `frontend/electron/browserRuntime/nativeInput.ts`: Dispatches true OS mouse clicks and key presses.
-- `frontend/electron/browserRuntime/verificationEngine.ts`: Verifies whether actions updated the page.
-- `frontend/src/services/agentRuntimeCore.ts`: Orchestrates the main agent step loop.
-- `frontend/src/services/agentSecurityPipeline.ts`: Gathers 14-channel snapshots and requests security clearance.
+- `frontend/electron/config.ts`: Central configuration loading CDP port (`9222`), OpenCode Zen settings, and extension paths.
+- `frontend/electron/stagehand/stagehandClient.ts`: Custom OpenAI-compatible `ClientLLM` adapter and local CDP connection manager.
+- `frontend/electron/stagehand/stagehandAgent.ts`: Main execution loop handling parallel security checks, element extraction, LLM reasoning, and tab actions.
+- `frontend/electron/stagehand/visualOverlay.ts`: Web Animations overlay managing the white virtual cursor, click pulses, and scan sweep beam.
+- `frontend/src/services/agentRuntimeCore.ts`: Client-side agent bridge streaming events and tab requests between UI and Electron main process.
+- `frontend/src/components/AgentModePanel.tsx`: User interface for entering agent goals, viewing live execution timelines, and handling security blocks.
 
 ## 4.4 Step-by-Step Agent Execution Loop
 
 ```
-[ USER SUBMITS GOAL ]
-         │
-         ▼
+[ USER SUBMITS GOAL IN AGENT PANEL ]
+                 │
+                 ▼
 [ STEP 1: INITIALIZE TASK & MEMORY ]
-• Creates task_id and records objective in Working Memory.
-         │
-         ▼
-[ STEP 2: PAGE PERCEPTION (AXTree) ]
-• Queries CDP for Accessibility Tree; builds semantic map of interactive elements (e0, e1, e2...).
-         │
-         ▼
-[ STEP 3: PARALLEL PLANNING & SECURITY SCAN ]
+• Creates task_id and begins streaming IPC session.
+                 │
+                 ▼
+[ STEP 2: PARALLEL SECURITY SCAN & DOM EXTRACTION ]
 ┌────────────────────────────────────────┴────────────────────────────────────────┐
-│  TRACK A: PLANNING                             TRACK B: SECURITY SCAN           │
-│  • Sends semantic state to /agent/plan         • Captures 14-channel CDP snapshot│
-│  • LLM returns JSON tool action (click/fill)   • Sends to /agent/scan-active-page│
+│  TRACK A: SECURITY SCAN                        TRACK B: DOM EXTRACTION          │
+│  • Checks in-memory page hash cache.           • Extracts interactive elements  │
+│  • If miss: captures 14-channel CDP snapshot    (buttons, inputs, links).       │
+│    and calls /agent/scan-active-page.          • Computes exact centroid coords.│
+│  • Fires asynchronous scan sweep beam.                                          │
 └────────────────────────────────────────┬────────────────────────────────────────┘
                                          │
                                          ▼
-[ STEP 4: CIRCUIT BREAKER GATE ]
-• If Security = UNSAFE ──► Abort task, alert user, discard action.
-• If Security = SAFE   ──► Proceed to Step 5.
+[ STEP 3: SECURITY GATE (CIRCUIT BREAKER) ]
+• If Security = UNSAFE ──► Halt task immediately, open threat modal, tear down overlay.
+• If Security = SAFE   ──► Proceed to Step 4.
                                          │
                                          ▼
-[ STEP 5: NATIVE HARDWARE EXECUTION ]
-• Resolves target element coordinates.
-• Dispatches native mouse click / keystrokes over CDP.
+[ STEP 4: LLM REASONING (OpenCode Zen) ]
+• Model chooses action: open_tab | click | type | navigate | scroll | wait | finish.
                                          │
                                          ▼
-[ STEP 6: VERIFICATION & RECOVERY ]
-• Confirms page state updated. If stuck, runs 5-step recovery ladder.
-• Repeats loop until LLM triggers "finish" tool.
+[ STEP 5: VISUAL CURSOR GLIDE & EXECUTION ]
+• Animates white virtual cursor smoothly to target centroid coordinates.
+• Triggers white click pulse ripple at exact click point.
+• Dispatches action (or delegates open_tab to browser shell tab strip).
+                                         │
+                                         ▼
+[ STEP 6: VERIFY & REPEAT ]
+• Streams step entry to UI timeline.
+• Loops until task completion or user cancellation.
 ```
-
-## 4.5 Action Verification & 5-Step Recovery Ladder
-
-If an element is temporarily covered, not rendered, or an action fails to change the page state, the agent executes an automatic **5-step recovery ladder** before escalating:
-
-1. **`Retry`**: Retries the action once with a brief quiescence wait.
-2. **`Re-find Element`**: Queries CDP to re-resolve current viewport coordinates.
 3. **`Wait for Page`**: Waits for network idle and DOM stabilization events.
 4. **`Rebuild State`**: Re-extracts the full AXTree to map updated layout changes.
 5. **`Replan`**: Sends failure feedback to the LLM to choose an alternative strategy.

@@ -12,6 +12,9 @@ import {
   type RuntimeResult,
 } from './browserRuntime/index.js'
 
+import { AGENT_CDP_PORT, AGENT_CDP_URL, STAGEHAND_EXTENSION_PATH, setStagehandExtensionId } from './config.js'
+import { stagehandAgentService } from './stagehand/stagehandAgent.js'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const isDevelopment = process.env.PROMPT_DEFENSE_DEV === 'true'
@@ -23,6 +26,8 @@ if (isDevelopment) {
 app.setPath('userData', path.join(app.getPath('temp'), 'prompt-defense-browser-user-data'))
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disk-cache-size', '0')
+app.commandLine.appendSwitch('remote-debugging-port', AGENT_CDP_PORT)
+app.commandLine.appendSwitch('load-extension', STAGEHAND_EXTENSION_PATH)
 
 let mainWindow: BrowserWindow | null = null
 const cdpSessionRegistry = new CdpSessionRegistry()
@@ -141,7 +146,100 @@ ipcMain.handle(RUNTIME_INVOKE_CHANNEL, (event, payload: unknown): Promise<Runtim
   return browserRuntime.invoke(request.targetId, request.name, request.params as never)
 })
 
+ipcMain.handle('stagehand:status', async () => {
+  const extensions = session.defaultSession.getAllExtensions()
+  return {
+    extensions,
+    cdpPort: AGENT_CDP_PORT,
+    cdpUrl: AGENT_CDP_URL,
+    extensionPath: STAGEHAND_EXTENSION_PATH,
+  }
+})
+
+const pendingOpenTabRequests = new Map<string, (targetId: number | null) => void>()
+
+ipcMain.handle('agent:response-open-tab', (_event, payload: { requestId: string; targetId: number | null }) => {
+  const resolver = pendingOpenTabRequests.get(payload.requestId)
+  if (resolver) {
+    resolver(payload.targetId)
+    pendingOpenTabRequests.delete(payload.requestId)
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('agent:start-task', async (event, payload: { taskId: string; goal: string; targetId: number; visualFeedback?: boolean }) => {
+  if (!mainWindow || event.sender.id !== mainWindow.webContents.id) {
+    return { ok: false, error: 'Unauthorized: task must originate from app shell' }
+  }
+
+  stagehandAgentService.setCdpInspector(cdpInspectionService)
+
+  // Run in background and stream events over webContents IPC
+  stagehandAgentService.runTask({
+    taskId: payload.taskId,
+    goal: payload.goal,
+    targetId: payload.targetId,
+    visualFeedback: payload.visualFeedback,
+    requestOpenTab: async (url?: string) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return null
+      const requestId = `req-tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      return new Promise<number | null>((resolve) => {
+        pendingOpenTabRequests.set(requestId, resolve)
+        mainWindow?.webContents.send('agent:request-open-tab', {
+          taskId: payload.taskId,
+          requestId,
+          url,
+        })
+        setTimeout(() => {
+          if (pendingOpenTabRequests.has(requestId)) {
+            pendingOpenTabRequests.delete(requestId)
+            resolve(null)
+          }
+        }, 15000)
+      })
+    },
+    onEvent: (evt) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('agent:task-event', { taskId: payload.taskId, ...evt })
+      }
+    },
+  }).then((result) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent:task-event', { taskId: payload.taskId, type: 'result', payload: result })
+    }
+  }).catch((err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent:task-event', {
+        taskId: payload.taskId,
+        type: 'result',
+        payload: { taskId: payload.taskId, status: 'failed', message: err.message, steps: 0 },
+      })
+    }
+  })
+
+  return { ok: true, taskId: payload.taskId }
+})
+
+ipcMain.handle('agent:stop-task', async (_event, taskId?: string) => {
+  stagehandAgentService.stopTask(taskId)
+  return { ok: true }
+})
+
 app.whenReady().then(async () => {
+  try {
+    const ext = await session.defaultSession.loadExtension(STAGEHAND_EXTENSION_PATH, { allowFileAccess: true })
+    setStagehandExtensionId(ext.id)
+    console.log(`[stagehand] Extension loaded with id: ${ext.id}`)
+  } catch (err) {
+    const existing = session.defaultSession.getAllExtensions().find((e) => e.name.includes('Stagehand'))
+    if (existing) {
+      setStagehandExtensionId(existing.id)
+      console.log(`[stagehand] Found existing extension id: ${existing.id}`)
+    } else {
+      console.warn('[stagehand] Extension not yet registered in session:', err)
+    }
+  }
+
   await createWindow()
 
   app.on('activate', async () => {

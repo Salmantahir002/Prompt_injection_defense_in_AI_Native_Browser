@@ -118,6 +118,7 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
       taskId: `task-${Date.now()}`,
       goal: trimmedGoal,
       targetId,
+      visualFeedback: true,
       signal: controller.signal,
       onApprovalRequest: handleApprovalRequest,
       onOpenTab,
