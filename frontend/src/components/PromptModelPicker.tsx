@@ -3,7 +3,6 @@ import type { ActiveProviderInfo, ClientProviderConfig, ModelInfo } from '../typ
 import {
   fetchProviderModels,
   getAllStoredProviders,
-  getBackendActiveProvider,
   setActiveStoredProvider,
 } from '../services/providerApiClient'
 import { getProviderLogo } from './ProviderIcons'
@@ -13,14 +12,14 @@ interface PromptModelPickerProps {
   className?: string
 }
 
-// Curated default OpenCode Zen / Fallback models
-const DEFAULT_FALLBACK_MODELS: ModelInfo[] = [
+// Preset model list for OpenCode Zen when selected
+const OPENCODE_ZEN_MODELS: ModelInfo[] = [
+  { id: 'nemotron-3-ultra-free', name: 'Nemotron 3 Ultra Free' },
   { id: 'deepseek-v4-flash-free', name: 'DeepSeek V4 Flash Free' },
-  { id: 'hy3-free', name: 'Hy3 Free' },
-  { id: 'laguna-s-2.1-free', name: 'Laguna S 2.1 Free' },
   { id: 'mimo-v2.5-free', name: 'MiMo V2.5 Free' },
   { id: 'nemotron-3.5-lightning-free', name: 'Nemotron 3.5 Lightning Free' },
-  { id: 'nemotron-3-ultra-free', name: 'Nemotron 3 Ultra Free' },
+  { id: 'hy3-free', name: 'Hy3 Free' },
+  { id: 'laguna-s-2.1-free', name: 'Laguna S 2.1 Free' },
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
   { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet' },
   { id: 'gpt-5.6-sol', name: 'GPT 5.6 Sol' },
@@ -29,7 +28,7 @@ const DEFAULT_FALLBACK_MODELS: ModelInfo[] = [
 function formatModelName(modelId: string, modelName?: string): { title: string; isFree: boolean } {
   const raw = modelName && modelName.trim() ? modelName : modelId
   const isFree = raw.toLowerCase().includes('free') || modelId.toLowerCase().includes('free')
-  
+
   let title = raw
   if (title === 'mimo-v2.5-free') title = 'MiMo V2.5 Free'
   else if (title === 'deepseek-v4-flash-free') title = 'DeepSeek V4 Flash Free'
@@ -53,7 +52,7 @@ function formatModelName(modelId: string, modelName?: string): { title: string; 
         .replace(/\b\w/g, (c) => c.toUpperCase())
     }
   }
-  
+
   return { title, isFree }
 }
 
@@ -67,56 +66,36 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
 
   const refreshActiveInfo = async () => {
     try {
-      const [backendInfo, stored] = await Promise.all([
-        getBackendActiveProvider().catch(() => null),
-        getAllStoredProviders().catch(() => []),
-      ])
-
+      const stored = await getAllStoredProviders().catch(() => [])
       setSavedProviders(stored)
 
-      if (backendInfo && backendInfo.is_active && !backendInfo.is_fallback) {
-        setActiveInfo(backendInfo)
+      const activeStored = stored.find((p) => p.is_active)
+      if (activeStored) {
+        setActiveInfo({
+          id: activeStored.id,
+          name: activeStored.name,
+          provider_type: activeStored.provider_type,
+          base_url: activeStored.base_url,
+          is_active: true,
+          is_fallback: false,
+          selected_model: activeStored.selected_model,
+          models: activeStored.models,
+          masked_key: activeStored.masked_key || '',
+        })
       } else {
-        const activeStored = stored.find((p) => p.is_active)
-        if (activeStored) {
-          setActiveInfo({
-            id: activeStored.id,
-            name: activeStored.name,
-            provider_type: activeStored.provider_type,
-            base_url: activeStored.base_url,
-            is_active: true,
-            is_fallback: false,
-            selected_model: activeStored.selected_model,
-            models: activeStored.models,
-            masked_key: activeStored.masked_key || '',
-          })
-        } else if (backendInfo) {
-          setActiveInfo(backendInfo)
-        } else {
-          setActiveInfo({
-            id: 'opencode',
-            name: 'OpenCode Zen',
-            provider_type: 'openai_compatible',
-            is_active: true,
-            is_fallback: true,
-            selected_model: 'nemotron-3-ultra-free',
-            masked_key: '',
-          })
-        }
+        setActiveInfo(null)
       }
     } catch {
-      // Graceful fallback
+      setActiveInfo(null)
     }
   }
 
   useEffect(() => {
     refreshActiveInfo()
-    const handleStorage = () => refreshActiveInfo()
-    window.addEventListener('promptguard:providers-updated', handleStorage)
-    window.addEventListener('focus', handleStorage)
+    const handleUpdated = () => refreshActiveInfo()
+    window.addEventListener('promptguard:providers-updated', handleUpdated)
     return () => {
-      window.removeEventListener('promptguard:providers-updated', handleStorage)
-      window.removeEventListener('focus', handleStorage)
+      window.removeEventListener('promptguard:providers-updated', handleUpdated)
     }
   }, [])
 
@@ -138,13 +117,16 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
 
   // Compute model list to display
   const modelList: ModelInfo[] = useMemo(() => {
+    if (!activeInfo || !activeInfo.is_active) {
+      return []
+    }
     if (currentProvider?.models && currentProvider.models.length > 0) {
       return currentProvider.models
     }
-    if (activeInfo?.models && activeInfo.models.length > 0) {
+    if (activeInfo.models && activeInfo.models.length > 0) {
       return activeInfo.models
     }
-    const id = (activeInfo?.id || currentProvider?.id || '').toLowerCase()
+    const id = (activeInfo.id || currentProvider?.id || '').toLowerCase()
     if (id.includes('gemini') || id.includes('google')) {
       return [
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
@@ -186,16 +168,24 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
         { id: 'o1', name: 'o1' },
       ]
     }
-    if (activeInfo?.id === 'opencode' || activeInfo?.id === 'opencode_zen' || activeInfo?.is_fallback || !activeInfo?.id) {
-      return DEFAULT_FALLBACK_MODELS
+    if (id === 'opencode' || id === 'opencode_zen') {
+      return OPENCODE_ZEN_MODELS
     }
-    if (activeInfo?.selected_model) {
+    if (activeInfo.selected_model) {
       return [{ id: activeInfo.selected_model, name: activeInfo.selected_model }]
     }
-    return DEFAULT_FALLBACK_MODELS
+    return []
   }, [currentProvider, activeInfo])
 
   const handleToggle = async () => {
+    if (!activeInfo && savedProviders.length === 0) {
+      // If no providers are saved, clicking directly opens settings
+      if (onOpenSettings) {
+        onOpenSettings()
+        return
+      }
+    }
+
     const nextState = !isOpen
     setIsOpen(nextState)
     setSearchTerm('')
@@ -210,7 +200,7 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
           setSavedProviders([...savedProviders])
         }
       } catch {
-        // Silently fallback
+        // Silently handle
       } finally {
         setIsLoadingModels(false)
       }
@@ -229,17 +219,17 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
   const handleSelectProvider = async (providerId: string, defaultModel?: string) => {
     await setActiveStoredProvider(providerId, defaultModel)
     setIsOpen(false)
-    refreshActiveInfo()
+    await refreshActiveInfo()
     window.dispatchEvent(new CustomEvent('promptguard:providers-updated'))
   }
 
-  // Active provider label & active model label
-  const providerId = activeInfo?.id || 'opencode'
-  const providerName = activeInfo?.name || (activeInfo?.is_fallback ? 'OpenCode Zen' : 'AI Provider')
-  const currentModelId = activeInfo?.selected_model || (modelList.length > 0 ? modelList[0].id : 'nemotron-3-ultra-free')
-  
+  // Determine display text for active provider & model
+  const hasActiveProvider = Boolean(activeInfo && activeInfo.is_active)
+  const providerId = activeInfo?.id || ''
+  const providerName = activeInfo?.name || 'AI Provider'
+  const currentModelId = activeInfo?.selected_model || (modelList.length > 0 ? modelList[0].id : '')
   const currentModelObj = modelList.find((m) => m.id === currentModelId)
-  const formattedCurrent = formatModelName(currentModelId, currentModelObj?.name)
+  const formattedCurrent = currentModelId ? formatModelName(currentModelId, currentModelObj?.name) : null
 
   const filteredModels = searchTerm.trim()
     ? modelList.filter(
@@ -251,20 +241,42 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
 
   return (
     <div className={`prompt-model-picker-wrapper ${className}`} ref={pickerRef}>
-      {/* Trigger Button: Only Logo + Model Name + Chevron (Matching Reference Image 4) */}
+      {/* Trigger Button */}
       <button
         type="button"
-        className="prompt-model-btn"
+        className={`prompt-model-btn ${!hasActiveProvider ? 'prompt-model-btn--unconfigured' : ''}`}
         onClick={handleToggle}
-        title={`Active Model: ${providerName} - ${formattedCurrent.title}`}
+        title={
+          hasActiveProvider
+            ? `Active Model: ${providerName} - ${formattedCurrent?.title || currentModelId}`
+            : 'Click to select or connect an AI Provider'
+        }
         aria-expanded={isOpen}
       >
-        <span className="prompt-model-btn-logo">
-          {getProviderLogo(providerId, 16)}
-        </span>
-        <span className="prompt-model-btn-name">
-          {formattedCurrent.title}
-        </span>
+        {hasActiveProvider ? (
+          <>
+            <span className="prompt-model-btn-logo">
+              {getProviderLogo(providerId, 16)}
+            </span>
+            <span className="prompt-model-btn-name">
+              {formattedCurrent?.title || currentModelId}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="prompt-model-btn-logo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="16" />
+                <line x1="8" y1="12" x2="16" y2="12" />
+              </svg>
+            </span>
+            <span className="prompt-model-btn-name">
+              {savedProviders.length > 0 ? 'Select Model' : 'Connect Provider'}
+            </span>
+          </>
+        )}
+
         <svg
           className={`prompt-model-btn-chevron ${isOpen ? 'open' : ''}`}
           viewBox="0 0 24 24"
@@ -280,93 +292,132 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
         </svg>
       </button>
 
-      {/* Upward Popover Dropdown (Matching Reference Image 5) */}
+      {/* Popover Dropdown */}
       {isOpen && (
         <div className="prompt-model-menu" role="menu">
-          {/* Header with Provider Name */}
-          <div className="prompt-model-menu-header">
-            <div className="prompt-model-provider-title">
-              <span className="prompt-model-header-logo">{getProviderLogo(providerId, 15)}</span>
-              <span className="prompt-model-header-text">{providerName}</span>
-            </div>
-          </div>
-
-          {/* Quick Search if model count is high */}
-          {modelList.length > 7 ? (
-            <div className="prompt-model-search-box">
-              <input
-                type="text"
-                className="prompt-model-search-input"
-                placeholder="Search models..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                autoFocus
-              />
-            </div>
-          ) : null}
-
-          {/* Models List for the Active Provider (Matching Reference Image 5) */}
-          <div className="prompt-model-list">
-            {isLoadingModels ? (
-              <div className="prompt-model-loading">
-                <span className="dot-pulse"><span /><span /><span /></span>
-                <span>Fetching live models...</span>
+          {hasActiveProvider ? (
+            <>
+              {/* Header with Provider Name */}
+              <div className="prompt-model-menu-header">
+                <div className="prompt-model-provider-title">
+                  <span className="prompt-model-header-logo">{getProviderLogo(providerId, 15)}</span>
+                  <span className="prompt-model-header-text">{providerName}</span>
+                </div>
               </div>
-            ) : null}
 
-            {filteredModels.map((model) => {
-              const isSelected = currentModelId === model.id
-              const { title, isFree } = formatModelName(model.id, model.name)
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  className={`prompt-model-item ${isSelected ? 'prompt-model-item--active' : ''}`}
-                  onClick={() => handleSelectModel(model.id)}
-                  role="menuitem"
-                >
-                  <div className="prompt-model-item-left">
-                    <span className="prompt-model-item-title">{title}</span>
-                    {isFree ? (
-                      <span className="prompt-model-free-badge">Free</span>
-                    ) : null}
+              {/* Quick Search if model count is high */}
+              {modelList.length > 7 ? (
+                <div className="prompt-model-search-box">
+                  <input
+                    type="text"
+                    className="prompt-model-search-input"
+                    placeholder="Search models..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              ) : null}
+
+              {/* Models List for the Active Provider */}
+              <div className="prompt-model-list">
+                {isLoadingModels ? (
+                  <div className="prompt-model-loading">
+                    <span className="dot-pulse"><span /><span /><span /></span>
+                    <span>Fetching live models...</span>
                   </div>
-                  {isSelected && (
-                    <span className="prompt-model-checkmark">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </span>
-                  )}
-                </button>
-              )
-            })}
+                ) : null}
 
-            {filteredModels.length === 0 && !isLoadingModels ? (
-              <div className="prompt-model-empty">No matching models found</div>
-            ) : null}
-          </div>
+                {filteredModels.map((model) => {
+                  const isSelected = currentModelId === model.id
+                  const { title, isFree } = formatModelName(model.id, model.name)
+                  return (
+                    <button
+                      key={model.id}
+                      type="button"
+                      className={`prompt-model-item ${isSelected ? 'prompt-model-item--active' : ''}`}
+                      onClick={() => handleSelectModel(model.id)}
+                      role="menuitem"
+                    >
+                      <div className="prompt-model-item-left">
+                        <span className="prompt-model-item-title">{title}</span>
+                        {isFree ? (
+                          <span className="prompt-model-free-badge">Free</span>
+                        ) : null}
+                      </div>
+                      {isSelected && (
+                        <span className="prompt-model-checkmark">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
 
-          {/* If there are other configured providers, offer quick switch */}
-          {savedProviders.length > 1 && (
-            <div className="prompt-model-providers-section">
-              <div className="prompt-model-section-label">Other Connected Providers</div>
-              {savedProviders
-                .filter((p) => p.id !== activeInfo?.id)
-                .map((p) => (
+                {filteredModels.length === 0 && !isLoadingModels ? (
+                  <div className="prompt-model-empty">No models available</div>
+                ) : null}
+              </div>
+
+              {/* Other connected providers list */}
+              {savedProviders.filter((p) => p.id !== activeInfo?.id).length > 0 && (
+                <div className="prompt-model-providers-section">
+                  <div className="prompt-model-section-label">Other Connected Providers</div>
+                  {savedProviders
+                    .filter((p) => p.id !== activeInfo?.id)
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="prompt-model-provider-switch-item"
+                        onClick={() => handleSelectProvider(p.id, p.selected_model)}
+                      >
+                        <span className="prompt-model-switch-logo">{getProviderLogo(p.id, 14)}</span>
+                        <span className="prompt-model-switch-name">{p.name}</span>
+                        <span className="prompt-model-switch-count">
+                          {p.models?.length ? `${p.models.length} models` : 'Ready'}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </>
+          ) : (
+            /* No Active Provider State */
+            <div className="prompt-model-list">
+              <div className="prompt-model-menu-header">
+                <div className="prompt-model-provider-title">
+                  <span className="prompt-model-header-text">Select AI Provider</span>
+                </div>
+              </div>
+
+              {savedProviders.length > 0 ? (
+                savedProviders.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     className="prompt-model-provider-switch-item"
                     onClick={() => handleSelectProvider(p.id, p.selected_model)}
                   >
-                    <span className="prompt-model-switch-logo">{getProviderLogo(p.id, 14)}</span>
+                    <span className="prompt-model-switch-logo">{getProviderLogo(p.id, 16)}</span>
                     <span className="prompt-model-switch-name">{p.name}</span>
                     <span className="prompt-model-switch-count">
-                      {p.models?.length ? `${p.models.length} models` : 'Ready'}
+                      {p.selected_model || (p.models?.length ? `${p.models.length} models` : 'Activate')}
                     </span>
                   </button>
-                ))}
+                ))
+              ) : (
+                <div className="prompt-model-empty" style={{ padding: '16px 12px', textAlign: 'center' }}>
+                  <div style={{ marginBottom: '6px', fontWeight: 500, color: 'var(--text-primary, #f0f0f0)' }}>
+                    No Providers Connected
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #888)' }}>
+                    Connect Google Gemini, Anthropic, OpenAI, OpenCode Zen, or Custom in Settings to start.
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -381,7 +432,7 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
                   onOpenSettings()
                 }}
               >
-                <span>Manage Providers & Keys</span>
+                <span>{savedProviders.length > 0 ? 'Manage Providers & Keys' : '+ Connect New Provider'}</span>
                 <span className="prompt-model-manage-arrow">→</span>
               </button>
             </div>

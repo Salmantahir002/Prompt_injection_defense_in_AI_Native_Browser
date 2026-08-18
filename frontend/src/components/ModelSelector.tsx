@@ -3,7 +3,6 @@ import type { ActiveProviderInfo, ClientProviderConfig, ModelInfo } from '../typ
 import {
   fetchProviderModels,
   getAllStoredProviders,
-  getBackendActiveProvider,
   setActiveStoredProvider,
 } from '../services/providerApiClient'
 
@@ -23,32 +22,26 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
 
   const refreshActiveInfo = async () => {
     try {
-      const [backendInfo, stored] = await Promise.all([
-        getBackendActiveProvider().catch(() => null),
-        getAllStoredProviders().catch(() => []),
-      ])
-
+      const stored = await getAllStoredProviders().catch(() => [])
       setSavedProviders(stored)
 
-      if (backendInfo) {
-        setActiveInfo(backendInfo)
+      const activeStored = stored.find((p) => p.is_active)
+      if (activeStored) {
+        setActiveInfo({
+          id: activeStored.id,
+          name: activeStored.name,
+          provider_type: activeStored.provider_type,
+          base_url: activeStored.base_url,
+          is_active: true,
+          is_fallback: false,
+          selected_model: activeStored.selected_model,
+          masked_key: activeStored.masked_key || '',
+        })
       } else {
-        const activeStored = stored.find((p) => p.is_active)
-        if (activeStored) {
-          setActiveInfo({
-            id: activeStored.id,
-            name: activeStored.name,
-            provider_type: activeStored.provider_type,
-            base_url: activeStored.base_url,
-            is_active: true,
-            is_fallback: false,
-            selected_model: activeStored.selected_model,
-            masked_key: activeStored.masked_key || '',
-          })
-        }
+        setActiveInfo(null)
       }
     } catch {
-      // Ignore
+      setActiveInfo(null)
     }
   }
 
@@ -56,10 +49,8 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
     refreshActiveInfo()
     const handleStorage = () => refreshActiveInfo()
     window.addEventListener('promptguard:providers-updated', handleStorage)
-    window.addEventListener('focus', handleStorage)
     return () => {
       window.removeEventListener('promptguard:providers-updated', handleStorage)
-      window.removeEventListener('focus', handleStorage)
     }
   }, [])
 
@@ -80,16 +71,15 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
     const nextState = !isOpen
     setIsOpen(nextState)
 
-    if (nextState && activeInfo && !activeInfo.is_fallback) {
-      // Find stored provider to fetch live model list
+    if (nextState && activeInfo) {
       const currentStored = savedProviders.find((p) => p.id === activeInfo.id)
-      if (currentStored && availableModels.length === 0) {
+      if (currentStored && availableModels.length === 0 && currentStored.has_key) {
         setIsLoadingModels(true)
         try {
           const models = await fetchProviderModels(currentStored)
           setAvailableModels(models)
         } catch {
-          // If live fetch fails, keep current model
+          // If live fetch fails, keep current
         } finally {
           setIsLoadingModels(false)
         }
@@ -114,20 +104,21 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
     window.dispatchEvent(new CustomEvent('promptguard:providers-updated'))
   }
 
-  const providerLabel = activeInfo?.name || (activeInfo?.is_fallback ? 'OpenCode Zen (Fallback)' : 'Default Model')
-  const modelLabel = activeInfo?.selected_model || 'mimo-v2.5-free'
+  const hasActive = Boolean(activeInfo && activeInfo.is_active)
+  const providerLabel = activeInfo?.name || 'No Provider'
+  const modelLabel = activeInfo?.selected_model || (hasActive ? 'Default Model' : 'None')
 
   return (
     <div className={`model-selector-wrapper ${className}`} ref={dropdownRef}>
       <button
         type="button"
-        className={`model-selector-btn ${activeInfo?.is_fallback ? 'model-selector-btn--fallback' : 'model-selector-btn--active'}`}
+        className={`model-selector-btn ${hasActive ? 'model-selector-btn--active' : 'model-selector-btn--inactive'}`}
         onClick={handleToggle}
         title={`Active LLM: ${providerLabel} (${modelLabel})`}
         aria-expanded={isOpen}
       >
         <span className="model-selector-indicator" />
-        <span className="model-selector-provider">{activeInfo?.is_fallback ? 'Fallback' : activeInfo?.name || 'AI'}</span>
+        <span className="model-selector-provider">{hasActive ? activeInfo?.name : 'AI Provider'}</span>
         <span className="model-selector-separator">/</span>
         <span className="model-selector-model">{modelLabel}</span>
         <svg className={`model-selector-chevron ${isOpen ? 'open' : ''}`} viewBox="0 0 24 24" width="12" height="12">
@@ -164,12 +155,12 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
             </button>
           </div>
 
-          {/* If there are saved custom providers */}
-          {savedProviders.length > 0 && (
+          {/* Saved providers */}
+          {savedProviders.length > 0 ? (
             <div className="model-selector-section">
               <div className="model-selector-section-title">Saved Providers</div>
               {savedProviders.map((p) => {
-                const isSelected = activeInfo?.id === p.id && !activeInfo?.is_fallback
+                const isSelected = activeInfo?.id === p.id
                 return (
                   <button
                     key={p.id}
@@ -185,6 +176,12 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
                   </button>
                 )
               })}
+            </div>
+          ) : (
+            <div className="model-selector-section">
+              <div style={{ padding: '12px', fontSize: '13px', color: '#999', textAlign: 'center' }}>
+                No providers connected.
+              </div>
             </div>
           )}
 
@@ -220,21 +217,6 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
               <span>Fetching live models...</span>
             </div>
           )}
-
-          {/* Default fallback info */}
-          <div className="model-selector-footer">
-            <button
-              type="button"
-              className={`model-selector-item model-selector-fallback ${activeInfo?.is_fallback ? 'model-selector-item--selected' : ''}`}
-              onClick={() => handleSelectProvider('', undefined)}
-            >
-              <div className="model-selector-item-main">
-                <span className="model-selector-item-name">Developer Fallback (.env)</span>
-                <span className="model-selector-item-sub">OpenCode Zen (mimo-v2.5-free)</span>
-              </div>
-              {activeInfo?.is_fallback && <span className="model-selector-checkmark">✓</span>}
-            </button>
-          </div>
         </div>
       )}
     </div>

@@ -113,4 +113,6 @@ def test_set_and_get_active_provider():
     del_res = client.delete("/api/v1/providers/active")
     assert del_res.status_code == 200
     del_data = del_res.json()
-    assert del_data["is_fallback"] is True
+    assert del_data["is_active"] is False
+    assert del_data["is_fallback"] is False
+    assert del_data["id"] == ""

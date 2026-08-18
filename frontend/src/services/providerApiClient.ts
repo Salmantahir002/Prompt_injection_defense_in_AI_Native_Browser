@@ -13,7 +13,7 @@ import type {
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
 
-export const FALLBACK_PRESETS: ProviderPreset[] = [
+export const DEFAULT_PRESETS: ProviderPreset[] = [
   {
     id: 'opencode',
     name: 'OpenCode Zen',
@@ -117,9 +117,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getProviderPresets(): Promise<ProviderPreset[]> {
   try {
     const res = await requestJson<{ presets: ProviderPreset[] }>('/providers/presets')
-    return res.presets || FALLBACK_PRESETS
+    return res.presets || DEFAULT_PRESETS
   } catch {
-    return FALLBACK_PRESETS
+    return DEFAULT_PRESETS
   }
 }
 

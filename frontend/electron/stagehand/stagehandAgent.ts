@@ -1,5 +1,5 @@
 import { webContents } from 'electron'
-import { AGENT_API_BASE_URL, OPENCODE_ZEN_API_KEY, OPENCODE_ZEN_BASE_URL, OPENCODE_ZEN_MODEL } from '../config.js'
+import { AGENT_API_BASE_URL } from '../config.js'
 import { visualOverlay } from './visualOverlay.js'
 import { providerSecureStore } from '../providerSecureStore.js'
 import type { CdpInspectionService } from '../cdpInspectionService.js'
@@ -379,103 +379,104 @@ Respond ONLY with valid JSON:
         let responseContent = '{}'
         const activeProvider = providerSecureStore.getDecryptedActiveConfig()
 
-        if (activeProvider && activeProvider.api_key) {
-          try {
-            if (activeProvider.provider_type === 'openai_compatible') {
-              const baseUrl = (activeProvider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
-              const llmResponse = await fetch(`${baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${activeProvider.api_key}`,
-                  'User-Agent': 'Anthropic/Python 0.39.0',
-                  'X-Stainless-Lang': 'python',
-                },
-                body: JSON.stringify({
-                  model: activeProvider.selected_model || 'gpt-4o',
-                  messages: promptMessages,
-                  temperature: 0.1,
-                  max_tokens: 800,
-                  response_format: { type: 'json_object' },
-                }),
-                signal,
-              })
-              if (llmResponse.ok) {
-                const llmData = (await llmResponse.json()) as any
-                const messageObj = llmData.choices?.[0]?.message
-                responseContent = messageObj?.content || messageObj?.reasoning || '{}'
-              }
-            } else if (activeProvider.provider_type === 'anthropic') {
-              const baseUrl = (activeProvider.base_url || 'https://api.anthropic.com/v1').replace(/\/+$/, '')
-              const llmResponse = await fetch(`${baseUrl}/messages`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': activeProvider.api_key,
-                  'anthropic-version': '2023-06-01',
-                },
-                body: JSON.stringify({
-                  model: activeProvider.selected_model || 'claude-3-5-sonnet-20241022',
-                  max_tokens: 800,
-                  temperature: 0.1,
-                  system: promptMessages[0].content,
-                  messages: [{ role: 'user', content: promptMessages[1].content }],
-                }),
-                signal,
-              })
-              if (llmResponse.ok) {
-                const llmData = (await llmResponse.json()) as any
-                responseContent = llmData.content?.[0]?.text || '{}'
-              }
-            } else if (activeProvider.provider_type === 'gemini') {
-              const baseUrl = (activeProvider.base_url || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
-              const modelName = (activeProvider.selected_model || 'gemini-1.5-flash').replace('models/', '')
-              const llmResponse = await fetch(`${baseUrl}/models/${modelName}:generateContent?key=${activeProvider.api_key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{ role: 'user', parts: [{ text: promptMessages[1].content }] }],
-                  systemInstruction: { parts: [{ text: promptMessages[0].content }] },
-                  generationConfig: {
-                    temperature: 0.1,
-                    maxOutputTokens: 800,
-                    responseMimeType: 'application/json',
-                  },
-                }),
-                signal,
-              })
-              if (llmResponse.ok) {
-                const llmData = (await llmResponse.json()) as any
-                responseContent = llmData.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
-              }
-            }
-          } catch (providerErr) {
-            console.warn('[stagehandAgent] Active provider call failed, falling back to OpenCode Zen:', providerErr)
+        if (!activeProvider || !activeProvider.api_key) {
+          emit('status', 'Error: No active LLM provider configured.')
+          return {
+            taskId,
+            status: 'failed',
+            message: 'No active LLM provider configured. Please open Settings (⚙️) and connect an LLM provider (Google Gemini, OpenAI, Anthropic, OpenCode Zen, NVIDIA, etc.) to use the agent.',
+            steps: stepCount,
+            decision,
           }
         }
 
-        // Fallback to OpenCode Zen if response is empty or active provider failed
-        if (responseContent === '{}' && OPENCODE_ZEN_API_KEY && OPENCODE_ZEN_API_KEY !== 'replace_with_your_key') {
-          const llmResponse = await fetch(`${OPENCODE_ZEN_BASE_URL}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${OPENCODE_ZEN_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: OPENCODE_ZEN_MODEL,
-              messages: promptMessages,
-              temperature: 0.1,
-              max_tokens: 800,
-              response_format: { type: 'json_object' },
-            }),
-            signal,
-          })
-
-          if (llmResponse.ok) {
-            const llmData = (await llmResponse.json()) as any
-            const messageObj = llmData.choices?.[0]?.message
-            responseContent = messageObj?.content || messageObj?.reasoning || '{}'
+        try {
+          if (activeProvider.provider_type === 'openai_compatible') {
+            const baseUrl = (activeProvider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+            const llmResponse = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${activeProvider.api_key}`,
+                'User-Agent': 'Anthropic/Python 0.39.0',
+                'X-Stainless-Lang': 'python',
+              },
+              body: JSON.stringify({
+                model: activeProvider.selected_model || 'gpt-4o',
+                messages: promptMessages,
+                temperature: 0.1,
+                max_tokens: 800,
+                response_format: { type: 'json_object' },
+              }),
+              signal,
+            })
+            if (llmResponse.ok) {
+              const llmData = (await llmResponse.json()) as any
+              const messageObj = llmData.choices?.[0]?.message
+              responseContent = messageObj?.content || messageObj?.reasoning || '{}'
+            } else {
+              const errBody = await llmResponse.text().catch(() => '')
+              throw new Error(`Provider returned status ${llmResponse.status}: ${errBody}`)
+            }
+          } else if (activeProvider.provider_type === 'anthropic') {
+            const baseUrl = (activeProvider.base_url || 'https://api.anthropic.com/v1').replace(/\/+$/, '')
+            const llmResponse = await fetch(`${baseUrl}/messages`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': activeProvider.api_key,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: activeProvider.selected_model || 'claude-3-5-sonnet-20241022',
+                max_tokens: 800,
+                temperature: 0.1,
+                system: promptMessages[0].content,
+                messages: [{ role: 'user', content: promptMessages[1].content }],
+              }),
+              signal,
+            })
+            if (llmResponse.ok) {
+              const llmData = (await llmResponse.json()) as any
+              responseContent = llmData.content?.[0]?.text || '{}'
+            } else {
+              const errBody = await llmResponse.text().catch(() => '')
+              throw new Error(`Provider returned status ${llmResponse.status}: ${errBody}`)
+            }
+          } else if (activeProvider.provider_type === 'gemini') {
+            const baseUrl = (activeProvider.base_url || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
+            const modelName = (activeProvider.selected_model || 'gemini-1.5-flash').replace('models/', '')
+            const llmResponse = await fetch(`${baseUrl}/models/${modelName}:generateContent?key=${activeProvider.api_key}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: promptMessages[1].content }] }],
+                systemInstruction: { parts: [{ text: promptMessages[0].content }] },
+                generationConfig: {
+                  temperature: 0.1,
+                  maxOutputTokens: 800,
+                  responseMimeType: 'application/json',
+                },
+              }),
+              signal,
+            })
+            if (llmResponse.ok) {
+              const llmData = (await llmResponse.json()) as any
+              responseContent = llmData.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
+            } else {
+              const errBody = await llmResponse.text().catch(() => '')
+              throw new Error(`Provider returned status ${llmResponse.status}: ${errBody}`)
+            }
+          }
+        } catch (providerErr: any) {
+          console.warn(`[stagehandAgent] Active provider (${activeProvider.name}) call failed:`, providerErr)
+          emit('status', `Error calling provider (${activeProvider.name}): ${providerErr.message}`)
+          return {
+            taskId,
+            status: 'failed',
+            message: `LLM provider error (${activeProvider.name}): ${providerErr.message}. Please check your credentials in Settings.`,
+            steps: stepCount,
+            decision,
           }
         }
 

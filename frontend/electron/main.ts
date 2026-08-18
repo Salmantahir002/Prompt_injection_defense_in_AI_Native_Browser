@@ -24,7 +24,7 @@ if (isDevelopment) {
   process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
 }
 
-app.setPath('userData', path.join(app.getPath('temp'), 'prompt-defense-browser-user-data'))
+app.setPath('userData', path.join(app.getPath('appData'), 'prompt-defense-browser'))
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disk-cache-size', '0')
 app.commandLine.appendSwitch('remote-debugging-port', AGENT_CDP_PORT)

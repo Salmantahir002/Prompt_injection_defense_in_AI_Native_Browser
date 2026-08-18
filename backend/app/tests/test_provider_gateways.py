@@ -212,7 +212,7 @@ async def test_gemini_gateway_chat_completion(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_provider_manager_fallback_on_active_provider_failure(monkeypatch):
+async def test_provider_manager_error_on_active_provider_failure():
     manager = LlmProviderManager()
 
     # Active provider throws error
@@ -224,19 +224,6 @@ async def test_provider_manager_fallback_on_active_provider_failure(monkeypatch)
     manager.set_active_provider(cfg)
     manager._active_gateway = FailingGateway()
 
-    # Fallback OpenCode Zen succeeds
-    class MockFallbackGateway:
-        async def chat_completion(self, *args, **kwargs):
-            from app.services.llm_gateways.base import ChatResult, ChatUsage
-            return ChatResult(
-                response="Response from fallback OpenCode Zen",
-                model="zen-model",
-                usage=ChatUsage(prompt_tokens=5, completion_tokens=5),
-            )
-
-    manager._fallback_gateway = MockFallbackGateway()
-    monkeypatch.setattr(LlmProviderManager, "fallback_is_configured", property(lambda self: True))
-
     result = await manager.chat("Test prompt")
-    assert result["response"] == "Response from fallback OpenCode Zen"
-    assert "fallback" in result["model"]
+    assert "LLM provider error (Custom)" in result["response"]
+    assert "error" in result["model"]

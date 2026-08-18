@@ -33,14 +33,14 @@ class TestConnectionResponse(BaseModel):
 
 
 class ActiveProviderInfo(BaseModel):
-    id: str
-    name: str
-    provider_type: str
-    base_url: Optional[str]
-    is_active: bool
-    is_fallback: bool
-    selected_model: Optional[str]
-    masked_key: str
+    id: str = ""
+    name: str = ""
+    provider_type: str = ""
+    base_url: Optional[str] = None
+    is_active: bool = False
+    is_fallback: bool = False
+    selected_model: Optional[str] = None
+    masked_key: str = ""
 
 
 class ProviderPresetsResponse(BaseModel):

@@ -40,10 +40,10 @@ export interface ActiveProviderInfo {
   provider_type: string
   base_url?: string
   is_active: boolean
-  is_fallback: boolean
+  is_fallback?: boolean
   selected_model?: string
   models?: ModelInfo[]
-  masked_key: string
+  masked_key?: string
 }
 
 export interface TestConnectionResult {

@@ -3692,6 +3692,18 @@ option, optgroup {
   color: #ffffff !important;
 }
 
+.prompt-model-btn--unconfigured {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.18) !important;
+  color: #94a3b8 !important;
+}
+
+.prompt-model-btn--unconfigured:hover {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: #f8fafc !important;
+}
+
 .prompt-model-btn-logo {
   display: inline-flex;
   align-items: center;

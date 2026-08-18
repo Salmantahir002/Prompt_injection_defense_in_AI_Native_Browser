@@ -132,7 +132,7 @@ def set_active_provider(request: ProviderConfigRequest):
 @router.delete("/providers/active", response_model=ActiveProviderInfo)
 def clear_active_provider():
     """
-    Clear custom active provider, resetting to default OpenCode Zen fallback.
+    Clear custom active provider.
     """
     llm_provider_manager.clear_active_provider()
     return get_active_provider()
@@ -157,12 +157,12 @@ def get_active_provider():
         )
 
     return ActiveProviderInfo(
-        id="opencode_zen",
-        name="OpenCode Zen (Default Fallback)",
-        provider_type=ProviderType.OPENAI_COMPATIBLE.value,
-        base_url=settings.OPENCODE_ZEN_BASE_URL,
+        id="",
+        name="",
+        provider_type="",
+        base_url=None,
         is_active=False,
-        is_fallback=True,
-        selected_model=settings.OPENCODE_ZEN_MODEL,
-        masked_key=_mask_key(settings.OPENCODE_ZEN_API_KEY),
+        is_fallback=False,
+        selected_model=None,
+        masked_key="",
     )

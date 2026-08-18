@@ -1,9 +1,8 @@
 """
-LLM OpenCode Zen / Gateway Service
-===================================
+LLM Gateway Service
+===================
 Proxy service for forwarding approved prompts to the active LLM Provider Gateway.
-Enforces the security-first flow and supports per-user multi-provider configuration
-with automatic fallback to OpenCode Zen.
+Enforces the security-first flow and supports per-user multi-provider configuration.
 """
 
 import logging
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class LlmOpenCodeZenService:
     """
-    Handles communication with the active LLM Provider Gateway (or OpenCode Zen fallback).
+    Handles communication with the active LLM Provider Gateway.
     Safety enforcement is done at the route level — this service proxies safely.
     """
 

@@ -1,6 +1,6 @@
 """
 LLM Provider Manager.
-Coordinates active provider gateways, live model listing, testing, and fallback to OpenCode Zen.
+Coordinates active provider gateways, live model listing, testing, and runtime provider configuration.
 """
 
 import logging
@@ -16,48 +16,24 @@ from app.services.llm_gateways.base import (
     ProviderType,
 )
 from app.services.llm_gateways.factory import create_gateway
-from app.services.llm_gateways.openai_compat import OpenAICompatibleGateway
 
 logger = logging.getLogger(__name__)
 
 
 class LlmProviderManager:
     """
-    Manages runtime LLM providers, model selection, and graceful fallback.
-    Ensures the application never crashes even if external endpoints or keys fail.
+    Manages runtime LLM providers, model selection, and execution.
+    Providers are user-selected; no provider is assumed as default.
     """
 
     def __init__(self) -> None:
         self._active_config: Optional[ProviderConfig] = None
         self._active_gateway: Optional[ProviderGateway] = None
-        self._fallback_gateway: Optional[ProviderGateway] = None
-        self._init_fallback_gateway()
-
-    def _init_fallback_gateway(self) -> None:
-        """Initialize the OpenCode Zen fallback gateway from local .env settings."""
-        zen_config = ProviderConfig(
-            id="opencode_zen",
-            name="OpenCode Zen (Default)",
-            provider_type=ProviderType.OPENAI_COMPATIBLE,
-            base_url=settings.OPENCODE_ZEN_BASE_URL,
-            api_key=settings.OPENCODE_ZEN_API_KEY,
-            verify_ssl=settings.OPENCODE_ZEN_VERIFY_SSL,
-            selected_model=settings.OPENCODE_ZEN_MODEL,
-        )
-        self._fallback_gateway = OpenAICompatibleGateway(zen_config)
-
-    @property
-    def fallback_is_configured(self) -> bool:
-        """Check if OpenCode Zen fallback has a valid API key configured."""
-        key = settings.OPENCODE_ZEN_API_KEY
-        return bool(key and key != "replace_with_your_key" and len(key) > 8)
 
     @property
     def is_configured(self) -> bool:
-        """Check if either a custom provider is active or fallback OpenCode Zen is configured."""
-        if self._active_config and self._active_config.api_key:
-            return True
-        return self.fallback_is_configured
+        """Check if a custom provider is active with a valid API key."""
+        return bool(self._active_config and self._active_config.api_key)
 
     @property
     def active_config(self) -> Optional[ProviderConfig]:
@@ -67,7 +43,7 @@ class LlmProviderManager:
     def active_model(self) -> str:
         if self._active_config and self._active_config.selected_model:
             return self._active_config.selected_model
-        return settings.OPENCODE_ZEN_MODEL
+        return ""
 
     def set_active_provider(self, config: ProviderConfig) -> None:
         """Set or switch the active LLM provider."""
@@ -81,10 +57,10 @@ class LlmProviderManager:
         )
 
     def clear_active_provider(self) -> None:
-        """Clear the custom active provider, resetting to default fallback."""
+        """Clear the custom active provider."""
         self._active_config = None
         self._active_gateway = None
-        logger.info("Active LLM provider cleared. Reverted to default fallback.")
+        logger.info("Active LLM provider cleared. No provider active.")
 
     async def list_models_for_config(self, config: ProviderConfig) -> List[ModelInfo]:
         """Fetch live models for a candidate configuration without activating it."""
@@ -128,7 +104,6 @@ class LlmProviderManager:
     ) -> Dict[str, Any]:
         """
         Send a chat prompt to the active LLM provider with webpage grounding.
-        Falls back to OpenCode Zen if the active provider fails.
         """
         system_message = (
             "You are Kimo, an intelligent, helpful, and concise AI assistant embedded inside an AI-native web browser. "
@@ -183,37 +158,17 @@ class LlmProviderManager:
                 }
             except Exception as exc:
                 logger.warning(
-                    "Active provider (%s) chat completion failed: %s. Falling back to OpenCode Zen.",
+                    "Active provider (%s) chat completion failed: %s",
                     self._active_config.name,
                     exc,
                 )
-
-        # 2. Fallback to OpenCode Zen default
-        if self._fallback_gateway and self.fallback_is_configured:
-            try:
-                result = await self._fallback_gateway.chat_completion(
-                    messages=messages,
-                    model=settings.OPENCODE_ZEN_MODEL,
-                    temperature=0.5,
-                    max_tokens=1536,
-                )
                 return {
-                    "response": result.response,
-                    "model": f"{result.model} (fallback)",
-                    "usage": {
-                        "prompt_tokens": result.usage.prompt_tokens,
-                        "completion_tokens": result.usage.completion_tokens,
-                    },
-                }
-            except Exception as exc:
-                logger.exception("Fallback OpenCode Zen chat completion failed: %s", exc)
-                return {
-                    "response": f"LLM error: {exc}. Please check your connection or provider settings.",
-                    "model": f"{settings.OPENCODE_ZEN_MODEL} (error)",
+                    "response": f"LLM provider error ({self._active_config.name}): {exc}. Please check your connection or API key in Settings.",
+                    "model": f"{self._active_config.name} (error)",
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0},
                 }
 
-        # 3. Unconfigured placeholder response
+        # 2. No provider configured placeholder response
         return self._placeholder_response(prompt)
 
     async def plan_chat(
@@ -229,47 +184,29 @@ class LlmProviderManager:
         """
         target_model = model or (self._active_config.selected_model if self._active_config else None)
 
-        # 1. Try active provider
         if self._active_gateway and self._active_config and self._active_config.api_key:
-            try:
-                result = await self._active_gateway.chat_completion(
-                    messages=messages,
-                    model=target_model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                return result.response
-            except Exception as exc:
-                logger.warning(
-                    "Active provider (%s) agent planning failed: %s. Falling back to OpenCode Zen.",
-                    self._active_config.name,
-                    exc,
-                )
-
-        # 2. Fallback to OpenCode Zen
-        if self._fallback_gateway and self.fallback_is_configured:
-            result = await self._fallback_gateway.chat_completion(
+            result = await self._active_gateway.chat_completion(
                 messages=messages,
-                model=settings.OPENCODE_ZEN_MODEL,
+                model=target_model,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
             return result.response
 
         raise ValueError(
-            "No LLM provider is configured. Please configure an LLM provider (OpenAI, Gemini, Anthropic, Custom, etc.) or set OPENCODE_ZEN_API_KEY in .env."
+            "No LLM provider is currently active. Please configure and activate a provider (OpenAI, Gemini, Anthropic, OpenCode Zen, NVIDIA, or Custom) in Settings."
         )
 
     def _placeholder_response(self, prompt: str) -> Dict[str, Any]:
-        """Return a placeholder response when no API key is configured."""
+        """Return a response when no AI provider is configured."""
         word_count = len(prompt.split())
         return {
             "response": (
-                f"[Placeholder] Security check passed.\n\n"
-                f"LLM Gateway received your prompt ({word_count} words).\n\n"
-                f"To receive real AI responses, configure your preferred LLM provider (OpenAI, Gemini, Anthropic, NVIDIA, AgentRouter, or Custom) in **Settings**, or configure OPENCODE_ZEN_API_KEY in `.env`."
+                f"🛡️ **Security check passed.**\n\n"
+                f"No AI provider is currently connected.\n\n"
+                f"To start chatting and asking questions, click the **Model Selection** button or open **Settings** (⚙️) to connect your preferred provider (Google Gemini, Anthropic Claude, OpenAI, OpenCode Zen, NVIDIA NIM, Cloudflare, or Custom Provider)."
             ),
-            "model": "no-provider (placeholder)",
+            "model": "no-provider",
             "usage": {
                 "prompt_tokens": word_count,
                 "completion_tokens": 0,

@@ -92,32 +92,54 @@ export class ProviderSecureStore {
 
   private encryptApiKey(key: string): string {
     if (!key) return ''
-    if (safeStorage.isEncryptionAvailable()) {
+    if (app.isReady() && safeStorage.isEncryptionAvailable()) {
       try {
-        return safeStorage.encryptString(key).toString('base64')
+        const encrypted = safeStorage.encryptString(key).toString('base64')
+        return `enc:${encrypted}`
       } catch (err) {
         console.warn('[providerSecureStore] safeStorage.encryptString failed:', err)
       }
     }
     // Fallback encoding if OS keychain is unavailable
-    return Buffer.from(key, 'utf-8').toString('base64')
+    return `b64:${Buffer.from(key, 'utf-8').toString('base64')}`
   }
 
-  private decryptApiKey(encryptedBase64?: string): string {
-    if (!encryptedBase64) return ''
-    const buffer = Buffer.from(encryptedBase64, 'base64')
-    if (safeStorage.isEncryptionAvailable()) {
+  private decryptApiKey(storedVal?: string): string {
+    if (!storedVal) return ''
+    if (storedVal.startsWith('enc:')) {
+      const b64 = storedVal.slice(4)
+      const buffer = Buffer.from(b64, 'base64')
+      if (app.isReady() && safeStorage.isEncryptionAvailable()) {
+        try {
+          return safeStorage.decryptString(buffer)
+        } catch (err) {
+          console.warn('[providerSecureStore] safeStorage.decryptString failed:', err)
+        }
+      }
+    } else if (storedVal.startsWith('b64:')) {
+      const b64 = storedVal.slice(4)
       try {
-        return safeStorage.decryptString(buffer)
+        return Buffer.from(b64, 'base64').toString('utf-8')
       } catch {
-        // May have been saved with fallback encoding
+        return ''
+      }
+    } else {
+      // Legacy without prefix
+      const buffer = Buffer.from(storedVal, 'base64')
+      if (app.isReady() && safeStorage.isEncryptionAvailable()) {
+        try {
+          return safeStorage.decryptString(buffer)
+        } catch {
+          // May have been saved with fallback encoding
+        }
+      }
+      try {
+        return buffer.toString('utf-8')
+      } catch {
+        return ''
       }
     }
-    try {
-      return buffer.toString('utf-8')
-    } catch {
-      return ''
-    }
+    return ''
   }
 
   private maskKey(key?: string): string {
@@ -288,7 +310,7 @@ export class ProviderSecureStore {
         await fetch(`${backendUrl}/providers/active`, {
           method: 'DELETE',
         })
-        console.log(`[providerSecureStore] Reset backend provider to fallback OpenCode Zen`)
+        console.log(`[providerSecureStore] Cleared active provider in backend (no provider active)`)
       }
     } catch (err) {
       console.warn('[providerSecureStore] Backend not reachable for provider sync on startup:', err)
