@@ -14,6 +14,7 @@ import {
 
 import { AGENT_CDP_PORT, AGENT_CDP_URL, STAGEHAND_EXTENSION_PATH, setStagehandExtensionId } from './config.js'
 import { stagehandAgentService } from './stagehand/stagehandAgent.js'
+import { providerSecureStore } from './providerSecureStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -225,6 +226,36 @@ ipcMain.handle('agent:stop-task', async (_event, taskId?: string) => {
   return { ok: true }
 })
 
+// LLM Provider Credentials & Configuration IPC
+ipcMain.handle('providers:get-all', () => {
+  return providerSecureStore.getAllProviders()
+})
+
+ipcMain.handle('providers:save', async (_event, payload: any) => {
+  const result = providerSecureStore.saveProvider(payload)
+  if (payload.set_active) {
+    await providerSecureStore.syncWithBackend()
+  }
+  return result
+})
+
+ipcMain.handle('providers:delete', async (_event, providerId: string) => {
+  const success = providerSecureStore.deleteProvider(providerId)
+  await providerSecureStore.syncWithBackend()
+  return { ok: success }
+})
+
+ipcMain.handle('providers:set-active', async (_event, payload: { id: string | null; selected_model?: string }) => {
+  providerSecureStore.setActiveProvider(payload.id, payload.selected_model)
+  await providerSecureStore.syncWithBackend()
+  return { ok: true }
+})
+
+ipcMain.handle('providers:get-active', () => {
+  const all = providerSecureStore.getAllProviders()
+  return all.find((p) => p.is_active) || null
+})
+
 app.whenReady().then(async () => {
   try {
     const ext = await session.defaultSession.loadExtension(STAGEHAND_EXTENSION_PATH, { allowFileAccess: true })
@@ -241,6 +272,13 @@ app.whenReady().then(async () => {
   }
 
   await createWindow()
+
+  // Sync saved active provider to FastAPI backend in the background
+  setTimeout(() => {
+    providerSecureStore.syncWithBackend().catch((err) => {
+      console.warn('[main] Initial provider backend sync failed:', err)
+    })
+  }, 1000)
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

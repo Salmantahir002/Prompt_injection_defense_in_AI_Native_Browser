@@ -1,6 +1,7 @@
 import { webContents } from 'electron'
 import { AGENT_API_BASE_URL, OPENCODE_ZEN_API_KEY, OPENCODE_ZEN_BASE_URL, OPENCODE_ZEN_MODEL } from '../config.js'
 import { visualOverlay } from './visualOverlay.js'
+import { providerSecureStore } from '../providerSecureStore.js'
 import type { CdpInspectionService } from '../cdpInspectionService.js'
 
 export type AgentTaskEventCallback = (event: {
@@ -166,46 +167,110 @@ export class StagehandAgentService {
           throw new Error('Task was cancelled by the user.')
         }
 
+        if (!guestContents || guestContents.isDestroyed()) {
+          throw new Error(`WebContents target ${targetId} is no longer available.`)
+        }
+
+        const currentGuest = guestContents
+
         stepCount++
         emit('status', `Step ${stepCount}: Analyzing page security & elements...`)
 
         // 1. Visual feedback: fire left-to-right scan sweep effect asynchronously
         if (visualEnabled) {
-          void visualOverlay.scanSweep(guestContents)
+          void visualOverlay.scanSweep(currentGuest)
+        }
+
+        // Wait briefly if the page is currently loading
+        if (currentGuest.isLoading()) {
+          emit('status', `Step ${stepCount}: Waiting for page to finish loading...`)
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(resolve, 1500)
+            const handleStop = () => {
+              clearTimeout(timeout)
+              currentGuest.removeListener('did-stop-loading', handleStop)
+              resolve()
+            }
+            currentGuest.once('did-stop-loading', handleStop)
+          })
         }
 
         // 2. Parallel Security Checkpoint & Element Extraction
-        const [decision, elementData]: [AgentScanDecision, any] = await Promise.all([
+        const [decision, elementData, pageStatus]: [AgentScanDecision, any, any] = await Promise.all([
           this.scanPageForInjection(taskId, targetId, signal),
-          guestContents.executeJavaScript(`
+          currentGuest.executeJavaScript(`
             (function() {
+              // Clear previous agent indices
+              document.querySelectorAll('[data-agent-idx]').forEach(function(el) {
+                el.removeAttribute('data-agent-idx');
+              });
+
               var items = [];
-              var elements = document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="textbox"], [role="searchbox"]');
+              var seen = new Set();
               var idx = 0;
+
+              // Query all interactive elements
+              var elements = document.querySelectorAll(
+                'button, a, input, select, textarea, [role="button"], [role="link"], [role="textbox"], [role="searchbox"], .mw-search-result-heading a, .search-result a, .g a'
+              );
+
               for (var i = 0; i < elements.length; i++) {
                 var el = elements[i];
-                if (!el || el.offsetParent === null && el.tagName !== 'BODY') continue;
+                if (!el || seen.has(el)) continue;
+                if (el.offsetParent === null && el.tagName !== 'BODY') continue;
+
                 var rect = el.getBoundingClientRect();
                 if (rect.width <= 0 || rect.height <= 0) continue;
-                if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
-                
-                var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('value') || '').trim();
-                var tag = el.tagName.toLowerCase();
+                // Allow elements in viewport or within 2.5 screens below
+                if (rect.bottom < -50 || rect.top > window.innerHeight * 2.5) continue;
+
+                var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('value') || '').trim();
+                text = text.replace(/\\s+/g, ' ').slice(0, 100);
+
+                if (!text && el.tagName === 'A' && !el.querySelector('img, svg')) continue;
+
+                seen.add(el);
                 idx++;
+                el.setAttribute('data-agent-idx', String(idx));
+
+                var href = (el.getAttribute('href') || '').slice(0, 120);
+                var isSearchResult = Boolean(el.closest('.mw-search-result, .search-result, .g, .result, .mw-search-results, .mw-search-result-heading'));
+                var isMainContent = Boolean(el.closest('main, #content, #mw-content-text, article, .content'));
+
                 items.push({
                   index: idx,
-                  tag: tag,
-                  text: text.slice(0, 80),
+                  tag: el.tagName.toLowerCase(),
+                  text: text,
                   type: el.type || '',
+                  href: href,
+                  isSearchResult: isSearchResult,
+                  isMainContent: isMainContent,
                   x: Math.round(rect.left + rect.width / 2),
                   y: Math.round(rect.top + rect.height / 2),
-                  rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
                 });
-                if (items.length >= 35) break;
+
+                if (items.length >= 75) break;
               }
               return items;
             })()
-          `).catch(() => [])
+          `).catch(() => []),
+          guestContents.executeJavaScript(`
+            (function() {
+              var text = (document.body ? document.body.innerText : '') || '';
+              var isNetError = text.includes('ERR_NAME_NOT_RESOLVED') ||
+                               text.includes('ERR_CONNECTION_REFUSED') ||
+                               text.includes('ERR_INTERNET_DISCONNECTED') ||
+                               text.includes('ERR_CONNECTION_TIMED_OUT') ||
+                               text.includes("This site can’t be reached") ||
+                               text.includes("This site can't be reached") ||
+                               document.title.includes('Problem loading page');
+              return {
+                isNetError: isNetError,
+                url: window.location.href,
+                textLength: text.trim().length,
+              };
+            })()
+          `).catch(() => ({ isNetError: false, url: '', textLength: 0 }))
         ])
 
         if (!decision.allowed) {
@@ -234,33 +299,76 @@ export class StagehandAgentService {
         const pageUrl = guestContents.getURL()
         const pageTitle = guestContents.getTitle()
 
-        // 4. Decide next action using OpenCode Zen LLM
+        // Handle network load failures gracefully instead of blind scrolling
+        if (pageStatus && pageStatus.isNetError) {
+          if (stepCount <= 3 && (goal.toLowerCase().includes('search') || goal.toLowerCase().includes('rating') || goal.toLowerCase().includes('who is') || goal.toLowerCase().includes('season'))) {
+            emit('status', `Step ${stepCount}: Network error loading page. Recovering via search engine...`)
+            const searchQuery = goal.replace(/^(search|find|lookup|open|check)\s+/i, '').replace(/on (wikipedia|google|the web)/i, '').trim()
+            const fallbackUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}`
+            await guestContents.loadURL(fallbackUrl).catch(() => undefined)
+            history.push({
+              action: `Navigated to search: ${fallbackUrl}`,
+              result: 'Search page loaded',
+            })
+            await new Promise((resolve) => setTimeout(resolve, 1500))
+            continue
+          }
+
+          emit('status', `Error: Page failed to load (ERR_NAME_NOT_RESOLVED).`)
+          return {
+            taskId,
+            status: 'failed',
+            message: `Could not load page due to network error (ERR_NAME_NOT_RESOLVED). Please verify your connection.`,
+            steps: stepCount,
+            decision,
+          }
+        }
+
+        // 4. Decide next action using LLM
         emit('status', `Step ${stepCount}: Reasoning next action for goal...`)
 
         const promptMessages = [
           {
             role: 'system',
-            content: `You are an autonomous browser agent. Your goal is to accomplish the user's objective on the webpage or across tabs.
-Current Webpage:
-- Title: "${pageTitle}"
+            content: `You are an expert autonomous web agent operating a browser tab.
+Goal: "${goal}"
+
+CURRENT WEBPAGE:
+- Page Title: "${pageTitle}"
 - URL: "${pageUrl}"
 
-Available Interactive Elements on screen:
+AVAILABLE INTERACTIVE ELEMENTS:
 ${JSON.stringify(elementData, null, 2)}
 
-Action History:
+ACTION HISTORY:
 ${history.map((h, i) => `${i + 1}. Action: ${h.action} -> Result: ${h.result}`).join('\n') || 'None'}
 
-You must choose ONE action from:
-1. {"action": "open_tab", "url": "<target url or https://www.google.com or about:blank>", "description": "<brief description>"} - USE THIS when the user asks to open a new tab, or open a site in a new tab.
-2. {"action": "click", "elementIndex": <number>, "description": "<brief description>"}
-3. {"action": "type", "elementIndex": <number>, "text": "<string to type>", "pressEnter": <boolean>, "description": "<brief description>"}
-4. {"action": "navigate", "url": "<target url>", "description": "<brief description>"}
-5. {"action": "scroll", "direction": "down" | "up", "description": "<brief description>"}
-6. {"action": "wait", "seconds": <number>, "description": "<brief description>"}
-7. {"action": "finish", "message": "<completion message>"} - USE THIS only when the user's goal has been fully accomplished.
+CRITICAL INSTRUCTIONS:
+1. MULTI-STEP COMPLETION:
+   - If the user asks to "search X on wikipedia and open it" or "search X and click it":
+     * Step 1: Type the search term into the search input and submit (pressEnter: true).
+     * Step 2: Once on the Search Results page, you MUST look at the search results list and CLICK the article/result link that matches the query!
+     * Step 3: Only after the actual article/destination page loads, call "finish".
+   - DO NOT call "finish" on a search results page (e.g., Wikipedia Search results, Google Search results, Bing results) when the user requested to open or read an article!
+2. CHOOSE THE RIGHT ACTION:
+   - To open an article/link: {"action": "click", "elementIndex": <index>, "description": "<description>"}
+   - To search: {"action": "type", "elementIndex": <index>, "text": "<query>", "pressEnter": true, "description": "<description>"}
+   - To reveal elements further down: {"action": "scroll", "direction": "down", "description": "Scroll to see search results"}
+   - To open a URL directly: {"action": "navigate", "url": "<url>", "description": "<description>"}
+   - To complete the task: {"action": "finish", "message": "<completion message>"} (ONLY when the final target page is open and goal is satisfied).
 
-Respond ONLY with strict JSON.`,
+Respond ONLY with valid JSON:
+{
+  "thought": "<brief reasoning about current state and why this action achieves the goal>",
+  "action": "click" | "type" | "open_tab" | "navigate" | "scroll" | "wait" | "finish",
+  "elementIndex": <number, for click/type>,
+  "text": "<string, for type>",
+  "pressEnter": <boolean, for type>,
+  "direction": "down" | "up", <for scroll>,
+  "url": "<url, for navigate/open_tab>",
+  "message": "<message, for finish>",
+  "description": "<brief user-facing description>"
+}`,
           },
           {
             role: 'user',
@@ -268,32 +376,109 @@ Respond ONLY with strict JSON.`,
           },
         ]
 
-        const llmResponse = await fetch(`${OPENCODE_ZEN_BASE_URL}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENCODE_ZEN_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: OPENCODE_ZEN_MODEL,
-            messages: promptMessages,
-            temperature: 0.1,
-            max_tokens: 200,
-            response_format: { type: 'json_object' },
-          }),
-          signal,
-        })
+        let responseContent = '{}'
+        const activeProvider = providerSecureStore.getDecryptedActiveConfig()
 
-        if (!llmResponse.ok) {
-          const errText = await llmResponse.text().catch(() => '')
-          throw new Error(`LLM reasoning failed (${llmResponse.status}): ${errText}`)
+        if (activeProvider && activeProvider.api_key) {
+          try {
+            if (activeProvider.provider_type === 'openai_compatible') {
+              const baseUrl = (activeProvider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+              const llmResponse = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${activeProvider.api_key}`,
+                  'User-Agent': 'Anthropic/Python 0.39.0',
+                  'X-Stainless-Lang': 'python',
+                },
+                body: JSON.stringify({
+                  model: activeProvider.selected_model || 'gpt-4o',
+                  messages: promptMessages,
+                  temperature: 0.1,
+                  max_tokens: 800,
+                  response_format: { type: 'json_object' },
+                }),
+                signal,
+              })
+              if (llmResponse.ok) {
+                const llmData = (await llmResponse.json()) as any
+                const messageObj = llmData.choices?.[0]?.message
+                responseContent = messageObj?.content || messageObj?.reasoning || '{}'
+              }
+            } else if (activeProvider.provider_type === 'anthropic') {
+              const baseUrl = (activeProvider.base_url || 'https://api.anthropic.com/v1').replace(/\/+$/, '')
+              const llmResponse = await fetch(`${baseUrl}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': activeProvider.api_key,
+                  'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                  model: activeProvider.selected_model || 'claude-3-5-sonnet-20241022',
+                  max_tokens: 800,
+                  temperature: 0.1,
+                  system: promptMessages[0].content,
+                  messages: [{ role: 'user', content: promptMessages[1].content }],
+                }),
+                signal,
+              })
+              if (llmResponse.ok) {
+                const llmData = (await llmResponse.json()) as any
+                responseContent = llmData.content?.[0]?.text || '{}'
+              }
+            } else if (activeProvider.provider_type === 'gemini') {
+              const baseUrl = (activeProvider.base_url || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
+              const modelName = (activeProvider.selected_model || 'gemini-1.5-flash').replace('models/', '')
+              const llmResponse = await fetch(`${baseUrl}/models/${modelName}:generateContent?key=${activeProvider.api_key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: 'user', parts: [{ text: promptMessages[1].content }] }],
+                  systemInstruction: { parts: [{ text: promptMessages[0].content }] },
+                  generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 800,
+                    responseMimeType: 'application/json',
+                  },
+                }),
+                signal,
+              })
+              if (llmResponse.ok) {
+                const llmData = (await llmResponse.json()) as any
+                responseContent = llmData.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
+              }
+            }
+          } catch (providerErr) {
+            console.warn('[stagehandAgent] Active provider call failed, falling back to OpenCode Zen:', providerErr)
+          }
         }
 
-        const llmData = (await llmResponse.json()) as any
-        const messageObj = llmData.choices?.[0]?.message
-        const responseContent = (typeof messageObj?.content === 'string' && messageObj.content)
-          ? messageObj.content
-          : (typeof messageObj?.reasoning === 'string' ? messageObj.reasoning : '{}')
+        // Fallback to OpenCode Zen if response is empty or active provider failed
+        if (responseContent === '{}' && OPENCODE_ZEN_API_KEY && OPENCODE_ZEN_API_KEY !== 'replace_with_your_key') {
+          const llmResponse = await fetch(`${OPENCODE_ZEN_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${OPENCODE_ZEN_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: OPENCODE_ZEN_MODEL,
+              messages: promptMessages,
+              temperature: 0.1,
+              max_tokens: 800,
+              response_format: { type: 'json_object' },
+            }),
+            signal,
+          })
+
+          if (llmResponse.ok) {
+            const llmData = (await llmResponse.json()) as any
+            const messageObj = llmData.choices?.[0]?.message
+            responseContent = messageObj?.content || messageObj?.reasoning || '{}'
+          }
+        }
+
         let plan: any
         try {
           plan = JSON.parse(responseContent)
@@ -307,10 +492,10 @@ Respond ONLY with strict JSON.`,
           isFinished = true
           emit('step', {
             step: stepCount,
-            toolCall: { tool: 'finish', arguments: { message: plan.message } },
+            toolCall: { tool: 'finish', arguments: { message: plan.message || plan.description || 'Goal achieved' } },
             decision,
           })
-          emit('status', `Done: ${plan.message}`)
+          emit('status', `Done: ${plan.message || 'Task completed'}`)
           break
         }
 
@@ -347,7 +532,7 @@ Respond ONLY with strict JSON.`,
                 break
               }
 
-              await new Promise((resolve) => setTimeout(resolve, 300))
+              await new Promise((resolve) => setTimeout(resolve, 800))
             } else {
               history.push({
                 action: `Open new tab`,
@@ -356,7 +541,14 @@ Respond ONLY with strict JSON.`,
             }
           }
         } else if (plan.action === 'click') {
-          const targetEl = elementData.find((el: any) => el.index === plan.elementIndex) || elementData[0]
+          // Target by elementIndex or text match
+          let targetEl = elementData.find((el: any) => el.index === plan.elementIndex)
+          if (!targetEl && plan.description) {
+            const descLower = String(plan.description).toLowerCase()
+            targetEl = elementData.find((el: any) => el.text && descLower.includes(el.text.toLowerCase()))
+          }
+          if (!targetEl) targetEl = elementData[0]
+
           if (targetEl) {
             emit('step', {
               step: stepCount,
@@ -372,22 +564,36 @@ Respond ONLY with strict JSON.`,
             // Execute click in page
             await guestContents.executeJavaScript(`
               (function() {
-                var el = document.elementFromPoint(${targetEl.x}, ${targetEl.y});
+                var el = document.querySelector('[data-agent-idx="${targetEl.index}"]') || document.elementFromPoint(${targetEl.x}, ${targetEl.y});
                 if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  el.focus();
-                  el.click();
+                  var clickable = el.closest('a, button, [role="button"], [role="link"], input') || el;
+                  clickable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  clickable.focus();
+                  clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                  clickable.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                  clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                  if (clickable.click) clickable.click();
+                  if (clickable.tagName === 'A' && clickable.href && !clickable.href.startsWith('javascript:')) {
+                    window.location.href = clickable.href;
+                  }
                 }
               })()
             `).catch(() => undefined)
 
             history.push({
-              action: `Clicked element "${targetEl.text || targetEl.tag}"`,
-              result: 'Click executed successfully',
+              action: `Clicked "${targetEl.text || targetEl.tag}"`,
+              result: 'Click dispatched, page updated',
             })
+
+            // Settle after click/navigation
+            await new Promise((resolve) => setTimeout(resolve, 1000))
           }
         } else if (plan.action === 'type') {
-          const targetEl = elementData.find((el: any) => el.index === plan.elementIndex) || elementData[0]
+          let targetEl = elementData.find((el: any) => el.index === plan.elementIndex)
+          if (!targetEl) {
+            targetEl = elementData.find((el: any) => el.tag === 'input' || el.tag === 'textarea' || el.type === 'search' || el.type === 'text') || elementData[0]
+          }
+
           if (targetEl) {
             emit('step', {
               step: stepCount,
@@ -402,17 +608,24 @@ Respond ONLY with strict JSON.`,
 
             await guestContents.executeJavaScript(`
               (function() {
-                var el = document.elementFromPoint(${targetEl.x}, ${targetEl.y});
+                var el = document.querySelector('[data-agent-idx="${targetEl.index}"]') || document.elementFromPoint(${targetEl.x}, ${targetEl.y});
                 if (el) {
-                  el.focus();
-                  el.value = ${JSON.stringify(plan.text)};
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                  var inputEl = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el : (el.querySelector('input, textarea') || el);
+                  inputEl.focus();
+                  inputEl.value = ${JSON.stringify(plan.text)};
+                  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                  inputEl.dispatchEvent(new Event('change', { bubbles: true }));
                   ${plan.pressEnter ? `
-                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    if (el.form) el.form.requestSubmit ? el.form.requestSubmit() : el.form.submit();
+                    inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                    inputEl.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                    inputEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                    if (inputEl.form) {
+                      if (inputEl.form.requestSubmit) {
+                        try { inputEl.form.requestSubmit(); } catch (e) { inputEl.form.submit(); }
+                      } else {
+                        inputEl.form.submit();
+                      }
+                    }
                   ` : ''}
                 }
               })()
@@ -420,8 +633,11 @@ Respond ONLY with strict JSON.`,
 
             history.push({
               action: `Typed "${plan.text}" into "${targetEl.text || targetEl.tag}"`,
-              result: 'Input typed and submitted',
+              result: 'Input typed and form submitted',
             })
+
+            // Settle after form submission / page search navigation
+            await new Promise((resolve) => setTimeout(resolve, 1200))
           }
         } else if (plan.action === 'navigate' && plan.url) {
           emit('step', {
@@ -435,8 +651,9 @@ Respond ONLY with strict JSON.`,
             action: `Navigated to ${plan.url}`,
             result: 'Page loaded',
           })
+          await new Promise((resolve) => setTimeout(resolve, 1000))
         } else if (plan.action === 'scroll') {
-          const delta = plan.direction === 'up' ? -400 : 400
+          const delta = plan.direction === 'up' ? -500 : 500
           emit('step', {
             step: stepCount,
             toolCall: { tool: 'scroll', arguments: { direction: plan.direction } },
@@ -445,8 +662,9 @@ Respond ONLY with strict JSON.`,
           await guestContents.executeJavaScript(`window.scrollBy({ top: ${delta}, behavior: 'smooth' })`).catch(() => undefined)
           history.push({
             action: `Scrolled ${plan.direction}`,
-            result: 'Scrolled page',
+            result: 'Scrolled page view',
           })
+          await new Promise((resolve) => setTimeout(resolve, 600))
         } else if (plan.action === 'wait') {
           const secs = Number(plan.seconds) || 2
           emit('step', {

@@ -18,6 +18,7 @@ import httpx
 
 from app.core.config import settings
 from app.schemas.agent_schemas import AgentPageState, AgentWorkingMemory
+from app.services.llm_provider_manager import llm_provider_manager
 from app.services.agent_tool_registry import (
     MAX_QUEUE_LENGTH,
     ToolValidationError,
@@ -85,11 +86,11 @@ class AgentPlannerService:
 
     @property
     def is_configured(self) -> bool:
-        return self._api_key != "replace_with_your_key" and len(self._api_key) > 10
+        return llm_provider_manager.is_configured
 
     @property
     def model(self) -> str:
-        return self._model
+        return llm_provider_manager.active_model
 
     # ------------------------------------------------------------------ prompt
 
@@ -306,82 +307,11 @@ class AgentPlannerService:
         return self.parse_plan(raw, known_element_ids)
 
     async def _call_model(self, messages: List[Dict[str, str]]) -> str:
-        max_retries = 3
-        last_exception: Optional[Exception] = None
-
-        for attempt in range(max_retries):
-            try:
-                async with httpx.AsyncClient(timeout=60.0, verify=self._verify_ssl) as client:
-                    response = await client.post(
-                        f"{self._base_url}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {self._api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": self._model,
-                            "messages": messages,
-                            # Planning is a decision, not a creative task — keep it
-                            # near-deterministic so repeated states plan consistently.
-                            "temperature": 0.1,
-                            # A crowded page (e.g. a YouTube results grid) needs more
-                            # headroom: reasoning-capable models spend tokens thinking
-                            # before the JSON, and 512 was tight enough that the model
-                            # sometimes exhausted its budget before emitting any
-                            # content at all — surfacing as "Planner returned an empty
-                            # response" for exactly the pages with the most elements.
-                            "max_tokens": 1536,
-                        },
-                    )
-                    if response.status_code in (429, 503, 504) and attempt < max_retries - 1:
-                        retry_after = 1.5 * (2 ** attempt)
-                        logger.warning(
-                            "Planner LLM returned %s; retrying in %.1fs (attempt %d/%d)",
-                            response.status_code,
-                            retry_after,
-                            attempt + 1,
-                            max_retries,
-                        )
-                        await asyncio.sleep(retry_after)
-                        continue
-
-                    response.raise_for_status()
-                    data = response.json()
-
-                choice = data.get("choices", [{}])[0]
-                return choice.get("message", {}).get("content", "")
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in (429, 503, 504) and attempt < max_retries - 1:
-                    retry_after = 1.5 * (2 ** attempt)
-                    logger.warning(
-                        "Planner LLM HTTP %s; retrying in %.1fs (attempt %d/%d)",
-                        exc.response.status_code,
-                        retry_after,
-                        attempt + 1,
-                        max_retries,
-                    )
-                    await asyncio.sleep(retry_after)
-                    last_exception = exc
-                    continue
-                raise
-            except httpx.RequestError as exc:
-                if attempt < max_retries - 1:
-                    retry_after = 1.5 * (2 ** attempt)
-                    logger.warning(
-                        "Planner LLM request error (%s); retrying in %.1fs (attempt %d/%d)",
-                        type(exc).__name__,
-                        retry_after,
-                        attempt + 1,
-                        max_retries,
-                    )
-                    await asyncio.sleep(retry_after)
-                    last_exception = exc
-                    continue
-                raise
-
-        if last_exception:
-            raise last_exception
-        raise httpx.RequestError("Planner LLM request failed after retries")
+        return await llm_provider_manager.plan_chat(
+            messages=messages,
+            temperature=0.1,
+            max_tokens=1536,
+        )
 
 
 agent_planner_service = AgentPlannerService()

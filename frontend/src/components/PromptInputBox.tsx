@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { PromptModelPicker } from './PromptModelPicker'
 
 type PromptInputBoxProps = {
   disabled: boolean
@@ -6,6 +7,7 @@ type PromptInputBoxProps = {
   clearSignal: number
   contextBadge?: ReactNode
   placeholder?: string
+  onOpenSettings?: () => void
 }
 
 function SendIcon() {
@@ -16,7 +18,14 @@ function SendIcon() {
   )
 }
 
-export function PromptInputBox({ disabled, onSubmit, clearSignal, contextBadge, placeholder }: PromptInputBoxProps) {
+export function PromptInputBox({
+  disabled,
+  onSubmit,
+  clearSignal,
+  contextBadge,
+  placeholder,
+  onOpenSettings,
+}: PromptInputBoxProps) {
   const [prompt, setPrompt] = useState('')
 
   useEffect(() => {
@@ -59,7 +68,7 @@ export function PromptInputBox({ disabled, onSubmit, clearSignal, contextBadge, 
       />
       <div className="prompt-form-footer">
         <div className="prompt-form-actions">
-          {/* Action buttons / indicators */}
+          <PromptModelPicker onOpenSettings={onOpenSettings} />
         </div>
         <button className="prompt-submit" type="submit" disabled={disabled || !prompt.trim()} aria-label="Send">
           <SendIcon />

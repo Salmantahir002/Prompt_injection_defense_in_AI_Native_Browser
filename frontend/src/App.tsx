@@ -5,6 +5,7 @@ import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
 import { PromptAnalysisDetailsPanel } from './components/PromptAnalysisDetailsPanel'
 import { WebpageAnalysisDetailsPanel } from './components/WebpageAnalysisDetailsPanel'
+import { ProviderSettingsModal } from './components/ProviderSettingsModal'
 import { extractPageContent } from './services/pageContentExtractor'
 import { checkWebpage } from './services/backendApiClient'
 import type { AnalysisDetails } from './types/analysisDetailsTypes'
@@ -385,6 +386,7 @@ function BrowserShell() {
   const [webpageScanResult, setWebpageScanResult] = useState<SecurityCheckResponse | null>(null)
   const [webpageScanContent, setWebpageScanContent] = useState<WebpageContent | null>(null)
   const [isScanningPage, setIsScanningPage] = useState(false)
+  const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false)
   // Resolved lazily: the webview only has a webContents id once it attaches.
   const [activeTargetId, setActiveTargetId] = useState<number | null>(null)
 
@@ -680,6 +682,10 @@ function BrowserShell() {
         result={webpageScanResult}
         isOpen={webpageDrawerOpen}
         onClose={handleCloseWebpageDrawer}
+      />
+      <ProviderSettingsModal
+        isOpen={isProviderSettingsOpen}
+        onClose={() => setIsProviderSettingsOpen(false)}
       />
     </main>
   )

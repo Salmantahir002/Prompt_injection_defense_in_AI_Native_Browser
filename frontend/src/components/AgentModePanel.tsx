@@ -4,6 +4,7 @@ import type { ApprovalRequest } from '../services/agentApprovalPolicy'
 import type { CircuitBreakerState } from '../services/agentCircuitBreaker'
 import type { AgentScanDecision, AgentTaskResult, AgentToolCall } from '../types/agentTypes'
 import { AgentThreatDetailsModal } from './AgentThreatDetailsModal'
+import { PromptModelPicker } from './PromptModelPicker'
 
 /**
  * Agent mode: give the agent a goal and watch it work.
@@ -32,6 +33,7 @@ type AgentModePanelProps = {
    * id. Omitted means the app cannot open tabs, and the tool is refused.
    */
   onOpenTab?: (url?: string) => Promise<number | null>
+  onOpenSettings?: () => void
 }
 
 function ShieldIcon() {
@@ -51,7 +53,7 @@ function describeArguments(toolCall: AgentToolCall): string {
     .join(' · ')
 }
 
-export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePanelProps) {
+export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings }: AgentModePanelProps) {
   const [goal, setGoal] = useState('')
   const [activeGoal, setActiveGoal] = useState('')
   const [isRunning, setIsRunning] = useState(false)
@@ -282,7 +284,10 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab }: AgentModePan
           }}
         />
         <div className="agent-goal-footer">
-          <span className="agent-goal-hint">{isRunning ? 'Running…' : 'Enter to run'}</span>
+          <div className="agent-goal-footer-left">
+            <PromptModelPicker onOpenSettings={onOpenSettings} />
+            <span className="agent-goal-hint">{isRunning ? 'Running…' : 'Enter to run'}</span>
+          </div>
           {isRunning ? (
             <button type="button" className="agent-stop-button" onClick={handleStop}>Stop</button>
           ) : (

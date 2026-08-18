@@ -9,6 +9,7 @@ import { AgentModePanel } from './AgentModePanel'
 import { KimoMascot } from './KimoMascot'
 import { MarkdownMessage } from './MarkdownMessage'
 import { PromptInputBox } from './PromptInputBox'
+import { ProviderSettingsModal } from './ProviderSettingsModal'
 
 type SidebarMode = 'chat' | 'agent'
 
@@ -97,6 +98,7 @@ export function AiAssistantSidebar({
   // Bumped to remount the agent panel, which is how "new task" discards a
   // running task and its transcript in one step.
   const [agentSessionId, setAgentSessionId] = useState(0)
+  const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const prevMsgCountRef = useRef<number>(0)
@@ -305,7 +307,13 @@ export function AiAssistantSidebar({
           abort a running task and discard a half-written goal simply because
           the user glanced at the chat tab. */}
       <div className="assistant-pane" hidden={mode !== 'agent'}>
-        <AgentModePanel key={agentSessionId} targetId={activeTargetId} currentUrl={currentUrl} onOpenTab={onOpenTab} />
+        <AgentModePanel
+          key={agentSessionId}
+          targetId={activeTargetId}
+          currentUrl={currentUrl}
+          onOpenTab={onOpenTab}
+          onOpenSettings={() => setIsProviderSettingsOpen(true)}
+        />
       </div>
 
       {mode === 'chat' ? (
@@ -445,10 +453,16 @@ export function AiAssistantSidebar({
               </button>
             ) : null
           }
+          onOpenSettings={() => setIsProviderSettingsOpen(true)}
         />
       </div>
         </div>
       ) : null}
+
+      <ProviderSettingsModal
+        isOpen={isProviderSettingsOpen}
+        onClose={() => setIsProviderSettingsOpen(false)}
+      />
     </aside>
   )
 }

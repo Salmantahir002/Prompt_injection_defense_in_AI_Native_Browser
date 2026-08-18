@@ -9,6 +9,11 @@ const allowedInvokeChannels = [
   'agent:response-open-tab',
   'stagehand:status',
   'stagehand:test-connect',
+  'providers:get-all',
+  'providers:save',
+  'providers:delete',
+  'providers:set-active',
+  'providers:get-active',
   RUNTIME_INVOKE_CHANNEL,
 ] as const
 type InvokeChannel = (typeof allowedInvokeChannels)[number]
@@ -44,6 +49,15 @@ const electronAPI = {
     return () => {
       ipcRenderer.removeListener('agent:request-open-tab', handler)
     }
+  },
+  // Secure Provider Storage APIs
+  providers: {
+    getAll: () => ipcRenderer.invoke('providers:get-all') as Promise<any[]>,
+    save: (config: any) => ipcRenderer.invoke('providers:save', config) as Promise<any>,
+    delete: (providerId: string) => ipcRenderer.invoke('providers:delete', providerId) as Promise<{ ok: boolean }>,
+    setActive: (payload: { id: string | null; selected_model?: string }) =>
+      ipcRenderer.invoke('providers:set-active', payload) as Promise<{ ok: boolean }>,
+    getActive: () => ipcRenderer.invoke('providers:get-active') as Promise<any>,
   },
   versions: process.versions,
 }
