@@ -31,10 +31,12 @@ export type ActionSignature = {
    * "submit" button) would report every checkbox click as a no-op.
    */
   targetChecked: string | null
+  /** Current expanded state of an accordion, menu, or combobox. */
+  targetExpanded: boolean | null
 }
 
 /**
- * Node count plus every role/name pair. Shared with the wait engine so
+ * Node count plus every role/name/state tuple. Shared with the wait engine so
  * "the page settled" and "the page changed" are judged by the same measure.
  */
 export function fingerprintNodes(nodes: AXNode[]): string {
@@ -43,10 +45,14 @@ export function fingerprintNodes(nodes: AXNode[]): string {
     if (node.ignored === true) continue
     const role = typeof node.role?.value === 'string' ? node.role.value : ''
     const name = typeof node.name?.value === 'string' ? node.name.value : ''
-    parts.push(`${role}${name}`)
+    const properties = Array.isArray(node.properties) ? node.properties : []
+    const checked = properties.find((p) => p?.name === 'checked')?.value?.value ?? ''
+    const expanded = properties.find((p) => p?.name === 'expanded')?.value?.value ?? ''
+    const invalid = properties.find((p) => p?.name === 'invalid')?.value?.value ?? ''
+    parts.push(`${role}:${name}:${checked}:${expanded}:${invalid}`)
   }
 
-  return parts.join('')
+  return parts.join(';')
 }
 
 function findNodeValue(nodes: AXNode[], backendNodeId: number): string | null {
@@ -62,8 +68,7 @@ function findNodeValue(nodes: AXNode[], backendNodeId: number): string | null {
 /**
  * `checked` lives in the AX node's `properties` array, not on `value` — the
  * same place the State Builder reads it from for the page state shown to the
- * planner. Reusing that source here (rather than only `findNodeValue`) is
- * what makes a checkbox/radio click count as evidence, not a no-op.
+ * planner.
  */
 function findNodeChecked(nodes: AXNode[], backendNodeId: number): string | null {
   for (const node of nodes) {
@@ -71,6 +76,21 @@ function findNodeChecked(nodes: AXNode[], backendNodeId: number): string | null 
       const properties = Array.isArray(node.properties) ? node.properties : []
       const checked = properties.find((property) => property?.name === 'checked')
       return typeof checked?.value?.value === 'string' ? checked.value.value : null
+    }
+  }
+
+  return null
+}
+
+function findNodeExpanded(nodes: AXNode[], backendNodeId: number): boolean | null {
+  for (const node of nodes) {
+    if (node.backendDOMNodeId === backendNodeId) {
+      const properties = Array.isArray(node.properties) ? node.properties : []
+      const expanded = properties.find((property) => property?.name === 'expanded')
+      if (typeof expanded?.value?.value === 'boolean') return expanded.value.value
+      if (expanded?.value?.value === 'true') return true
+      if (expanded?.value?.value === 'false') return false
+      return null
     }
   }
 
@@ -105,6 +125,7 @@ export async function captureActionSignature(
     scrollY,
     targetValue: typeof backendNodeId === 'number' ? findNodeValue(nodes, backendNodeId) : null,
     targetChecked: typeof backendNodeId === 'number' ? findNodeChecked(nodes, backendNodeId) : null,
+    targetExpanded: typeof backendNodeId === 'number' ? findNodeExpanded(nodes, backendNodeId) : null,
   }
 }
 
@@ -124,6 +145,7 @@ export function verifyAction(
   const scrollChanged = before.scrollY !== after.scrollY
   const valueChanged = before.targetValue !== after.targetValue
   const checkedChanged = before.targetChecked !== after.targetChecked
+  const expandedChanged = before.targetExpanded !== after.targetExpanded
 
   // For a fill we can assert the stronger property: the field now holds what
   // we typed, not merely that something about it moved.
@@ -150,9 +172,9 @@ export function verifyAction(
       reason = verified ? 'The viewport moved' : 'The page did not scroll'
       break
     case 'change':
-      verified = urlChanged || structureChanged || valueChanged || checkedChanged
+      verified = urlChanged || structureChanged || valueChanged || checkedChanged || expandedChanged
       reason = verified
-        ? (checkedChanged ? 'The control\'s selected state changed' : 'The page changed')
+        ? (checkedChanged ? 'The control\'s selected state changed' : expandedChanged ? 'The element\'s expanded state changed' : 'The page changed')
         : 'Nothing on the page changed'
       break
     case 'none':

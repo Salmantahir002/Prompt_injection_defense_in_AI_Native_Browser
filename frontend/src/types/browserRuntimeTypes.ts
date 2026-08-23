@@ -78,6 +78,12 @@ export type SemanticElement = {
   /** The nearest preceding block of plain page text, in document order. */
   nearbyText?: string
   placeholder?: string
+  /** Structural container or form context enclosing this element (e.g. form: "checkout", nav, table). */
+  container?: string
+  /** HTML input type or variant (e.g. text, password, email, search, number). */
+  inputType?: string
+  /** HTML name attribute when present on the element. */
+  nameAttr?: string
 }
 
 export type SemanticDialog = {

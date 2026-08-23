@@ -44,7 +44,7 @@ export type AgentTaskOptions = {
 }
 
 /** One planning round trip may queue several actions; each still costs one step. */
-const DEFAULT_MAX_STEPS = 60
+const DEFAULT_MAX_STEPS = 150
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
@@ -97,7 +97,7 @@ export class AgentTask {
    * count — without its own cap this could otherwise retry forever.
    */
   private plannerFailureStreak = 0
-  private static readonly MAX_PLANNER_FAILURES = 5
+  private static readonly MAX_PLANNER_FAILURES = 12
 
   constructor(options: AgentTaskOptions) {
     this.taskId = options.taskId
@@ -132,7 +132,8 @@ export class AgentTask {
 
         const stateResult = await extractPageState(this.targetId)
         if (!stateResult.ok) {
-          return this.finalResult('failed', `Could not read the page: ${stateResult.error.message}`, 'action_failed')
+          const errorMsg = 'error' in stateResult && stateResult.error ? stateResult.error.message : 'Unknown error'
+          return this.finalResult('failed', `Could not read the page: ${errorMsg}`, 'action_failed')
         }
         const pageState = stateResult.data
         this.memory.setCurrentPage(pageState.url)
@@ -171,7 +172,9 @@ export class AgentTask {
               return this.finalResult('failed', `The planner kept failing: ${error.message}`, 'planner_failed')
             }
 
+            const backoffMs = Math.min(500 * Math.pow(1.5, this.plannerFailureStreak - 1), 4000)
             this.events.onStatus?.(`Planner error, retrying: ${error.message}`)
+            await new Promise((resolve) => setTimeout(resolve, backoffMs))
             continue
           }
           throw error
@@ -280,10 +283,12 @@ export class AgentTask {
       }
 
       if (!execResult.ok) {
+        const errorMsg = 'error' in execResult && execResult.error ? execResult.error.message : 'Action failed'
+        const errorCode = 'error' in execResult && execResult.error ? execResult.error.code : undefined
         this.memory.recordFailure(
           toolCall.tool,
-          `${describeToolCall(toolCall)} — ${execResult.error.message}`,
-          execResult.error.code,
+          `${describeToolCall(toolCall)} — ${errorMsg}`,
+          errorCode,
         )
         this.memory.incrementRetries()
         return null

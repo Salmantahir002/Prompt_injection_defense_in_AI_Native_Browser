@@ -38,15 +38,28 @@ function quadCenter(quad: Quad): ViewportPoint {
   return { x, y }
 }
 
-function requireBackendNodeId(handle: ElementHandle): number {
-  if (typeof handle.backendNodeId !== 'number') {
-    throw new BrowserRuntimeError(
-      'ELEMENT_NOT_INTERACTABLE',
-      `Element ${handle.elementId} (${handle.role}) has no DOM node behind it`,
-    )
-  }
 
-  return handle.backendNodeId
+/**
+ * Recovers a stale or missing backendDOMNodeId by querying the current AX tree.
+ */
+async function recoverBackendNodeId(session: CdpSession, handle: ElementHandle): Promise<number | undefined> {
+  try {
+    const axResult = await session.send('Accessibility.getFullAXTree')
+    const nodes = Array.isArray(axResult.nodes) ? axResult.nodes : []
+    const match = nodes.find((node: Record<string, unknown>) => {
+      if (node.nodeId === handle.axNodeId && typeof node.backendDOMNodeId === 'number') return true
+      const role = typeof (node.role as { value?: unknown })?.value === 'string' ? (node.role as { value: string }).value : ''
+      const name = typeof (node.name as { value?: unknown })?.value === 'string' ? (node.name as { value: string }).value : ''
+      return role === handle.role && name === handle.name && typeof node.backendDOMNodeId === 'number'
+    })
+    if (match && typeof match.backendDOMNodeId === 'number') {
+      handle.backendNodeId = match.backendDOMNodeId
+      return match.backendDOMNodeId
+    }
+  } catch {
+    // Ignore recovery error
+  }
+  return undefined
 }
 
 /**
@@ -54,8 +67,13 @@ function requireBackendNodeId(handle: ElementHandle): number {
  * a layout object simply produces no quads later, which is the clearer error.
  */
 export async function scrollElementIntoView(session: CdpSession, handle: ElementHandle): Promise<void> {
-  const backendNodeId = requireBackendNodeId(handle)
-  await session.send('DOM.scrollIntoViewIfNeeded', { backendNodeId }).catch(() => undefined)
+  let backendNodeId = handle.backendNodeId
+  if (typeof backendNodeId !== 'number') {
+    backendNodeId = await recoverBackendNodeId(session, handle)
+  }
+  if (typeof backendNodeId === 'number') {
+    await session.send('DOM.scrollIntoViewIfNeeded', { backendNodeId }).catch(() => undefined)
+  }
 }
 
 type ViewportSize = { width: number; height: number }
@@ -74,15 +92,43 @@ export async function readViewportSize(session: CdpSession): Promise<ViewportSiz
  * most substantial part of a wrapped or multi-line element.
  */
 export async function resolveElementPoint(session: CdpSession, handle: ElementHandle): Promise<ViewportPoint> {
-  const backendNodeId = requireBackendNodeId(handle)
+  let backendNodeId = handle.backendNodeId
+  if (typeof backendNodeId !== 'number') {
+    backendNodeId = await recoverBackendNodeId(session, handle)
+  }
+
+  if (typeof backendNodeId !== 'number') {
+    throw new BrowserRuntimeError(
+      'ELEMENT_NOT_INTERACTABLE',
+      `Element ${handle.elementId} (${handle.role}) has no DOM node behind it`,
+    )
+  }
+
   await scrollElementIntoView(session, handle)
 
-  const [quadsResult, viewport] = await Promise.all([
-    session.send('DOM.getContentQuads', { backendNodeId }),
-    readViewportSize(session),
-  ])
+  let quadsResult = await session.send('DOM.getContentQuads', { backendNodeId }).catch(() => ({ quads: [] }))
+  let quads = Array.isArray(quadsResult.quads) ? quadsResult.quads.filter(isQuad) : []
 
-  const quads = Array.isArray(quadsResult.quads) ? quadsResult.quads.filter(isQuad) : []
+  // If primary getContentQuads returned nothing, attempt box model fallback
+  if (quads.length === 0) {
+    try {
+      const boxModel = await session.send('DOM.getBoxModel', { backendNodeId })
+      const model = boxModel.model as Record<string, unknown> | undefined
+      const content = model?.content
+      const border = model?.border
+      if (isQuad(content)) quads.push(content)
+      else if (isQuad(border)) quads.push(border)
+    } catch {
+      const recoveredId = await recoverBackendNodeId(session, handle)
+      if (recoveredId && recoveredId !== backendNodeId) {
+        backendNodeId = recoveredId
+        await scrollElementIntoView(session, handle)
+        quadsResult = await session.send('DOM.getContentQuads', { backendNodeId }).catch(() => ({ quads: [] }))
+        quads = Array.isArray(quadsResult.quads) ? quadsResult.quads.filter(isQuad) : []
+      }
+    }
+  }
+
   const usable = quads
     .filter((quad) => quadArea(quad) > MIN_HIT_AREA)
     .sort((left, right) => quadArea(right) - quadArea(left))
@@ -95,14 +141,15 @@ export async function resolveElementPoint(session: CdpSession, handle: ElementHa
   }
 
   const point = quadCenter(usable[0])
-  const withinViewport = viewport.width === 0 || viewport.height === 0
-    || (point.x >= 0 && point.y >= 0 && point.x <= viewport.width && point.y <= viewport.height)
+  const viewport = await readViewportSize(session)
 
-  if (!withinViewport) {
-    throw new BrowserRuntimeError(
-      'ELEMENT_NOT_INTERACTABLE',
-      `Element ${handle.elementId} (${handle.role}) sits outside the viewport after scrolling`,
-    )
+  if (viewport.width > 0 && viewport.height > 0) {
+    // If coordinate sits slightly offscreen, clamp safely inside viewport bounds
+    if (point.x < 0 || point.y < 0 || point.x > viewport.width || point.y > viewport.height) {
+      const clampedX = Math.max(5, Math.min(viewport.width - 5, point.x))
+      const clampedY = Math.max(5, Math.min(viewport.height - 5, point.y))
+      return { x: clampedX, y: clampedY }
+    }
   }
 
   return point
@@ -110,10 +157,31 @@ export async function resolveElementPoint(session: CdpSession, handle: ElementHa
 
 /** Moves keyboard focus without a click, used before typing into a field. */
 export async function focusElement(session: CdpSession, handle: ElementHandle): Promise<void> {
-  const backendNodeId = requireBackendNodeId(handle)
+  let backendNodeId = handle.backendNodeId
+  if (typeof backendNodeId !== 'number') {
+    backendNodeId = await recoverBackendNodeId(session, handle)
+  }
+
+  if (typeof backendNodeId !== 'number') {
+    throw new BrowserRuntimeError(
+      'ELEMENT_NOT_INTERACTABLE',
+      `Element ${handle.elementId} (${handle.role}) has no DOM node behind it`,
+    )
+  }
+
   try {
     await session.send('DOM.focus', { backendNodeId })
   } catch (error) {
+    const recoveredId = await recoverBackendNodeId(session, handle)
+    if (recoveredId && recoveredId !== backendNodeId) {
+      try {
+        await session.send('DOM.focus', { backendNodeId: recoveredId })
+        return
+      } catch {
+        // fall through
+      }
+    }
+
     throw new BrowserRuntimeError(
       'ELEMENT_NOT_INTERACTABLE',
       `Element ${handle.elementId} (${handle.role}) could not take focus: ${error instanceof Error ? error.message : String(error)}`,

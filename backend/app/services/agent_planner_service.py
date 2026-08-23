@@ -30,7 +30,7 @@ from app.services.agent_tool_registry import (
 logger = logging.getLogger(__name__)
 
 # Bounds on what reaches the prompt. Working memory is a summary, not a log.
-MAX_PROMPT_ELEMENTS = 120
+MAX_PROMPT_ELEMENTS = 450
 MAX_COMPLETED_STEPS = 12
 MAX_FAILURES = 5
 MAX_PENDING_STEPS = 8
@@ -50,7 +50,7 @@ Rules:
 4. Never queue anything after "navigate" or "open_tab" — the page will be different
    and every element id will be invalid. Plan the new page in the next step.
 5. Only use element ids that appear in the CURRENT PAGE STATE. Never invent an id.
-6. If the goal is achieved, or cannot be achieved, use the "finish" tool with a clear summary.
+6. Goal Completion & Persistence: Only use the "finish" tool when the user's entire goal has been fully achieved and confirmed against CURRENT PAGE STATE, or when all plausible interaction paths have been exhausted. Never call "finish" prematurely when required steps (e.g. searching, selecting, filling all fields, submitting) are still incomplete.
 7. If you are unsure which action is correct, still answer, but report a lower confidence.
 8. Set confidence honestly: it decides whether a human is asked to confirm.
 9. "click", "fill", "type", and "press_key" already wait for the page to settle before
@@ -140,10 +140,19 @@ class AgentPlannerService:
 
         lines.append("elements:")
         last_near = None
+        last_container = None
         for element in state.elements[:MAX_PROMPT_ELEMENTS]:
+            if element.container and element.container != last_container:
+                lines.append(f"  --- [{element.container}] ---")
+                last_container = element.container
+            elif not element.container and last_container is not None:
+                last_container = None
+
             flags = []
             if element.role in ("textbox", "searchbox", "combobox", "input"):
                 flags.append("editable input")
+            if element.inputType and element.inputType not in (element.role, "text"):
+                flags.append(f"type={element.inputType}")
             if element.disabled:
                 flags.append("disabled")
             if element.required:
@@ -158,6 +167,8 @@ class AgentPlannerService:
                 flags.append("invalid")
 
             parts = [f'  {element.id} [{element.role}] "{element.name}"']
+            if element.nameAttr and element.nameAttr != element.name:
+                parts.append(f'name="{element.nameAttr}"')
             if element.value:
                 parts.append(f'value="{element.value}"')
             if element.placeholder:

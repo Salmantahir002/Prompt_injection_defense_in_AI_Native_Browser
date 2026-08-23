@@ -11,9 +11,9 @@ import { BrowserRuntimeError } from './runtimeContract.js'
  * cannot hang the agent.
  */
 
-export const DEFAULT_WAIT_TIMEOUT_MS = 15_000
-export const DEFAULT_QUIET_PERIOD_MS = 500
-const AX_POLL_INTERVAL_MS = 250
+export const DEFAULT_WAIT_TIMEOUT_MS = 10_000
+export const DEFAULT_QUIET_PERIOD_MS = 250
+const AX_POLL_INTERVAL_MS = 150
 const AX_STABLE_SAMPLES = 2
 
 export type WaitOptions = { timeoutMs?: number; quietPeriodMs?: number }
@@ -167,6 +167,7 @@ export async function waitForDomStable(session: CdpSession, options: WaitOptions
  * changes nothing is legitimate — so timeouts resolve rather than throw.
  */
 export async function settleAfterAction(session: CdpSession, options: WaitOptions = {}): Promise<AXNode[] | null> {
-  await waitForNetworkIdle(session, { timeoutMs: 3_000, quietPeriodMs: quietPeriodMs(options) }).catch(() => undefined)
-  return waitForDomStable(session, { timeoutMs: 3_000 }).catch(() => null)
+  const quiet = quietPeriodMs(options)
+  await waitForNetworkIdle(session, { timeoutMs: 2_500, quietPeriodMs: quiet }).catch(() => undefined)
+  return waitForDomStable(session, { timeoutMs: 2_500, quietPeriodMs: quiet }).catch(() => null)
 }

@@ -31,6 +31,9 @@ class AgentSemanticElement(BaseModel):
     invalid: Optional[str] = None
     nearbyText: Optional[str] = None
     placeholder: Optional[str] = None
+    container: Optional[str] = None
+    inputType: Optional[str] = None
+    nameAttr: Optional[str] = None
 
 
 class AgentSemanticDialog(BaseModel):

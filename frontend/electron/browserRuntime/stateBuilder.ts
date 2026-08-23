@@ -42,13 +42,28 @@ const INTERACTIVE_ROLES = new Set([
 
 const DIALOG_ROLES = new Set(['dialog', 'alertdialog'])
 const ALERT_ROLES = new Set(['alert', 'alertdialog', 'status'])
+const CONTAINER_ROLES = new Set([
+  'form',
+  'region',
+  'navigation',
+  'banner',
+  'contentinfo',
+  'complementary',
+  'main',
+  'table',
+  'section',
+  'group',
+  'fieldset',
+  'search',
+  'tabpanel',
+])
 
-const MAX_ELEMENTS = 150
-const MAX_DIALOGS = 10
-const MAX_VALIDATION_ISSUES = 20
-const MAX_NAME_LENGTH = 160
-const MAX_VALUE_LENGTH = 240
-const MAX_NEARBY_TEXT_LENGTH = 220
+const MAX_ELEMENTS = 500
+const MAX_DIALOGS = 25
+const MAX_VALIDATION_ISSUES = 50
+const MAX_NAME_LENGTH = 300
+const MAX_VALUE_LENGTH = 500
+const MAX_NEARBY_TEXT_LENGTH = 400
 /** Below this many characters a text run is punctuation/noise, not a label. */
 const MIN_NEARBY_TEXT_LENGTH = 6
 
@@ -132,6 +147,7 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
    * follows it.
    */
   let recentText = ''
+  let currentContainer = ''
 
   for (const node of input.nodes) {
     if (node.ignored === true || typeof node.nodeId !== 'string') continue
@@ -141,6 +157,11 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
 
     const properties = propertyMap(node)
     if (asBoolean(properties.get('hidden'))) continue
+
+    if (CONTAINER_ROLES.has(role)) {
+      const containerName = normalizeText(node.name?.value || properties.get('name') || '', MAX_NAME_LENGTH)
+      currentContainer = containerName ? `${role}: ${containerName}` : role
+    }
 
     if (role === 'StaticText') {
       const text = normalizeText(node.name?.value, MAX_NEARBY_TEXT_LENGTH)
@@ -205,6 +226,14 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
       if (selected) selectedElementIds.push(elementId)
 
       const element: SemanticElement = { id: elementId, role, name }
+      if (currentContainer) element.container = currentContainer
+      const inputType = typeof properties.get('type') === 'string'
+        ? String(properties.get('type'))
+        : (role === 'textbox' || role === 'searchbox' ? role : undefined)
+      if (inputType) element.inputType = inputType
+      const nameAttr = typeof properties.get('name') === 'string' ? String(properties.get('name')) : undefined
+      if (nameAttr && nameAttr !== name) element.nameAttr = nameAttr
+
       if (value) element.value = value
       if (placeholder) element.placeholder = placeholder
       if (description && description !== name) element.description = description

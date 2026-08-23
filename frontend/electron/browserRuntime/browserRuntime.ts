@@ -333,7 +333,7 @@ export class BrowserRuntime {
     options: { backendNodeId?: number; expectedValue?: string } = {},
   ): Promise<ActionAck> {
     const before: ActionSignature = expectation === 'none'
-      ? { url: '', structureHash: '', scrollY: 0, targetValue: null, targetChecked: null }
+      ? { url: '', structureHash: '', scrollY: 0, targetValue: null, targetChecked: null, targetExpanded: null }
       : await captureActionSignature(session, options.backendNodeId)
 
     await action()

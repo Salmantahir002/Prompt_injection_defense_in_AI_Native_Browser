@@ -43,8 +43,14 @@ export class CdpSession {
       session.emit(method, (params ?? {}) as CdpParams)
     })
     contents.debugger.on('detach', (_event, reason) => {
-      session.detached = true
       console.warn(`[cdp] Detached from target ${contents.id}: ${reason}`)
+      if (!contents.isDestroyed()) {
+        setTimeout(() => {
+          void session.ensureAttached().catch(() => undefined)
+        }, 100)
+      } else {
+        session.detached = true
+      }
     })
     contents.once('destroyed', () => {
       session.detached = true
@@ -55,7 +61,35 @@ export class CdpSession {
   }
 
   isAlive(): boolean {
-    return !this.detached && !this.contents.isDestroyed() && this.contents.debugger.isAttached()
+    return !this.contents.isDestroyed() && (!this.detached || this.contents.debugger.isAttached())
+  }
+
+  /**
+   * Ensures the debugger is attached, re-attaching and restoring domains if detached.
+   */
+  async ensureAttached(): Promise<boolean> {
+    if (this.contents.isDestroyed()) {
+      this.detached = true
+      return false
+    }
+
+    if (!this.contents.debugger.isAttached()) {
+      try {
+        this.contents.debugger.attach('1.3')
+        this.detached = false
+        const domainsToRestore = [...this.enabledDomains]
+        this.enabledDomains.clear()
+        if (domainsToRestore.length > 0) {
+          await this.enableDomains(domainsToRestore)
+        }
+      } catch (error) {
+        console.warn(`[cdp] Failed to auto-reattach to target ${this.contents.id}:`, error)
+        return false
+      }
+    }
+
+    this.detached = false
+    return true
   }
 
   url(): string {
@@ -67,7 +101,8 @@ export class CdpSession {
   }
 
   async send(method: string, params?: CdpParams): Promise<CdpParams> {
-    if (!this.isAlive()) {
+    const attached = await this.ensureAttached()
+    if (!attached || this.contents.isDestroyed()) {
       throw new BrowserRuntimeError('TARGET_DETACHED', `CDP session for target ${this.targetId} is no longer attached`)
     }
 
