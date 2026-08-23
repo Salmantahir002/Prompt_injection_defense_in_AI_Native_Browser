@@ -48,6 +48,9 @@ const MAX_DIALOGS = 10
 const MAX_VALIDATION_ISSUES = 20
 const MAX_NAME_LENGTH = 160
 const MAX_VALUE_LENGTH = 240
+const MAX_NEARBY_TEXT_LENGTH = 220
+/** Below this many characters a text run is punctuation/noise, not a label. */
+const MIN_NEARBY_TEXT_LENGTH = 6
 
 export type StateBuilderInput = {
   targetId: number
@@ -118,6 +121,17 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
   let focusedElementId: string | null = null
   let idCounter = 0
   let truncated = false
+  /**
+   * The most recent substantial block of plain text seen while walking the
+   * tree in document order — replaced, not accumulated, on every new text
+   * node. A quiz question, a form field's label, an instruction: none of it
+   * is reliably tied to its control by ARIA on an arbitrary page, so reading
+   * order is the only association available. Every control encountered
+   * before the next text block inherits this same value, exactly like a
+   * sighted reader would associate the last thing they read with what
+   * follows it.
+   */
+  let recentText = ''
 
   for (const node of input.nodes) {
     if (node.ignored === true || typeof node.nodeId !== 'string') continue
@@ -127,6 +141,13 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
 
     const properties = propertyMap(node)
     if (asBoolean(properties.get('hidden'))) continue
+
+    if (role === 'StaticText') {
+      const text = normalizeText(node.name?.value, MAX_NEARBY_TEXT_LENGTH)
+      if (text.length >= MIN_NEARBY_TEXT_LENGTH) recentText = text
+      continue
+    }
+
     if (!isExposed(role, properties)) continue
 
     const isInteractive = INTERACTIVE_ROLES.has(role) || asBoolean(properties.get('editable'))
@@ -139,13 +160,32 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
       continue
     }
 
-    const name = normalizeText(node.name?.value, MAX_NAME_LENGTH)
+    let name = normalizeText(node.name?.value, MAX_NAME_LENGTH)
     const description = normalizeText(node.description?.value, MAX_NAME_LENGTH)
     const value = normalizeText(node.value?.value, MAX_VALUE_LENGTH)
+    const placeholder = normalizeText(properties.get('placeholder'), MAX_NAME_LENGTH)
+    const title = normalizeText(properties.get('title'), MAX_NAME_LENGTH)
+    const url = normalizeText(properties.get('url'), MAX_NAME_LENGTH)
 
-    // An unnamed, valueless control is not addressable by the planner and only
-    // costs context, so it is skipped unless it carries an error.
-    if (isInteractive && !name && !value && !description && !invalid) continue
+    // For interactive controls with no explicit accessible name, synthesize smart fallbacks
+    // so icon buttons (e.g. submit arrows ">", search icons, filter buttons) and unnamed inputs
+    // are fully addressable by the planner.
+    if (isInteractive && !name) {
+      if (placeholder) {
+        name = placeholder
+      } else if (title) {
+        name = title
+      } else if (role === 'button') {
+        name = recentText ? `Apply/Action near ${recentText}` : 'Action / Submit button'
+      } else if (role === 'textbox' || role === 'searchbox' || role === 'combobox' || asBoolean(properties.get('editable'))) {
+        name = recentText ? `Input for ${recentText}` : 'Input field'
+      } else if (role === 'link' && url) {
+        name = `Link to ${url}`
+      }
+    }
+
+    // Only skip genuinely non-actionable elements (e.g. empty non-button anchor without href or text)
+    if (isInteractive && !name && !value && !description && !invalid && !url && role !== 'button') continue
 
     idCounter += 1
     const elementId = `e${idCounter}`
@@ -166,8 +206,11 @@ export function buildSemanticState(input: StateBuilderInput): BuiltState {
 
       const element: SemanticElement = { id: elementId, role, name }
       if (value) element.value = value
+      if (placeholder) element.placeholder = placeholder
       if (description && description !== name) element.description = description
-      const url = normalizeText(properties.get('url'), MAX_NAME_LENGTH)
+      if (recentText && recentText !== name && recentText !== description && recentText !== placeholder) {
+        element.nearbyText = recentText
+      }
       if (url) element.url = url
       if (asBoolean(properties.get('disabled'))) element.disabled = true
       if (asBoolean(properties.get('required'))) element.required = true

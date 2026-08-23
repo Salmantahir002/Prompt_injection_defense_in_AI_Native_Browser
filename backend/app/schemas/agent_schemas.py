@@ -29,6 +29,8 @@ class AgentSemanticElement(BaseModel):
     selected: Optional[bool] = None
     checked: Optional[str] = None
     invalid: Optional[str] = None
+    nearbyText: Optional[str] = None
+    placeholder: Optional[str] = None
 
 
 class AgentSemanticDialog(BaseModel):

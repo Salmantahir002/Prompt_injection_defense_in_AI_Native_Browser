@@ -162,6 +162,8 @@ export async function dispatchNativeScroll(
 
 /** Selects the whole field and deletes it, without touching `.value`. */
 export async function clearFocusedField(session: CdpSession): Promise<void> {
-  await dispatchNativeKeyPress(session, 'a', MODIFIER.ctrl)
+  const selectAllModifier = process.platform === 'darwin' ? MODIFIER.meta : MODIFIER.ctrl
+  await dispatchNativeKeyPress(session, 'a', selectAllModifier)
+  await dispatchNativeKeyPress(session, 'Backspace')
   await dispatchNativeKeyPress(session, 'Delete')
 }

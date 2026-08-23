@@ -95,9 +95,18 @@ async def agent_plan(request: AgentPlanRequest):
             status_code=502,
             detail=f"Planner LLM returned {exc.response.status_code}.",
         ) from exc
-    except httpx.RequestError as exc:
-        logger.exception("Planner LLM unreachable")
-        raise HTTPException(status_code=502, detail=f"Planner LLM is unreachable: {type(exc).__name__}.") from exc
+    except ValueError as exc:
+        logger.warning("Planner LLM execution error: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Planner LLM provider error: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error in agent planner: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Planner failed: {type(exc).__name__}: {exc}",
+        ) from exc
 
     tool_calls = [
         AgentToolCall(tool=name, arguments=arguments, requires_approval=requires_approval(name))

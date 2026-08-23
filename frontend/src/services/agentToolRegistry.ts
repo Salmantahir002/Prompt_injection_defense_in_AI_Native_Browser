@@ -10,8 +10,10 @@ import type { AgentToolCall, ResolvedToolCommand } from '../types/agentTypes'
  * mean an agent that can act on an unscanned page.
  *
  * Tools that resolve to `null` are handled by the agent loop rather than the
- * browser: `extract` writes to working memory, `finish` ends the task, and
- * `upload` remains gated behind the Phase 7 approval workflow.
+ * browser: `open_tab` re-points the loop at a new target, `extract` writes to
+ * working memory, and `finish` ends the task. `upload` does reach the
+ * browser — the runtime shows the user a native file picker and never lets
+ * the planner name a path.
  */
 
 function asString(value: unknown): string {
@@ -47,11 +49,12 @@ export function resolveToolCall(call: AgentToolCall): ResolvedToolCommand {
       }
     case 'wait':
       return { command: 'waitForDomStable', params: { timeoutMs: asNumber(args.timeoutMs) } }
+    case 'upload':
+      return { command: 'upload', params: { elementId: asString(args.target) } }
     // `open_tab` is loop-handled: the tab strip is renderer state, so the agent
     // loop creates the tab and re-points itself at it rather than sending a
     // command to the Browser Runtime, which only ever drives one existing tab.
     case 'open_tab':
-    case 'upload':
     case 'extract':
     case 'finish':
       return null

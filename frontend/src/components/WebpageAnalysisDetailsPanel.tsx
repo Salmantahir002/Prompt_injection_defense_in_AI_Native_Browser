@@ -170,7 +170,6 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
                 <div className="webpage-decision-copy">{result.summary_reason}</div>
               </div>
             </div>
-            <div className="drawer-decision-meta"><strong>{Math.round(result.confidence * 100)}%</strong>confidence</div>
           </div>
 
           <div className={`webpage-credential-notice ${isBlocked ? 'webpage-credential-notice--blocked' : ''}`}>

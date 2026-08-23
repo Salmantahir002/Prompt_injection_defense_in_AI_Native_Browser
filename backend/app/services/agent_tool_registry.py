@@ -71,7 +71,8 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
         name="fill",
         description=(
             "Replace the contents of an editable input field (role 'textbox', 'searchbox', 'combobox', 'input') "
-            "with a text value. Always use this to enter search queries or form data."
+            "with a text value. Always use this to enter search queries, form data, or filter/setting values "
+            "(e.g. a price, quantity, or date field) — prefer it over 'type' whenever the field has an element id."
         ),
         parameters=(
             ToolParameter("target", "element_id", True, "Element id of the input field"),
@@ -141,14 +142,22 @@ TOOL_SPECS: Tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="wait",
-        description="Wait for the page to finish loading or settle.",
+        description=(
+            "Wait for the page to finish loading or settle. Rarely needed: click/fill/type/press_key "
+            "already wait for the page to settle before returning, so do not queue this right after one "
+            "of them — only use it when something is loading that none of your actions triggered."
+        ),
         parameters=(
             ToolParameter("timeoutMs", "number", False, "Maximum wait in milliseconds"),
         ),
     ),
     ToolSpec(
         name="extract",
-        description="Record information from the current page into working memory.",
+        description=(
+            "Record information from the current page into working memory. The note must describe what "
+            "is actually visible in the current page state (a field's value, the url, the results shown) "
+            "— not what an earlier action was intended to accomplish."
+        ),
         parameters=(
             ToolParameter("note", "string", True, "What was found"),
         ),

@@ -46,21 +46,43 @@ Rules:
 3. Queue multiple actions (up to {max_queue}) for certain, deterministic sequences to make automation FAST:
    - Example 1 (Search): [{"tool": "fill", "arguments": {"target": "<input_id>", "value": "<query>"}}, {"tool": "press_key", "arguments": {"key": "Enter"}}]
    - Example 2 (Form filling): [{"tool": "fill", "arguments": {"target": "e1", "value": "user"}}, {"tool": "fill", "arguments": {"target": "e2", "value": "pass"}}, {"tool": "click", "arguments": {"target": "e3"}}]
+   - Example 3 (Filter/setting field): [{"tool": "fill", "arguments": {"target": "<input_id>", "value": "50000"}}, {"tool": "click", "arguments": {"target": "<apply_button_id>"}}]
 4. Never queue anything after "navigate" or "open_tab" — the page will be different
    and every element id will be invalid. Plan the new page in the next step.
 5. Only use element ids that appear in the CURRENT PAGE STATE. Never invent an id.
 6. If the goal is achieved, or cannot be achieved, use the "finish" tool with a clear summary.
 7. If you are unsure which action is correct, still answer, but report a lower confidence.
 8. Set confidence honestly: it decides whether a human is asked to confirm.
+9. "click", "fill", "type", and "press_key" already wait for the page to settle before
+   they return — do not follow one of them with a bare "wait" just to be safe. Only queue
+   "wait" when the page is doing something no action of yours triggered (e.g. it was already
+   loading when you arrived), or after a "wait" already timed out and you have a specific
+   reason the page needs more time. Never queue two "wait" actions back to back.
 
 CROSS-WEBSITE AUTOMATION GUIDELINES:
 - Searching: Always find the editable input field (role 'textbox', 'searchbox', 'combobox', 'input') and use "fill" with the search term. Then submit via "press_key" ("Enter") or clicking the search button. NEVER click a search button while the search box is empty.
 - Input vs Button Disambiguation: Elements with role 'textbox', 'searchbox', 'combobox' are input fields where text must be entered; elements with role 'button' only trigger actions. When both exist with similar names (e.g. "Search"), fill the input field first.
+- Filters, Price Ranges, and Settings Fields: Range and price filter fields (Min/Max price) are NOT search boxes and pressing "Enter" will NOT submit them on most e-commerce sites (e.g. Daraz, Amazon, AliExpress).
+  1. Identify Min and Max inputs by checking their `placeholder="..."` (e.g. placeholder="Min", placeholder="Max"), `name="..."`, or `near="Price"`.
+  2. Fill the requested value using "fill".
+  3. ALWAYS click the nearby apply/submit/arrow button right next to the inputs (e.g. `[button] "Apply/Action near Price"`, `[button] ">"`, or `[button] "Apply"`). You can queue the fill and the click in a single step for speed: `[{"tool": "fill", "arguments": {"target": "<max_input_id>", "value": "60000"}}, {"tool": "click", "arguments": {"target": "<apply_btn_id>"}}]`.
+  4. If an Enter keypress resulted in "Nothing on the page changed", look for the apply button next to the filter in CURRENT PAGE STATE and click it.
+- Confirming an action actually took effect: Do not call "finish" or write an "extract" note claiming a filter/setting/value was applied unless CURRENT PAGE STATE actually shows it (the field's own `value="..."`, an updated URL, or changed results). "extract" must describe what is genuinely visible on the page, not what you intended to happen — if the effect isn't visible yet, take the corrective action (e.g. click the apply button) instead of extracting or finishing.
 - Modals & Cookie Dialogs: If a modal dialog or cookie consent banner obscures the page, click "Accept", "Agree", "Allow", or "Close" to dismiss it before interacting with main content.
 - Multi-field Forms: Fill all necessary form inputs in a single queued step for maximum speed.
 - Finding Links & Results: Choose links that most accurately match the user's target. If the goal is to view or extract info from a result, click the link to visit the page.
 - Information Extraction: When the goal is to answer a question or find data on a page, use the "extract" tool to record the finding, then call "finish".
-- Failure Recovery: If a previous action failed or had no effect ("Nothing on the page changed"), do not repeat the same action; try a different element (such as an input field or a different link/button) or scroll to reveal more.
+- Reading Context: `near="..."` on an element is the plain text that appeared immediately before it on the page — a question, a label, an instruction — even when the page has no ARIA linking them. It is not the element itself; read it before deciding what to do with the element(s) that carry it. It is only printed once per new block of text, so it applies to every element after it until the next `near="..."` appears.
+- CURRENT PAGE STATE already lists every matching element anywhere in the page, not only what is currently scrolled into view — clicking a listed element scrolls it into view automatically. Scroll only to visually confirm something, or on pages that load more content as you scroll (new element ids will then appear that were not listed before); do not scroll just to "look for" elements that would already be listed if they existed.
+- Failure Recovery: WORKING MEMORY's "completed" and "recent failures" lines name the exact element id each action targeted (e.g. "click e7 ... — Nothing on the page changed"). Before picking your next action, check whether the id you are about to act on already appears there. If it does and the outcome was a failure or a no-op, do NOT repeat that exact action — pick a different element. Two failures in a row on the same element id means that element is not the answer.
+
+MULTIPLE-CHOICE / QUIZ QUESTIONS:
+- Read the `near="..."` text on the first option of each group — that is the actual question. Answer using your own knowledge of the subject; you are not shown whether a click was "correct", so clicking options one after another hoping for feedback will not work and only wastes steps. Decide the answer before acting, then act once.
+- If the question requires a calculation (subnetting, unit conversion, arithmetic of any kind), work through it step by step in your "reason" field before picking an option — a confidently wrong calculation looks no different from a right one until it is graded, so care matters more here than speed.
+- Each radio/checkbox's line shows "checked=true" or "checked=false" — ground truth for what is currently selected, not something to infer from memory.
+- Single-answer questions (role 'radio'): a question is answered as soon as ONE of its options shows "checked=true". Click exactly one option — the one whose text is correct — then move to the next question's elements entirely. Do not click a second option in the same group afterwards; that only changes the selection, it does not "double-check" it, and there is nothing on the page telling you to reconsider.
+- "Select all that apply" questions (role 'checkbox'): click every checkbox in the group whose text is a correct answer, one click per action (queue several in one step if you are confident about more than one), then leave that group alone. Never click a checkbox that already shows "checked=true" unless you specifically intend to deselect it — clicking it again toggles it OFF.
+- Work through every question shown in CURRENT PAGE STATE — it already contains the whole page's questions regardless of scroll position, so plan against the full list rather than only what happens to be visible. Only call "finish" once every question's group has a selection; on a lazily-loaded page, scroll after the last currently-known question to check whether more appear before finishing.
 
 Available tools:
 {tool_catalogue}
@@ -117,6 +139,7 @@ class AgentPlannerService:
             lines.append(f"errors: {rendered}")
 
         lines.append("elements:")
+        last_near = None
         for element in state.elements[:MAX_PROMPT_ELEMENTS]:
             flags = []
             if element.role in ("textbox", "searchbox", "combobox", "input"):
@@ -137,8 +160,15 @@ class AgentPlannerService:
             parts = [f'  {element.id} [{element.role}] "{element.name}"']
             if element.value:
                 parts.append(f'value="{element.value}"')
+            if element.placeholder:
+                parts.append(f'placeholder="{element.placeholder}"')
             if element.description and element.description != element.name:
                 parts.append(f'desc="{element.description}"')
+            # Printed once per new block, not on every element that shares it —
+            # a 4-option question would otherwise repeat its own text 4 times.
+            if element.nearbyText and element.nearbyText != last_near:
+                parts.append(f'near="{element.nearbyText}"')
+                last_near = element.nearbyText
             if element.url:
                 parts.append(f'href="{element.url}"')
             if flags:

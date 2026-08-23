@@ -23,6 +23,14 @@ export type ActionSignature = {
   scrollY: number
   /** Current value of the targeted element, when the action had one. */
   targetValue: string | null
+  /**
+   * Current checked/unchecked/mixed state of the targeted element, when it has
+   * one. A checkbox or radio click often changes nothing else observable — no
+   * new text, no structural change, no `value` — so without this a page with
+   * no other reaction to a selection (e.g. results only revealed by a later
+   * "submit" button) would report every checkbox click as a no-op.
+   */
+  targetChecked: string | null
 }
 
 /**
@@ -45,6 +53,24 @@ function findNodeValue(nodes: AXNode[], backendNodeId: number): string | null {
   for (const node of nodes) {
     if (node.backendDOMNodeId === backendNodeId) {
       return typeof node.value?.value === 'string' ? node.value.value : ''
+    }
+  }
+
+  return null
+}
+
+/**
+ * `checked` lives in the AX node's `properties` array, not on `value` — the
+ * same place the State Builder reads it from for the page state shown to the
+ * planner. Reusing that source here (rather than only `findNodeValue`) is
+ * what makes a checkbox/radio click count as evidence, not a no-op.
+ */
+function findNodeChecked(nodes: AXNode[], backendNodeId: number): string | null {
+  for (const node of nodes) {
+    if (node.backendDOMNodeId === backendNodeId) {
+      const properties = Array.isArray(node.properties) ? node.properties : []
+      const checked = properties.find((property) => property?.name === 'checked')
+      return typeof checked?.value?.value === 'string' ? checked.value.value : null
     }
   }
 
@@ -78,6 +104,7 @@ export async function captureActionSignature(
     structureHash: fingerprintNodes(nodes),
     scrollY,
     targetValue: typeof backendNodeId === 'number' ? findNodeValue(nodes, backendNodeId) : null,
+    targetChecked: typeof backendNodeId === 'number' ? findNodeChecked(nodes, backendNodeId) : null,
   }
 }
 
@@ -96,6 +123,7 @@ export function verifyAction(
   const structureChanged = before.structureHash !== after.structureHash
   const scrollChanged = before.scrollY !== after.scrollY
   const valueChanged = before.targetValue !== after.targetValue
+  const checkedChanged = before.targetChecked !== after.targetChecked
 
   // For a fill we can assert the stronger property: the field now holds what
   // we typed, not merely that something about it moved.
@@ -122,8 +150,10 @@ export function verifyAction(
       reason = verified ? 'The viewport moved' : 'The page did not scroll'
       break
     case 'change':
-      verified = urlChanged || structureChanged || valueChanged
-      reason = verified ? 'The page changed' : 'Nothing on the page changed'
+      verified = urlChanged || structureChanged || valueChanged || checkedChanged
+      reason = verified
+        ? (checkedChanged ? 'The control\'s selected state changed' : 'The page changed')
+        : 'Nothing on the page changed'
       break
     case 'none':
     default:
@@ -138,6 +168,7 @@ export function verifyAction(
     structureChanged,
     scrollChanged,
     valueChanged,
+    checkedChanged,
     expectation: options.expectation,
     reason,
   }

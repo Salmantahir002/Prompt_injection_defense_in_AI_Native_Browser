@@ -333,7 +333,7 @@ export class BrowserRuntime {
     options: { backendNodeId?: number; expectedValue?: string } = {},
   ): Promise<ActionAck> {
     const before: ActionSignature = expectation === 'none'
-      ? { url: '', structureHash: '', scrollY: 0, targetValue: null }
+      ? { url: '', structureHash: '', scrollY: 0, targetValue: null, targetChecked: null }
       : await captureActionSignature(session, options.backendNodeId)
 
     await action()
@@ -508,6 +508,7 @@ export class BrowserRuntime {
       structureChanged: false,
       scrollChanged: false,
       valueChanged: true,
+      checkedChanged: false,
       expectation: 'none',
       reason: `Attached ${files.length} file(s) chosen by the user`,
     })

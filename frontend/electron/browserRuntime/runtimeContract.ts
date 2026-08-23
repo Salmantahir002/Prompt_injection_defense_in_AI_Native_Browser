@@ -60,6 +60,8 @@ export type ActionVerification = {
   structureChanged: boolean
   scrollChanged: boolean
   valueChanged: boolean
+  /** Checked/unchecked/mixed state of the target flipped — the signal a checkbox or radio click needs. */
+  checkedChanged: boolean
   expectation: VerificationExpectation
   reason: string
 }
@@ -100,6 +102,14 @@ export type SemanticElement = {
   selected?: boolean
   checked?: CheckedState
   invalid?: string
+  /**
+   * The nearest preceding block of plain page text, in document order — a
+   * question, a label, a hint. Most form controls (this one included, maybe)
+   * have no ARIA association to the text that explains them; proximity in
+   * reading order is often the only signal there is.
+   */
+  nearbyText?: string
+  placeholder?: string
 }
 
 export type SemanticDialog = {

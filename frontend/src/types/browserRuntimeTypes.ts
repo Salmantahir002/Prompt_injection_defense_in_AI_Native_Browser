@@ -39,6 +39,8 @@ export type ActionVerification = {
   structureChanged: boolean
   scrollChanged: boolean
   valueChanged: boolean
+  /** Checked/unchecked/mixed state of the target flipped — the signal a checkbox or radio click needs. */
+  checkedChanged: boolean
   expectation: VerificationExpectation
   reason: string
 }
@@ -73,6 +75,9 @@ export type SemanticElement = {
   selected?: boolean
   checked?: CheckedState
   invalid?: string
+  /** The nearest preceding block of plain page text, in document order. */
+  nearbyText?: string
+  placeholder?: string
 }
 
 export type SemanticDialog = {
@@ -130,7 +135,13 @@ export type FillParams = { elementId: string; value: string; delayMs?: number }
 export type TypeParams = { text: string; delayMs?: number }
 export type PressKeyParams = { key: string; modifiers?: number }
 export type ScrollParams = { deltaX?: number; deltaY?: number; elementId?: string }
-export type UploadParams = { elementId: string; filePaths: string[] }
+/**
+ * Note there is no `filePaths`. The planner names the *field*, never the file.
+ * The paths come from a native OS picker the user drives, so a hostile page
+ * cannot cause a specific file to be uploaded even if it fully controls the
+ * planner's output.
+ */
+export type UploadParams = { elementId: string }
 export type WaitParams = { timeoutMs?: number; quietPeriodMs?: number }
 export type ScreenshotParams = { fullPage?: boolean }
 /** Toggles the cosmetic agent overlay (virtual cursor + breathing glow). */

@@ -33,6 +33,18 @@ function classifyStatus(status: number): AgentPlanFailure['kind'] {
   return 'llm_error'
 }
 
+function extractDetail(raw: string, status: number): string {
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.detail === 'string') {
+      return parsed.detail
+    }
+  } catch {
+    // raw text
+  }
+  return raw.trim() || `Planner failed with status ${status}`
+}
+
 /**
  * Asks the planner for the next action.
  *
@@ -62,12 +74,13 @@ export async function requestPlan(
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
-    throw new AgentPlanError('network', 'Agent backend is not reachable.')
+    throw new AgentPlanError('network', 'Agent backend is not reachable. Ensure the Python backend is running on port 8000.')
   }
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '')
-    throw new AgentPlanError(classifyStatus(response.status), detail || `Planner failed with status ${response.status}`)
+    const raw = await response.text().catch(() => '')
+    const message = extractDetail(raw, response.status)
+    throw new AgentPlanError(classifyStatus(response.status), message)
   }
 
   return response.json() as Promise<AgentPlanResponse>
