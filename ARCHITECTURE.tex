@@ -12,6 +12,9 @@
 \usepackage{fancyhdr}
 \usepackage{enumitem}
 \usepackage{float}
+\usepackage{array}
+\usepackage{seqsplit}
+\usepackage{ragged2e}
 
 \hypersetup{
     colorlinks=true,
@@ -22,7 +25,7 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{Project Summary (v2.0)}}
+\fancyhead[L]{\small\textit{Project Summary (v3.0)}}
 \fancyhead[R]{\small\textit{Prompt Injection Defense in AI-Native Browser}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -46,10 +49,24 @@
     boxrule=0.8pt
 }
 
-\title{\textbf{\LARGE Project Summary \& System Architecture (v2.0)}\\[0.3em]
+% Fixed-width, left-aligned, wrapping "label" columns for tables whose first
+% column(s) hold file paths, identifiers, or short labels. Plain `l` columns
+% never wrap, so a single long \texttt path would otherwise force that column
+% to its full natural width and starve the adjacent X (description) column.
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{A}{P{4.1cm}} % wide label / long file path
+\newcolumntype{B}{P{3.0cm}} % medium label / short-to-medium file path
+\newcolumntype{C}{P{2.2cm}} % narrow label
+\newcolumntype{D}{P{1.4cm}} % very narrow label (e.g. row numbers, HTTP verbs)
+
+% Wraps long, unbreakable monospace tokens (file paths, identifiers) so they
+% can break at any character rather than overflowing a fixed-width column.
+\newcommand{\pth}[1]{\texttt{\seqsplit{#1}}}
+
+\title{\textbf{\LARGE Project Summary \& System Architecture (v3.0)}\\[0.3em]
 \Large Prompt Injection Defense in AI-Native Browser\\[0.2em]
 \large Final Year Project Specification}
-\author{July / August 2026}
+\author{August 2026}
 \date{}
 
 \begin{document}
@@ -57,7 +74,7 @@
 \maketitle
 
 \begin{tcolorbox}[title=What is this project?]
-A custom secure desktop web browser that uses Artificial Intelligence (AI) to browse the internet on your behalf. The fundamental security challenge: malicious websites can embed hidden instructions (Indirect Prompt Injection) or users can enter hostile prompts (Direct Prompt Injection) to hijack the AI. This project introduces a multi-stage, isolated security architecture that detects and blocks those attacks in real time before instructions can reach the Large Language Model or trigger browser actions.
+A custom secure desktop web browser, codenamed \textbf{PromptGuard}, that uses Artificial Intelligence (AI) to browse the internet on your behalf. The fundamental security challenge: malicious websites can embed hidden instructions (Indirect Prompt Injection) or users can enter hostile prompts (Direct Prompt Injection) to hijack the AI. This project introduces a multi-stage, isolated security architecture that detects and blocks those attacks in real time before instructions can reach the Large Language Model or trigger browser actions. The autonomous agent drives the browser through a purpose-built, typed Chrome DevTools Protocol (CDP) runtime rather than any third-party automation framework, and the chat/agent assistant can be pointed at any of several LLM providers the user configures, not a single fixed vendor.
 \end{tcolorbox}
 
 \vspace{0.8em}
@@ -69,21 +86,21 @@ A custom secure desktop web browser that uses Artificial Intelligence (AI) to br
 % =========================================================================
 \section{Frontend --- What the User Sees}
 
-The frontend is everything the user interacts with directly. It is built as a desktop application using \textbf{Electron 42}, \textbf{React 19}, and \textbf{TypeScript 6} (a hardened, custom version of a modern browser shell).
+The frontend is everything the user interacts with directly. It is built as a desktop application using \textbf{Electron 42.3}, \textbf{React 19.2}, and \textbf{TypeScript 6.0} (a hardened, custom browser shell -- not a fork of an existing browser).
 
 \subsection{Technologies Used in the Frontend}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Technology} & \textbf{What It Is} & \textbf{Why We Use It} \\
 \midrule
-\textbf{Electron 42} & Framework turning web apps into desktop software & Provides native desktop window management, webviews, and deep Chrome DevTools Protocol (CDP) access. \\
-\textbf{Stagehand 4.0} & Browser automation runtime & Powers natural-language browser control (\texttt{act}, \texttt{observe}, \texttt{extract}) connected directly to the active Electron CDP port (\texttt{9222}). \\
-\textbf{React 19} & Component-based UI library & Powers the tabbed browser shell, navigation toolbar, AI chat sidebar, and explainability analysis drawers. \\
-\textbf{TypeScript 6} & JavaScript with static typing & Eliminates runtime bugs by strictly enforcing type safety across IPC and API contracts. \\
+\textbf{Electron 42.3} & Framework turning web apps into desktop software & Provides native desktop window management, \texttt{<webview>} containers, and direct access to each guest's Chrome DevTools Protocol (CDP) session. \\
+\textbf{Native CDP (\texttt{webContents.debugger})} & Electron's built-in CDP attachment API & Drives the browser and captures its content directly -- \textbf{no external automation library is bundled}. Electron allows exactly one \texttt{debugger.attach()} per \texttt{webContents}, so the same attachment is shared by the agent runtime and the security sensor. \\
+\textbf{React 19.2} & Component-based UI library & Powers the tabbed browser shell, navigation toolbar, "Kimo" AI sidebar (Chat + Agent modes), provider settings, and explainability drawers. \\
+\textbf{TypeScript 6.0} & JavaScript with static typing & Eliminates runtime bugs by strictly enforcing type safety across IPC contracts, the Browser Runtime command map, and API payloads. \\
 \textbf{Vite 8} & Build tool \& dev server & Provides fast development reload and optimized production packaging. \\
 \textbf{Vanilla CSS3} & Custom design tokens & Delivers a dark theme, smooth animations, and responsive layouts with zero library overhead. \\
 \bottomrule
@@ -91,99 +108,126 @@ The frontend is everything the user interacts with directly. It is built as a de
 \caption{Frontend Technologies}
 \end{table}
 
+\begin{tcolorbox}[colback=red!6!white,colframe=red!55!black,title=Design change since v2.0]
+Earlier iterations of this project drove the browser through \textbf{Stagehand}, a third-party natural-language automation library. Stagehand has since been \textbf{removed entirely} -- it is no longer a dependency, and no code in the repository references it. All browser automation now goes through a purpose-built \textbf{Browser Runtime} (Section~\ref{sec:runtime}) that talks to Chromium exclusively over native CDP, with no external automation framework in the dependency tree.
+\end{tcolorbox}
+
 \subsection{Key Parts of the Frontend (Files and What They Do)}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{AX}
 \toprule
 \textbf{File} & \textbf{What It Does (Simply)} \\
 \midrule
-\texttt{App.tsx} & Main shell controller --- coordinates browser tabs, the address bar, and sidebars. \\
-\texttt{BrowserToolbar.tsx} & Address bar, navigation buttons, and the dedicated \textbf{"Scan Page"} button. \\
-\texttt{Sidebar.tsx} & Hosts the \textbf{"Kimo"} AI Chat Assistant and the \textbf{Autonomous Agent Console}. \\
-\texttt{AgentModePanel.tsx} & Interactive console for agent goals, live step timeline, threat alerts, and cancellation. \\
-\texttt{AnalysisPanel.tsx} & Detailed explainability drawer displaying chunk breakdown scores and attack evidence. \\
-\texttt{backendApiClient.ts} & The sole HTTP gateway sending REST requests to the Python FastAPI backend on port 8000. \\
-\texttt{electron/main.ts} & Electron main process --- configures \texttt{--remote-debugging-port 9222}, loads Stagehand extension, and binds IPC. \\
-\texttt{electron/config.ts} & Centralized configuration loading CDP port, OpenCode Zen settings, and extension paths. \\
-\texttt{electron/preload.ts} & Hardened security bridge exposing \texttt{electronAPI} (\texttt{agentStartTask}, \texttt{agentStopTask}, \texttt{onAgentRequestOpenTab}). \\
-\texttt{electron/cdpInspectionService.ts} & Directly inspects the live browser webview across 14 distinct content channels via CDP. \\
-\texttt{electron/stagehand/stagehandClient.ts} & Custom OpenAI-compatible \texttt{ClientLLM} adapter and local CDP connection manager. \\
-\texttt{electron/stagehand/stagehandAgent.ts} & Main agent loop with pre-action prompt injection gating, in-memory hash caching, and tab control. \\
-\texttt{electron/stagehand/visualOverlay.ts} & Web Animations overlay providing a white virtual cursor, click ripples, and scan sweep beam. \\
-\texttt{services/agentRuntimeCore.ts} & Bridges UI tasks to Electron Stagehand streaming IPC with live status and tab requests. \\
+\pth{electron/main.ts} & Electron main process --- creates the window, registers guest \texttt{<webview>}s with the Browser Runtime, and binds all IPC handlers. \\
+\pth{electron/config.ts} & Centralized configuration for extension paths and runtime defaults. \\
+\pth{electron/preload.ts} & Hardened, context-isolated bridge exposing \texttt{window.electronAPI} with an explicit IPC channel allow-list. \\
+\pth{electron/electronSecurityConfig.ts} & Hardens the desktop shell: \texttt{contextIsolation}, no direct Node access, navigation restrictions. \\
+\pth{electron/cdpInspectionService.ts} & Deep CDP content extractor powering the manual "Scan Page" capture. \\
+\pth{electron/webviewContextMenu.ts} & Native right-click context menu for browser tabs. \\
+\pth{electron/providerSecureStore.ts} & Encrypts and persists LLM provider credentials on disk (\texttt{safeStorage}) and syncs the active provider to the backend. \\
 \bottomrule
 \end{tabularx}
-\caption{Frontend Key Files}
+\caption{Frontend Key Files --- Electron Main Process}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{AX}
+\toprule
+\textbf{File} & \textbf{What It Does (Simply)} \\
+\midrule
+\pth{App.tsx} & Main shell controller (\texttt{BrowserShell}) --- coordinates browser tabs, the address bar, and the assistant sidebar; \texttt{StartupScreen} covers the initial backend health check. \\
+\pth{components/BrowserToolbar.tsx} & Navigation controls, address bar, and the \textbf{"Scan Page"} button. \\
+\pth{components/AiAssistantSidebar.tsx} & Host for the \textbf{"Kimo"} assistant --- switches between \textbf{Chat} mode and \textbf{Agent} mode without unmounting either. \\
+\pth{components/AgentModePanel.tsx} & Interactive console for agent goals, live step timeline, threat alerts, and cancellation. \\
+\pth{components/ProviderSettingsModal.tsx} & Add, test, and activate LLM provider configurations; manages API keys and model selection. \\
+\pth{components/ModelSelector.tsx} / \pth{PromptModelPicker.tsx} & Quick-switch model picker surfaced from the chat input and toolbar. \\
+\pth{components/ProviderIcons.tsx} & Brand icon set for each supported provider (OpenAI, Anthropic, Gemini, NVIDIA, Cloudflare, custom). \\
+\pth{components/WebpageAnalysisDetailsPanel.tsx} / \pth{PromptAnalysisDetailsPanel.tsx} & Explainability drawers for webpage scans and chat-prompt checks respectively. \\
+\pth{components/ChunkAnalysisTable.tsx}, \pth{ClassifierDecisionBreakdown.tsx}, \pth{FeatureEvidenceList.tsx} & Chunk-by-chunk score tables and matched-evidence views inside the explainability drawers. \\
+\pth{components/AgentThreatDetailsModal.tsx} & Modal shown when the agent's security pipeline blocks a task. \\
+\pth{components/SecurityStatusBanner.tsx} / \pth{SecurityEventList.tsx} & Live security state banner and the session's scan/check history log. \\
+\pth{components/BrowserWebView.tsx} & Wraps the Electron \texttt{<webview>} tag and registers it with the Browser Runtime. \\
+\pth{services/backendApiClient.ts} & HTTP client for security, LLM chat, and health endpoints on port 8000. \\
+\pth{services/providerApiClient.ts} / \pth{agentApiClient.ts} & HTTP clients for the provider-management and agent-planning endpoints respectively. \\
+\pth{services/agentRuntimeCore.ts} & The renderer-side agent loop: orchestrates planning, the security pipeline, the circuit breaker, and execution. \\
+\pth{services/browserRuntime.ts} & Renderer-side facade over the main-process Browser Runtime (\texttt{invokeRuntime} and one typed helper per command). \\
+\bottomrule
+\end{tabularx}
+\caption{Frontend Key Files --- React UI \& Agent Services}
 \end{table}
 
 \subsection{How the Frontend Captures Webpage Content for Scanning}
 
-When you click \textbf{"Scan Page"} or when the autonomous agent inspects an active page, PromptGuard uses the \textbf{Chrome DevTools Protocol (CDP)} to extract content across 14 channels:
+When you click \textbf{"Scan Page"}, or when the autonomous agent is about to act on a page, PromptGuard captures content across the same \textbf{14 classified channels} in both paths (kept identical on purpose -- see Section~\ref{sec:isolation}):
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Content Channel} & \textbf{What It Captures} \\
 \midrule
-\textbf{Visible Text} & All readable text rendered on the screen. \\
-\textbf{Hidden Text} & Text hidden with \texttt{display:none}, \texttt{visibility:hidden}, \texttt{opacity:0}, or off-screen. \\
-\textbf{HTML Comments} & Developer comments embedded in page source (\texttt{<!-- injection directive -->}). \\
-\textbf{Meta Tags} & Page metadata, OpenGraph properties, and search description tags in \texttt{<head>}. \\
-\textbf{Input Field Values} & Pre-filled text, placeholders, and current values in form inputs. \\
-\textbf{Inline JavaScript} & Raw script strings and inline JavaScript blocks in the HTML. \\
-\textbf{CSS Content} & Generated pseudo-element content (\texttt{::before}, \texttt{::after}) and hidden styling. \\
-\textbf{Network Responses} & Intercepted API responses and HTTP payloads received by the page. \\
-\textbf{WebSocket Messages} & Live real-time bidirectional message frames. \\
-\textbf{Service Worker Activity} & Cached background scripts and service worker storage. \\
-\textbf{iFrame Content} & Embedded content inside cross-origin and child sub-frames. \\
-\textbf{Shadow DOM Content} & Encapsulated components used by modern web frameworks. \\
-\textbf{Accessibility Tree (AXTree)} & Clean interactive node hierarchy (buttons, inputs, links) used by the agent. \\
+\textbf{\pth{visible\_text}} & All readable text rendered on the screen. \\
+\textbf{\pth{hidden\_text}} & Text hidden with \texttt{display:none}, \texttt{visibility:hidden}, \texttt{opacity:0}, or off-screen. \\
+\textbf{\pth{html\_comments}} & Developer comments embedded in page source (\texttt{<!-- injection directive -->}). \\
+\textbf{\pth{meta\_tags}} & Page metadata, OpenGraph properties, and search description tags in \texttt{<head>}. \\
+\textbf{\pth{input\_values}} & Pre-filled text, placeholders, and current values in form inputs. \\
+\textbf{\pth{aria\_text}} & Accessibility labels, descriptions, and ARIA roles. \\
+\textbf{\pth{iframe\_content}} & Content loaded within embedded (same-origin) child frames. \\
+\textbf{\pth{shadow\_dom\_content}} & Encapsulated components used by modern web frameworks. \\
+\textbf{\pth{inline\_javascript}} & Raw script strings and inline JavaScript blocks in the HTML. \\
+\textbf{\pth{css\_content}} \newline \textbf{\pth{css\_generated\_content}} & Stylesheet text and generated pseudo-element content (\texttt{::before}, \texttt{::after}). \\
+\textbf{\pth{network\_responses}} & Intercepted API responses and HTTP payloads received by the page. \\
+\textbf{\pth{websocket\_messages}} & Live real-time bidirectional message frames. \\
+\textbf{\pth{service\_worker\_activity}} & Cached background scripts and service worker storage. \\
 \bottomrule
 \end{tabularx}
-\caption{CDP Content Extraction Channels}
+\caption{The 14 Content Channels Fed to the Classifier}
 \end{table}
+
+The agent's raw security snapshot additionally captures \texttt{external\_javascript}, \texttt{dom\_snapshot\_content}, \texttt{page\_title}, and \texttt{url} (18 fields total), but these four are \textbf{not} passed to the classifier: \texttt{page\_title}/\texttt{url} are metadata used for the scan cache key, \texttt{external\_javascript} is not currently scanned, and \texttt{dom\_snapshot\_content} (the raw \texttt{DOMSnapshot.captureSnapshot} string table) was deliberately excluded after it produced no additional true positives over the other 14 channels while adding pure noise. The semantic \textbf{Accessibility Tree (AXTree)} used to plan and execute agent actions is captured separately from this security snapshot (see Section~\ref{sec:runtime}).
 
 \subsection{Frontend Internal Communication (Electron IPC)}
 
-The React UI communicates securely with the Electron Main Process through context-isolated IPC channels:
+The React UI communicates securely with the Electron main process through a small, explicit allow-list of context-isolated IPC channels (\texttt{electron/preload.ts}):
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{llX}
+\begin{tabularx}{\textwidth}{BCX}
 \toprule
 \textbf{IPC Channel} & \textbf{Direction} & \textbf{What It Does} \\
 \midrule
-\texttt{security:scan-webview} & Renderer $\rightarrow$ Main & Triggers the main process to capture all 14 CDP channels from the webview. \\
-\texttt{agent:start-task} & Renderer $\rightarrow$ Main & Launches an autonomous Stagehand agent task on the targeted webview. \\
-\texttt{agent:stop-task} & Renderer $\rightarrow$ Main & Immediately halts running agent tasks and clears visual overlays. \\
-\texttt{agent:task-event} & Main $\rightarrow$ Renderer & Streams real-time progress events (\texttt{status}, \texttt{step}, \texttt{security\_block}, \texttt{result}). \\
-\texttt{agent:request-open-tab} & Main $\rightarrow$ Renderer & Requests the browser shell to create and focus a new tab in the tab strip. \\
-\texttt{agent:response-open-tab} & Renderer $\rightarrow$ Main & Replies with the newly created tab's \texttt{targetId} to resume automation. \\
-\texttt{app:get-version} & Renderer $\rightarrow$ Main & Retrieves runtime version numbers (Electron, Chromium, Node.js, V8). \\
+\pth{security:scan-webview} & Renderer $\rightarrow$ Main & Triggers the main process to capture all 14 channels from the active webview for a manual scan. \\
+\pth{agent:runtime:invoke} & Renderer $\rightarrow$ Main & \textbf{Single typed bridge} for every Browser Runtime command (\texttt{navigate}, \texttt{click}, \texttt{fill}, \texttt{captureSecuritySnapshot}, etc. --- see Section~\ref{sec:runtime}). \\
+\pth{providers:get-all} \newline \pth{providers:save} \newline \pth{providers:delete} & Renderer $\rightarrow$ Main & CRUD operations against the encrypted provider settings store. \\
+\pth{providers:set-active} \newline \pth{providers:get-active} & Renderer $\rightarrow$ Main & Switches or reads the currently active LLM provider, syncing it to the backend. \\
+\pth{app:get-version} & Renderer $\rightarrow$ Main & Retrieves runtime version numbers (Electron, Chromium, Node.js, V8). \\
 \bottomrule
 \end{tabularx}
 \caption{Electron Internal IPC Channels}
 \end{table}
+
+Opening a new tab for the agent (the \texttt{open\_tab} tool) is handled as a plain React callback (\texttt{onOpenTab}) inside the renderer rather than as an IPC round trip, since the agent loop itself now runs in the renderer process, not in Electron main.
 
 % =========================================================================
 % SECTION 2: BACKEND
 % =========================================================================
 \section{Backend --- The Brains Behind the Scenes}
 
-The backend is an asynchronous Python server built on \textbf{FastAPI} and \textbf{Uvicorn}. It runs on port 8000 and performs all heavy lifting: threat preprocessing, chunk-based classification, LLM proxying, and agent planning.
+The backend is an asynchronous Python server built on \textbf{FastAPI} and \textbf{Uvicorn}. It runs on port 8000 and performs all heavy lifting: threat preprocessing, chunk-based classification, multi-provider LLM proxying, and agent planning.
 
 \subsection{Technologies Used in the Backend}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Technology} & \textbf{What It Is} & \textbf{Why We Use It} \\
 \midrule
@@ -193,8 +237,8 @@ The backend is an asynchronous Python server built on \textbf{FastAPI} and \text
 \textbf{BeautifulSoup4} & HTML parsing library & Strips raw HTML and extracts clean text for auxiliary tasks. \\
 \textbf{Playwright (Python)} & Headless browser engine & Provides server-side JavaScript-rendered webpage crawling when required. \\
 \textbf{scikit-learn \& joblib} & Machine learning framework & Loads and executes trained classification model pipelines from disk. \\
-\textbf{HTTPX} & Async HTTP client & Communicates securely with the upstream AI service (OpenCode Zen). \\
-\textbf{pytest} & Test suite framework & Validates backend correctness through 166 comprehensive unit and integration tests. \\
+\textbf{HTTPX} & Async HTTP client & Communicates with every upstream LLM provider gateway (OpenAI-compatible, Anthropic, Gemini). \\
+\textbf{pytest} & Test suite framework & Validates backend correctness through \textbf{182} unit and integration tests. \\
 \bottomrule
 \end{tabularx}
 \caption{Backend Technologies}
@@ -205,61 +249,72 @@ The backend is an asynchronous Python server built on \textbf{FastAPI} and \text
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{AX}
 \toprule
 \textbf{File Path} & \textbf{What It Does (Simply)} \\
 \midrule
-\texttt{app/main.py} & Initializes the FastAPI app, configures CORS, and mounts the \texttt{/api/v1} router. \\
-\texttt{app/api/v1/api\_router.py} & Central router aggregating health, security, LLM, agent, and crawler endpoints. \\
-\texttt{app/services/prompt\_preprocessing\_service.py} & Normalizes Unicode, strips control characters, and cleans incoming text streams. \\
-\texttt{app/services/text\_chunking\_service.py} & Slices long text into 800-character overlapping chunks (100-character overlap). \\
-\texttt{app/services/rule\_based\_detector\_service.py} & Active security scanner using whole-word regex and 160-char context corroboration. \\
-\texttt{app/services/prompt\_classifier\_service.py} & ML inference service; loads \texttt{.joblib} pipeline with automatic rule-based fallback. \\
-\texttt{app/services/agent\_planner\_service.py} & LLM planning engine converting user goals and AXTree states into validated tool calls. \\
-\texttt{app/services/agent\_tool\_registry.py} & Single source of truth for the agent's permitted action tools and schema validation. \\
-\texttt{app/services/llm\_opencode\_zen\_service.py} & Connects to OpenCode Zen API for chat completions and structured JSON plans. \\
+\pth{app/main.py} & Initializes the FastAPI app, configures CORS, and mounts the \texttt{/api/v1} router. \\
+\pth{app/api/v1/api\_router.py} & Central router aggregating health, security, LLM, agent, crawler, and \textbf{provider} endpoints. \\
+\pth{app/services/prompt\_preprocessing\_service.py} & Normalizes Unicode, strips control characters, and cleans incoming text streams. \\
+\pth{app/services/text\_chunking\_service.py} & Slices long text into 800-character overlapping chunks (100-character overlap). \\
+\pth{app/services/rule\_based\_detector\_service.py} & Active security scanner using whole-word regex and 160-char context corroboration. \\
+\pth{app/services/prompt\_classifier\_service.py} & ML inference service; loads \texttt{.joblib} pipeline with automatic rule-based fallback. \\
+\pth{app/services/agent\_planner\_service.py} & LLM planning engine converting user goals, working memory, and semantic page state into a validated tool call. \\
+\pth{app/services/agent\_tool\_registry.py} & Single source of truth for the agent's permitted action tools and schema validation. \\
+\pth{app/services/agent\_security\_service.py} & Per-channel classification of an agent page snapshot (independent from the manual-scan aggregator). \\
+\pth{app/services/llm\_provider\_manager.py} & Holds the active provider configuration and gateway; routes chat and planning calls through it. \\
+\pth{app/services/llm\_gateways/} & \pth{base.py} (interface), \pth{factory.py} (presets + selection), \pth{openai\_compat.py}, \pth{anthropic\_gateway.py}, \pth{gemini\_gateway.py}. \\
+\pth{app/services/llm\_opencode\_zen\_service.py} & Thin compatibility wrapper kept for the OpenCode Zen preset, delegating to the provider manager. \\
 \bottomrule
 \end{tabularx}
 \caption{Backend Key Files}
 \end{table}
 
-\subsection{AI Model \& LLM Integration (OpenCode Zen)}
+\subsection{Multi-Provider LLM Gateway}
+\label{sec:providers}
 
-The backend connects to \textbf{OpenCode Zen} (an OpenAI-compatible high-performance LLM provider) configured in \texttt{.env}:
+OpenCode Zen is no longer the sole, hardcoded LLM path. The backend now ships a \textbf{provider manager} and \textbf{gateway factory} so the user can connect any of several LLM vendors -- \textbf{no provider is assumed as a default}; chat and planning simply return a "no provider configured" placeholder until the user activates one.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{CXX}
 \toprule
-\textbf{Setting} & \textbf{Environment Variable} & \textbf{Role} \\
+\textbf{Preset ID} & \textbf{Provider} & \textbf{Gateway Implementation} \\
 \midrule
-\textbf{API Base URL} & \texttt{OPENCODE\_ZEN\_BASE\_URL} & \texttt{https://opencode.ai/zen/v1} \\
-\textbf{API Key} & \texttt{OPENCODE\_ZEN\_API\_KEY} & Upstream authentication token for model inference. \\
-\textbf{Model ID} & \texttt{OPENCODE\_ZEN\_MODEL} & The LLM model driving conversational chat and agent planning. \\
+\pth{opencode} & OpenCode Zen (\texttt{opencode.ai/zen}) & \pth{OpenAICompatibleGateway} \\
+\pth{openai} & OpenAI & \pth{OpenAICompatibleGateway} \\
+\pth{nvidia} & NVIDIA NIM & \pth{OpenAICompatibleGateway} \\
+\pth{agentrouter} & AgentRouter proxy & \pth{OpenAICompatibleGateway} \\
+\pth{cloudflare} & Cloudflare Workers AI & \pth{OpenAICompatibleGateway} \\
+\pth{custom} & Any OpenAI-compatible endpoint (vLLM, Ollama, Groq, ...) & \pth{OpenAICompatibleGateway} \\
+\pth{anthropic} & Anthropic Claude & \pth{AnthropicGateway} (native \texttt{/v1/messages}) \\
+\pth{gemini} & Google Gemini / AI Studio & \pth{GeminiGateway} (native Generative Language API) \\
 \bottomrule
 \end{tabularx}
-\caption{OpenCode Zen Configuration}
+\caption{Supported LLM Provider Presets}
 \end{table}
+
+Every gateway implements the same three-method interface: \texttt{list\_models()}, \texttt{chat\_completion()}, and \texttt{validate\_key()}, so \texttt{agent\_planner\_service.py} and \texttt{llm\_provider\_manager.chat()} never branch on vendor. Credentials are entered once in \texttt{ProviderSettingsModal.tsx}; \texttt{providerSecureStore.ts} on the Electron side encrypts the API key with OS-level \texttt{safeStorage} (falling back to base64 only when the OS keychain is unavailable), persists it under \texttt{\%APPDATA\%/prompt-defense-browser/provider\_settings.json}, and syncs only the decrypted \emph{active} provider to the backend over \texttt{POST}/\texttt{DELETE /api/v1/providers/active} -- the backend never sees or stores the credentials of an inactive provider.
 
 % =========================================================================
 % SECTION 3: REST API ENDPOINTS
 % =========================================================================
 \section{REST API Endpoints --- How Frontend Talks to Backend}
 
-All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api/v1}. Think of each endpoint as a dedicated door in the backend that the frontend knocks on to request security checks, AI chat, or agent planning.
+All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api/v1}. There are now \textbf{16} endpoints across six route groups: health, security, LLM chat, agent, crawler, and providers.
 
 \subsection{Endpoint 1 --- Health Check}
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
 \textbf{URL \& Method} & \texttt{GET /api/v1/health} \\
 \textbf{What It Does} & Verifies server uptime, reports runtime versions, and indicates if the ML model is loaded. \\
-\textbf{Who Calls It} & Frontend startup (\texttt{backendApiClient.ts $\rightarrow$ getHealth()}) \\
+\textbf{Who Calls It} & Frontend startup screen (\texttt{backendApiClient.ts $\rightarrow$ getHealth()}) \\
 \bottomrule
 \end{tabularx}
 \caption{Health Check Endpoint Details}
@@ -272,7 +327,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
   "version": "1.0.0",
   "model_loaded": false,
   "classifier_mode": "rule_based_fallback",
-  "runtime_versions": { "python": "3.14.6", "fastapi": "0.139.0" }
+  "runtime": { "python": "3.14.6", "fastapi": "0.139.0", "uvicorn": "0.51.0" }
 }
 \end{lstlisting}
 
@@ -280,7 +335,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -307,7 +362,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
   "summary_reason": "No injection pattern detected.",
   "matched_patterns": [],
   "source": "direct_prompt",
-  "timestamp": "2026-08-16T15:00:00+00:00"
+  "timestamp": "2026-08-23T15:00:00+00:00"
 }
 \end{lstlisting}
 
@@ -315,7 +370,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -328,7 +383,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \caption{Webpage Scan Endpoint Details}
 \end{table}
 
-\textbf{What you send:} Extracted 14-channel dictionary (\texttt{visible\_text}, \texttt{hidden\_text}, \texttt{html\_comments}, \texttt{meta\_tags}, etc.).
+\textbf{What you send:} The 14-channel dictionary (\texttt{visible\_text}, \texttt{hidden\_text}, \texttt{html\_comments}, \texttt{meta\_tags}, etc.).
 
 \textbf{What comes back:}
 \begin{lstlisting}[language=json]
@@ -348,7 +403,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -364,12 +419,12 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
 \textbf{URL \& Method} & \texttt{POST /api/v1/llm/chat} \\
-\textbf{What It Does} & Proxies a cleared, safe prompt to OpenCode Zen API and returns the AI response. \\
+\textbf{What It Does} & Proxies a cleared, safe prompt to the currently active LLM provider (Section~\ref{sec:providers}) and returns its response. \\
 \textbf{Who Calls It} & \texttt{AiAssistantSidebar.tsx} (only invoked after Endpoint 2 returns \texttt{allowed: true}). \\
 \textbf{Safety Note} & Enforces a fail-closed route guard --- if an unsafe prompt somehow reaches here, it is rejected (HTTP 403). \\
 \bottomrule
@@ -381,12 +436,12 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
 \textbf{URL \& Method} & \texttt{POST /api/v1/agent/plan} \\
-\textbf{What It Does} & Receives the user goal, task working memory, and semantic AXTree state; asks the LLM for the next tool action. \\
+\textbf{What It Does} & Receives the user goal, bounded working memory, and semantic AXTree state; asks the active LLM provider for the next tool call. \\
 \textbf{Who Calls It} & \texttt{agentRuntimeCore.ts} during each step of an active autonomous task. \\
 \bottomrule
 \end{tabularx}
@@ -425,12 +480,12 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
 \textbf{URL \& Method} & \texttt{POST /api/v1/agent/scan-active-page} \\
-\textbf{What It Does} & Deeply scans the page the agent is about to interact with. Executed in parallel with planning. \\
+\textbf{What It Does} & Independently classifies the same 14 content channels for the page the agent is about to interact with, keeping each channel separate. Executed in parallel with planning. \\
 \textbf{Who Calls It} & \texttt{agentSecurityPipeline.ts} (Agent loop only). \\
 \bottomrule
 \end{tabularx}
@@ -441,7 +496,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -456,7 +511,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -472,7 +527,7 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Detail} & \textbf{Value} \\
 \midrule
@@ -483,142 +538,197 @@ All backend endpoints live under the base URL: \texttt{http://127.0.0.1:8000/api
 \caption{Crawler Render Endpoint Details}
 \end{table}
 
+\subsection{Endpoints 11--16 --- Multi-Provider LLM Gateway (New in v3.0)}
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{DAX}
+\toprule
+\textbf{\#} & \textbf{Method \& Path} & \textbf{What It Does} \\
+\midrule
+11 & \pth{GET /api/v1/providers/presets} & List the 8 built-in provider presets and their metadata. \\
+12 & \pth{POST /api/v1/providers/models} & Live-fetch the model list from a candidate provider config without saving or activating it. \\
+13 & \pth{POST /api/v1/providers/test} & Test connectivity and credentials for a candidate config; returns latency and model count. \\
+14 & \pth{POST /api/v1/providers/active} & Set or switch the backend's active runtime LLM provider. \\
+15 & \pth{GET /api/v1/providers/active} & Read the currently active provider and selected model (key returned masked). \\
+16 & \pth{DELETE /api/v1/providers/active} & Clear the active provider (chat/planning fall back to the "no provider" placeholder). \\
+\bottomrule
+\end{tabularx}
+\caption{Provider Management Endpoints}
+\end{table}
+
 \subsection{Quick Reference --- All Endpoints at a Glance}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{clllX}
+\begin{tabularx}{\textwidth}{DDAXX}
 \toprule
 \textbf{\#} & \textbf{Method} & \textbf{Endpoint} & \textbf{What It Does} & \textbf{Called By} \\
 \midrule
-1 & \texttt{GET} & \texttt{/api/v1/health} & Server health \& ML status & App startup \\
-2 & \texttt{POST} & \texttt{/api/v1/security/check-prompt} & Scan user's chat prompt & Chat send button \\
-3 & \texttt{POST} & \texttt{/api/v1/security/check-webpage} & Scan live webpage DOM & "Scan Page" button \\
-4 & \texttt{GET} & \texttt{/api/v1/security/events} & Get manual scan history log & Security panel \\
-5 & \texttt{POST} & \texttt{/api/v1/llm/chat} & Send safe prompt to AI & Chat Assistant \\
-6 & \texttt{POST} & \texttt{/api/v1/agent/plan} & Plan next agent action & Agent step loop \\
-7 & \texttt{POST} & \texttt{/api/v1/agent/scan-active-page} & Pre-action agent page scan & Agent security gate \\
-8 & \texttt{GET} & \texttt{/api/v1/agent/security/events} & Get agent scan events & Agent console \\
-9 & \texttt{GET} & \texttt{/api/v1/agent/tools} & List allowed agent tools & Agent startup \\
-10 & \texttt{POST} & \texttt{/api/v1/crawler/render-url} & Server-side headless render & Crawler service \\
+1 & \texttt{GET} & \pth{/api/v1/health} & Server health \& ML status & App startup \\
+2 & \texttt{POST} & \pth{/api/v1/security/check-prompt} & Scan user's chat prompt & Chat send button \\
+3 & \texttt{POST} & \pth{/api/v1/security/check-webpage} & Scan live webpage DOM & "Scan Page" button \\
+4 & \texttt{GET} & \pth{/api/v1/security/events} & Get manual scan history log & Security panel \\
+5 & \texttt{POST} & \pth{/api/v1/llm/chat} & Send safe prompt to active LLM & Chat Assistant \\
+6 & \texttt{POST} & \pth{/api/v1/agent/plan} & Plan next agent action & Agent step loop \\
+7 & \texttt{POST} & \pth{/api/v1/agent/scan-active-page} & Pre-action agent page scan & Agent security pipeline \\
+8 & \texttt{GET} & \pth{/api/v1/agent/security/events} & Get agent scan events & Agent console \\
+9 & \texttt{GET} & \pth{/api/v1/agent/tools} & List allowed agent tools & Agent startup \\
+10 & \texttt{POST} & \pth{/api/v1/crawler/render-url} & Server-side headless render & Crawler service \\
+11 & \texttt{GET} & \pth{/api/v1/providers/presets} & List provider presets & Provider settings modal \\
+12 & \texttt{POST} & \pth{/api/v1/providers/models} & Fetch models for a candidate config & Provider settings modal \\
+13 & \texttt{POST} & \pth{/api/v1/providers/test} & Test provider connectivity & Provider settings modal \\
+14 & \texttt{POST} & \pth{/api/v1/providers/active} & Set active provider & Electron main (on save) \\
+15 & \texttt{GET} & \pth{/api/v1/providers/active} & Read active provider & Backend startup sync \\
+16 & \texttt{DELETE} & \pth{/api/v1/providers/active} & Clear active provider & Provider settings modal \\
 \bottomrule
 \end{tabularx}
-\caption{All REST API Endpoints}
+\caption{All 16 REST API Endpoints}
 \end{table}
 
 % =========================================================================
-% SECTION 4: BROWSER AUTOMATION
+% SECTION 4: BROWSER RUNTIME
 % =========================================================================
-\section{Browser Automation --- How the AI Agent Works}
+\section{Browser Runtime --- How the AI Agent Drives the Browser}
+\label{sec:runtime}
 
-\subsection{What is Browser Automation \& Agentic Task Performance?}
-Browser Automation in PromptGuard allows an AI Agent to autonomously operate the browser to fulfill user objectives:
-\begin{enumerate}[noitemsep]
-\item The user gives a plain-English goal (\textit{"Open a new tab, go to YouTube, and search for Digiskills"}).
-\item The agent attaches directly to the active Electron window over the Chrome DevTools Protocol debug port (\texttt{9222}) using \textbf{Stagehand}.
-\item Every action must pass through a \textbf{mandatory prompt injection security checkpoint} (\texttt{POST /api/v1/agent/scan-active-page}) that immediately halts the task if threats are detected.
-\item The agent executes natural language actions (\texttt{open\_tab}, \texttt{click}, \texttt{type}, \texttt{navigate}, \texttt{scroll}, \texttt{wait}, \texttt{finish}) with a real-time white virtual cursor and laser scan sweep visual overlay.
-\end{enumerate}
+\subsection{From Stagehand to a Typed CDP Runtime}
+Earlier designs drove the browser through Stagehand's natural-language \texttt{act}/\texttt{observe}/\texttt{extract} API. That dependency has been \textbf{fully removed}. The agent now drives registered Electron guest \texttt{<webview>}s through a single main-process \textbf{\texttt{BrowserRuntime}}, exposed to the renderer only through the one typed \texttt{agent:runtime:invoke} IPC bridge. The runtime validates the target session, command name, parameter object, and element handle before dispatching any CDP work, and returns typed \texttt{\{ok, data\}} / \texttt{\{ok: false, error\}} envelopes rather than raw exceptions.
+
+\subsection{Runtime Layers}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{CBX}
+\toprule
+\textbf{Layer} & \textbf{Location} & \textbf{Responsibility} \\
+\midrule
+Browser Runtime & \pth{browserRuntime.ts} & The only path to the page. CDP only; dispatches every command. \\
+CDP session & \pth{cdpSession.ts} & Owns the single \texttt{debugger.attach()} per \texttt{webContents}; fans events out. \\
+Page inspector & \pth{pageInspector.ts} & \texttt{Accessibility.getFullAXTree}, \texttt{Page.captureScreenshot}. \\
+State builder & \pth{stateBuilder.ts} & Pure function: AXTree $\rightarrow$ compact semantic \texttt{PageStateSnapshot}. \\
+Element resolver & \pth{elementResolver.ts} & \texttt{backendNodeId} $\rightarrow$ live viewport point. \\
+Native input & \pth{nativeInput.ts} & \texttt{Input.dispatchMouseEvent} / \texttt{dispatchKeyEvent} --- trusted, per-character events. \\
+Wait engine & \pth{waitEngine.ts} & Event-driven waits for navigation and DOM stability; no fixed sleeps. \\
+Verification engine & \pth{verificationEngine.ts} & Confirms an action actually changed something before acknowledging it. \\
+Virtual cursor & \pth{virtualCursor.ts} & Cosmetic overlay: glide, click pulses, breathing glow shown to the user. \\
+Runtime contract & \pth{runtimeContract.ts} & The shared TypeScript command map, params, and result types (main \& renderer). \\
+\bottomrule
+\end{tabularx}
+\caption{Browser Runtime Layers --- all paths relative to \pth{frontend/electron/browserRuntime/}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{CBX}
+\toprule
+\textbf{Layer} & \textbf{Location} & \textbf{Responsibility} \\
+\midrule
+Agent runtime core & \pth{agentRuntimeCore.ts} & The loop: plan $\rightarrow$ gate $\rightarrow$ execute $\rightarrow$ verify $\rightarrow$ repeat. \\
+Circuit breaker & \pth{agentCircuitBreaker.ts} & The hard stop --- a tripped breaker never re-arms within a task. \\
+Security pipeline & \pth{agentSecurityPipeline.ts} & Capture $\rightarrow$ hash $\rightarrow$ cache $\rightarrow$ scan, run concurrently with planning. \\
+Security cache & \pth{agentSecurityCache.ts} & Caches verdicts keyed by task id + normalized URL + SHA-256 of content. \\
+Recovery engine & \pth{agentRecoveryEngine.ts} & retry $\rightarrow$ re-find element $\rightarrow$ wait $\rightarrow$ rebuild state $\rightarrow$ replan. \\
+Approval policy & \pth{agentApprovalPolicy.ts} & Decides which planned actions need explicit human consent. \\
+Browser memory & \pth{agentBrowserMemory.ts} & Reusable per-origin knowledge --- which control worked for which tool. \\
+Working memory & \pth{agentWorkingMemory.ts} & Bounded per-task summary: goal, recent steps, pending steps, failures. \\
+Tool registry (client) & \pth{agentToolRegistry.ts} & Resolves and validates a planner tool call before dispatch; flags terminal tools. \\
+\bottomrule
+\end{tabularx}
+\caption{Agent Loop Layers --- all paths relative to \pth{frontend/src/services/}}
+\end{table}
+
+\subsection{Supported Runtime Commands}
+The runtime's command map (\texttt{RuntimeCommandMap} in \texttt{runtimeContract.ts}) currently exposes 14 commands: \texttt{describeTarget}, \texttt{extractPageState}, \texttt{captureScreenshot}, \texttt{captureSecuritySnapshot}, \texttt{navigate}, \texttt{click}, \texttt{fill}, \texttt{type}, \texttt{pressKey}, \texttt{scroll}, \texttt{upload}, \texttt{waitForNavigation}, \texttt{waitForDomStable}, and \texttt{setAgentOverlay}. Each browser action is wrapped in \texttt{withVerification}: a before/after signature is captured, the native CDP input is dispatched, and the after-state is compared against an expectation (\texttt{url} for navigation, \texttt{value} for \texttt{fill}, \texttt{change} for \texttt{click}) before the action is acknowledged.
+
+\begin{tcolorbox}[title=Upload is structural, not procedural]
+\texttt{DOM.setFileInputFiles} can hand any readable file to a remote site, so its defence is not a permission prompt but the shape of the API itself: the \textbf{planner names only the target field}, never a file path. A native OS file picker, driven by the user, supplies the actual path -- \texttt{UploadParams} has no \texttt{filePaths} field at all. A fully compromised planner can, at worst, cause a file dialog the user cancels.
+\end{tcolorbox}
 
 \subsection{Key Technologies Used in Browser Automation}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Technology} & \textbf{Role in Automation} & \textbf{Why It Is Used} \\
 \midrule
-\textbf{Stagehand 4.0} & Browser Automation Engine & Direct CDP-driven automation library executing natural language browser control without launching external browser instances. \\
-\textbf{CDP Debug Port (9222)} & Direct Connection Gateway & Electron is launched with \texttt{--remote-debugging-port 9222}, allowing Stagehand to drive the user's active window. \\
-\textbf{Pre-Action Security Gate} & Prompt Injection Checkpoint & Scans active page content across 14 channels before every action to catch indirect prompt injections before execution. \\
-\textbf{In-Memory Hash Cache} & Latency Optimization & Caches \texttt{(url, pageHash) -> verdict} tuples, providing instant ($<$ 1ms) clearance for consecutive actions on the same page. \\
-\textbf{Visual Feedback Overlay} & User Visibility & Injected Web Animations layer displaying a white virtual cursor with dark contrast border, click pulses, and laser scan sweep beams. \\
-\textbf{Dynamic Tab Strip Bridge} & Multi-Tab Orchestration & Two-way IPC (\texttt{agent:request-open-tab} / \texttt{agent:response-open-tab}) enabling the agent to create and switch browser tabs. \\
+\textbf{Native CDP (\texttt{webContents.debugger})} & Direct Connection Gateway & The Browser Runtime attaches to the guest \texttt{<webview>}'s own \texttt{webContents}; there is no shared debug port to expose. \\
+\textbf{AXTree (Accessibility Tree)} & Semantic state source & Chromium has already resolved roles, names, and computed visibility, and flags decorative nodes as \texttt{ignored} -- smaller and more stable than DOM scraping, with no script injected into the page. \\
+\textbf{Trusted native input events} & Action execution & \texttt{isTrusted}-indistinguishable from a real user, so pointer capture, focus side effects, and \texttt{isTrusted} checks all behave correctly (\texttt{element.click()} is never used). \\
+\textbf{SHA-256 content-hash cache} & Latency \& safety optimization & Caches \texttt{(task, url, hash) -> verdict}; the content hash means a page that mutates after load cannot silently reuse a stale "safe" verdict. \\
+\textbf{Visual Feedback Overlay} & User visibility & Injected, \texttt{pointer-events: none} Web Animations layer showing a white virtual cursor, click pulses, and a breathing glow while the agent works. \\
 \bottomrule
 \end{tabularx}
 \caption{Technologies in Browser Automation}
 \end{table}
 
-\subsection{Key Files Involved in the Automation Process}
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabularx}{\textwidth}{llX}
-\toprule
-\textbf{File Path} & \textbf{Component} & \textbf{Exact Role in Automation} \\
-\midrule
-\texttt{electron/config.ts} & Configuration & Central configuration loading CDP port (9222), OpenCode Zen settings, and extension paths. \\
-\texttt{electron/stagehand/stagehandClient.ts} & Stagehand Adapter & Custom OpenAI-compatible \texttt{ClientLLM} adapter and local CDP connection manager. \\
-\texttt{electron/stagehand/stagehandAgent.ts} & Agent Loop & Main execution loop handling parallel security checks, element extraction, LLM reasoning, and tab actions. \\
-\texttt{electron/stagehand/visualOverlay.ts} & Visual Overlay & Web Animations overlay managing the white virtual cursor, click pulses, and laser scan sweep beam. \\
-\texttt{services/agentRuntimeCore.ts} & Bridge & Client-side agent bridge streaming events and tab requests between UI and Electron main process. \\
-\texttt{components/AgentModePanel.tsx} & Agent Console & User interface for entering agent goals, viewing live execution timelines, and handling security blocks. \\
-\bottomrule
-\end{tabularx}
-\caption{Files in the Automation Subsystem}
-\end{table}
-
-\subsection{How the Automation Process Works (Step-by-Step Loop)}
+\subsection{How the Agent Loop Works (One Iteration)}
 
 \begin{lstlisting}
-[ USER SUBMITS GOAL IN AGENT PANEL ]
-                 |
-                 v
-[ STEP 1: INITIALIZE TASK & MEMORY ]
-  - Sets up task_id and begins streaming IPC session.
-                 |
-                 v
-[ STEP 2: PARALLEL SECURITY SCAN & DOM EXTRACTION ]
-  +---------------------------------------+---------------------------------------+
-  | TRACK A: SECURITY SCAN                | TRACK B: DOM EXTRACTION               |
-  | - Checks in-memory page hash cache.   | - Extracts interactive elements       |
-  | - If miss: captures 14-channel CDP    |   (buttons, inputs, links).           |
-  |   snapshot & calls scan-active-page.  | - Computes exact centroid coords.     |
-  | - Fires asynchronous scan sweep beam. |                                       |
-  +---------------------------------------+---------------------------------------+
-                                          |
-                                          v
-[ STEP 3: SECURITY GATE (CIRCUIT BREAKER) ]
-  - If Security = UNSAFE -> Halt task immediately, open threat modal, tear down overlay.
-  - If Security = SAFE   -> Proceed to Step 4.
-                                          |
-                                          v
-[ STEP 4: LLM REASONING (OpenCode Zen) ]
-  - Model chooses action: open_tab | click | type | navigate | scroll | wait | finish.
-                                          |
-                                          v
-[ STEP 5: VISUAL CURSOR GLIDE & EXECUTION ]
-  - Animates white virtual cursor smoothly to target centroid coordinates.
-  - Triggers white click pulse ripple at exact click point.
-  - Dispatches action (or delegates open_tab to browser shell tab strip).
-                                          |
-                                          v
-[ STEP 6: VERIFY & REPEAT ]
-  - Streams step entry to UI timeline.
-  - Loops until task completion or user cancellation.
+                        goal
+                         |
+                         v
+                 Agent Runtime Core (renderer)
+                         |
+              extractPageState (AXTree)
+                         |
+        +----------------+----------------+
+        |                                 |
+  PLANNING PIPELINE                SECURITY PIPELINE
+        |                                 |
+  State Builder -> semantic state   deep CDP content snapshot (14 channels)
+        |                                 |
+  POST /api/v1/agent/plan          POST /api/v1/agent/scan-active-page
+        |                                 |
+  validated tool call               allowed: true | false
+        |                                 |
+        +----------------+----------------+
+                         |
+                 [ CIRCUIT BREAKER ]
+              allowed?  |
+        +----------------+----------------+
+       yes                               no
+        |                                 |
+  approval gate (if needed)     discard the action,
+        |                       end the task, log it
+  Browser Runtime
+  (native CDP input events)
+        |
+  Verification Engine
+        |
+  +-----------+-----------+
+verified               unverified
+  |                        |
+next action      Recovery Engine ladder
 \end{lstlisting}
 
-\subsection{What Happens If the Agent Gets Stuck? (5-Step Recovery Ladder)}
+The two pipelines run \textbf{concurrently} (\texttt{Promise.allSettled}), because neither depends on the other's result and both are on the critical path. This is only safe because of the rule that governs it: \textbf{the planner may produce an action while a scan is in flight, but nothing executes until the security verdict is in.}
+
+\subsection{5-Step Automatic Recovery Ladder}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Recovery Step} & \textbf{What the Agent Does} \\
 \midrule
 \textbf{1. Retry} & Retries the same action once after a short quiescence wait. \\
-\textbf{2. Re-find Element} & Re-resolves target element viewport coordinates via CDP. \\
-\textbf{3. Wait for Page} & Waits for network idle and DOM stabilization events. \\
-\textbf{4. Rebuild State} & Re-extracts the full AXTree to capture dynamic layout changes. \\
+\textbf{2. Re-find Element} & Re-resolves the target by role + name (what the planner actually reasoned about), never across roles. \\
+\textbf{3. Wait for Page} & Waits for navigation settlement and DOM stabilization events (AXTree fingerprint polling, not DOM mutation events, which CDP only reports for nodes already pushed to the client). \\
+\textbf{4. Rebuild State} & Re-extracts the full AXTree to capture dynamic layout changes; all previous element ids are invalidated. \\
 \textbf{5. Replan} & Sends failure diagnostics back to the LLM to choose an alternative action. \\
 \bottomrule
 \end{tabularx}
 \caption{5-Step Automatic Recovery Ladder}
 \end{table}
+
+Element ids (\texttt{e1}, \texttt{e2}, \dots) are handles, not selectors: they are rebound on every \texttt{extractPageState} call and are meaningless once the state that produced them is gone.
 
 % =========================================================================
 % SECTION 5: SECURITY DETECTION
@@ -630,7 +740,7 @@ Browser Automation in PromptGuard allows an AI Agent to autonomously operate the
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Attack Type} & \textbf{What It Means} & \textbf{Example} \\
 \midrule
@@ -646,13 +756,13 @@ Browser Automation in PromptGuard allows an AI Agent to autonomously operate the
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Attack Type} & \textbf{Detection Path} & \textbf{When It Runs} \\
 \midrule
 \textbf{Direct (Chat Prompt)} & Text $\rightarrow$ Preprocess $\rightarrow$ Chunk $\rightarrow$ Classifier $\rightarrow$ Allow/Block & Every time a chat prompt is submitted. \\
 \textbf{Indirect (Manual Scan)} & 14-Channel CDP Extraction $\rightarrow$ Chunking $\rightarrow$ Scan $\rightarrow$ Explainability Drawer & When user clicks \textbf{"Scan Page"}. \\
-\textbf{Indirect (Agent Loop)} & Deep CDP Snapshot $\rightarrow$ Parallel Scan $\rightarrow$ Circuit Breaker Gate & Automatically before every agent action. \\
+\textbf{Indirect (Agent Loop)} & Deep CDP Snapshot $\rightarrow$ Parallel Per-Channel Scan $\rightarrow$ Circuit Breaker Gate & Automatically before every agent action. \\
 \bottomrule
 \end{tabularx}
 \caption{Detection Pathways}
@@ -674,7 +784,7 @@ Your Text Arrives (User Prompt OR Extracted Webpage Channels)
   |     - Guarantees boundary-straddling attacks are never split.
   |
   +---> STEP 3: CLASSIFICATION INFERENCE
-  |     - Evaluates each chunk via Active Rule-Based Detector (or ML model when loaded).
+  |     - Evaluates each chunk via the Active Rule-Based Detector (or ML model when loaded).
   |     - Generates confidence score and evidence reasons.
   |
   +---> STEP 4: AGGREGATE DECISION
@@ -682,27 +792,29 @@ Your Text Arrives (User Prompt OR Extracted Webpage Channels)
         - If ALL chunks are safe -> Input is ALLOWED (allowed: true).
 \end{lstlisting}
 
+Two structural rules apply everywhere in this pipeline. \textbf{Fail closed:} a missing verdict, an unreachable backend, a failed capture, or an empty snapshot all deny execution -- the backend returns HTTP 400 rather than \texttt{allowed: true} for an empty webpage snapshot, because an empty capture is not evidence of safety. \textbf{No re-arming:} once the agent's circuit breaker trips within a task, it stays tripped for that task; a page that flickers between hostile and clean content cannot earn its way back to executing.
+
 % =========================================================================
 % SECTION 6: RULE-BASED DETECTION
 % =========================================================================
 \section{Rule-Based Detection --- Current Active System}
 
-Because the custom ML model is in training, PromptGuard operates an active, production-grade \textbf{Rule-Based Detection Engine} (\texttt{rule\_based\_detector\_service.py}) that scans for malicious signatures.
+Because no trained ML model is currently installed, PromptGuard operates an active, production-grade \textbf{Rule-Based Detection Engine} (\texttt{rule\_based\_detector\_service.py}) that scans for malicious signatures. It is the sole detector behind every endpoint in Section 3.
 
 \subsection{Attack Categories and Keywords}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Category} & \textbf{What It Catches} & \textbf{Example Keywords} \\
 \midrule
-\textbf{\texttt{override\_instructions}} & Directives telling the AI to ignore its rules & \textit{"ignore previous", "disregard instructions", "override rules"} \\
-\textbf{\texttt{jailbreak\_attempt}} & Personas designed to bypass safety bounds & \textit{"DAN", "developer mode", "jailbreak", "do anything now"} \\
-\textbf{\texttt{hidden\_instructions}} & Stealth directives meant to run secretly & \textit{"hidden instruction", "execute secretly", "process silently"} \\
-\textbf{\texttt{system\_prompt\_reveal}} & Extraction of internal system prompts & \textit{"reveal system prompt", "show your instructions", "what are your rules"} \\
-\textbf{\texttt{data\_exfiltration}} & Attempts to steal and transmit user data & \textit{"export all data", "exfiltrate", "transfer credentials", "send to http"} \\
+\textbf{\pth{override\_instructions}} & Directives telling the AI to ignore its rules & \textit{"ignore previous", "disregard instructions", "override rules"} \\
+\textbf{\pth{jailbreak\_attempt}} & Personas designed to bypass safety bounds & \textit{"DAN", "developer mode", "jailbreak", "do anything now"} \\
+\textbf{\pth{hidden\_instructions}} & Stealth directives meant to run secretly & \textit{"hidden instruction", "execute secretly", "process silently"} \\
+\textbf{\pth{system\_prompt\_reveal}} & Extraction of internal system prompts & \textit{"reveal system prompt", "show your instructions", "what are your rules"} \\
+\textbf{\pth{data\_exfiltration}} & Attempts to steal and transmit user data & \textit{"export all data", "exfiltrate", "transfer credentials", "send to http"} \\
 \bottomrule
 \end{tabularx}
 \caption{Rule-Based Attack Categories}
@@ -710,16 +822,18 @@ Because the custom ML model is in training, PromptGuard operates an active, prod
 
 \subsection{Smart Matching --- What Makes It Better Than Simple Text Search}
 
+Three precision rules keep ordinary pages out of the blocked column, tuned against real captures of YouTube, Wikipedia, GitHub, Hacker News, BBC News, Stack Overflow, Reddit, MDN, Amazon, and a Google search for "jailbreak tutorial" -- all allowed, while injections planted in \texttt{hidden\_text}, \texttt{html\_comments}, \texttt{aria\_text}, and \texttt{meta\_tags} are still caught on every one.
+
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
-\textbf{Feature} & \textbf{Simple Text Search Problem} & \textbf{How PromptGuard Fixes It} \\
+\textbf{Rule} & \textbf{The Problem It Fixes} & \textbf{How PromptGuard Fixes It} \\
 \midrule
-\textbf{Word Boundaries} & \textit{"dan"} would match inside \textit{"guidance"} or \textit{"dance"}. & Uses whole-word regex matching (\texttt{\textbackslash bdan\textbackslash b}). \\
-\textbf{Uppercase DAN} & Would trigger on the common name \textit{"Dan"}. & Only fires on uppercase \texttt{"DAN"} as used in jailbreak templates. \\
-\textbf{Context Proximity (160 chars)} & Bare terms like \textit{"jailbreak"} or \textit{"upload to"} appear in safe news/tutorials. & Only triggers if directive language (\textit{"you must", "ignore", "act as"}) appears within 160 characters. \\
+\textbf{Whole-Word Matching} & \textit{"dan"} would match inside \textit{"guidance"}, \textit{"abundant"}, or \textit{"dance"} -- this is literally what once blocked youtube.com. & Uses whole-word regex matching (\texttt{\textbackslash bdan\textbackslash b}); only fires on uppercase \texttt{"DAN"} as used in jailbreak templates. \\
+\textbf{Weak-Indicator Corroboration (160 chars)} & Terms like \textit{"jailbreak"}, \textit{"developer mode"}, \textit{"upload to"}, or \textit{"extract user"} describe an ordinary subject as often as an attack. & Only counts as a match when directive language sits within 160 characters. Scanning the whole chunk was too generous -- any page large enough to contain \textit{"jailbreak"} almost certainly contains \emph{some} imperative somewhere. \\
+\textbf{Corroboration Must Be Second-Person \& Directive} & Generic verbs like \textit{"show"} and \textit{"follow"} are far too common -- \textit{"Show more images"} is a button, \textit{"follow every step"} is a tutorial. & The corroborating context set is second-person and directive only: \textit{"you are"}, \textit{"you must"}, \textit{"ignore"}, \textit{"act as"}, \textit{"your instructions"}, \textit{"from now on"}, and similar. A term also cannot corroborate itself, or \textit{"upload to your channel"} would always read as an attack. \\
 \bottomrule
 \end{tabularx}
 \caption{Smart Matching Capabilities}
@@ -730,7 +844,7 @@ Because the custom ML model is in training, PromptGuard operates an active, prod
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{BX}
 \toprule
 \textbf{Matched Indicators} & \textbf{Assigned Confidence Score} \\
 \midrule
@@ -754,7 +868,7 @@ Each additional keyword hit & +1\% extra (capped at 99\%) \\
 \midrule
 $\bullet$ Catches known attack signatures with zero latency. & $\bullet$ Cannot catch heavily re-worded attacks. \\
 $\bullet$ Zero external API dependency for scanning. & $\bullet$ Cannot handle complex adversarial Unicode bypasses. \\
-$\bullet$ Provides full explainability of matched evidence. & $\bullet$ Does not automatically learn from new zero-day attacks. \\
+$\bullet$ Provides full explainability of matched evidence. & $\bullet$ Injections phrased without second-person directive language, using only a weak indicator, will not be flagged -- the deliberate cost of not blocking every page that merely mentions "jailbreaking". \\
 \bottomrule
 \end{tabularx}
 \caption{Rule-Based Detection Capabilities vs Limitations}
@@ -766,7 +880,7 @@ $\bullet$ Provides full explainability of matched evidence. & $\bullet$ Does not
 \section{Machine Learning Model --- Future Integration}
 
 \subsection{Current Situation \& Architecture}
-The machine learning pipeline architecture is fully built. The backend service (\texttt{prompt\_classifier\_service.py}) provides the pluggable loading interface for scikit-learn/joblib pipelines.
+The machine learning pipeline architecture is fully built but no trained model is currently installed. The backend service (\texttt{prompt\_classifier\_service.py}) provides the pluggable loading interface for scikit-learn/joblib pipelines; every detection path in this document runs on the rule-based detector today.
 
 \subsection{How Adding Your Model Works}
 You place your trained model artifacts in the reserved backend directory:
@@ -777,25 +891,25 @@ You place your trained model artifacts in the reserved backend directory:
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabularx}{\textwidth}{AX}
 \toprule
 \textbf{File to Place} & \textbf{Purpose} \\
 \midrule
-\texttt{prompt\_injection\_pipeline.joblib} & Combined TF-IDF vectorizer and classifier pipeline artifact. \\
-\texttt{model\_metadata.json} & Metadata recording training metrics, feature names, and thresholds. \\
+\pth{prompt\_injection\_pipeline.joblib} & Combined TF-IDF vectorizer and classifier pipeline artifact. \\
+\pth{model\_metadata.json} & Metadata recording training metrics, feature names, and thresholds. \\
 \bottomrule
 \end{tabularx}
 \caption{Model Artifact Files}
 \end{table}
 
-When the backend starts up, it checks this directory. If present, it loads the model and sets \texttt{classifier\_mode = "ml\_model"}. If absent, it runs the rule-based detector automatically.
+When the backend starts up, it checks this directory. If present, it loads the model and sets \texttt{classifier\_mode = "ml\_model"}. If absent, it runs the rule-based detector automatically -- the two paths are otherwise identical from the caller's point of view.
 
 \subsection{Where the ML Model Will Be Used}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Detection Path} & \textbf{Will Use ML?} & \textbf{Execution Characteristics} \\
 \midrule
@@ -811,28 +925,55 @@ When the backend starts up, it checks this directory. If present, it loads the m
 % SECTION 8: ENDPOINT ISOLATION
 % =========================================================================
 \section{Webpage Scan vs Agent Loop --- Are They Connected?}
+\label{sec:isolation}
 
-\textbf{Short answer: No.} They are strictly isolated in routes, schemas, and event stores.
+\textbf{Short answer: No.} They are strictly isolated in routes, schemas, IPC channels, and event stores -- but their channel lists and detection logic are kept identical on purpose, and a dedicated test (\texttt{test\_agent\_and\_manual\_scan\_agree.py}) pins the two lists equal. A user who scans a page by hand, sees "no injection detected", and then watches the agent refuse the same page has been given contradictory advice by one product -- that shipped once, when the agent scanned \texttt{dom\_snapshot\_content} and the manual scanner did not. \texttt{dom\_snapshot\_content} is now excluded from both.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\textwidth}{lXX}
+\begin{tabularx}{\textwidth}{BXX}
 \toprule
 \textbf{Dimension} & \textbf{"Scan Page" Button} & \textbf{AI Agent Loop} \\
 \midrule
 \textbf{Who triggers it?} & User clicks header toolbar button. & User starts an autonomous agent task. \\
-\textbf{Which endpoint?} & \texttt{POST /api/v1/security/check-webpage} & \texttt{POST /api/v1/agent/scan-active-page} \\
-\textbf{Event Store} & \texttt{security\_event\_store.py} & \texttt{agent\_security\_event\_store.py} \\
-\textbf{UI Output} & Opens Detailed Analysis Drawer. & Live status toast / task abort banner. \\
-\textbf{Affects Agent Loop?} & No. & Yes --- unsafe verdict aborts task immediately. \\
+\textbf{Which endpoint?} & \pth{POST /api/v1/security/check-webpage} & \pth{POST /api/v1/agent/scan-active-page} \\
+\textbf{Which IPC channel?} & \pth{security:scan-webview} & \pth{agent:runtime:invoke} $\rightarrow$ \pth{captureSecuritySnapshot} \\
+\textbf{Channel list constant} & \pth{MANUAL\_SCAN\_CHANNELS} (\pth{security\_routes.py}) & \pth{AGENT\_SCAN\_CHANNELS} (\pth{agent\_routes.py}) --- byte-identical to the manual list \\
+\textbf{Event Store} & \pth{security\_event\_store.py} & \pth{agent\_security\_event\_store.py} \\
+\textbf{UI Output} & Opens the Webpage Analysis Details drawer. & Live status toast / \texttt{AgentThreatDetailsModal} task-abort banner. \\
+\textbf{Affects Agent Loop?} & No. & Yes --- unsafe verdict aborts task immediately, breaker never re-arms. \\
 \bottomrule
 \end{tabularx}
 \caption{Manual Scan vs Agent Scan Isolation Comparison}
 \end{table}
 
+The one component genuinely shared between the two paths is the low-level CDP content collector -- Electron permits exactly one \texttt{debugger.attach()} per \texttt{webContents}, so duplicating the sensor itself is not possible. Everything downstream of that sensor (aggregation, schemas, event stores, IPC) stays separate.
+
 % =========================================================================
-% SECTION 9: FULL SYSTEM FLOW DIAGRAM
+% SECTION 9: KNOWN LIMITATIONS
+% =========================================================================
+\section{Known Limitations \& Design Rationale}
+
+Documented directly in \texttt{docs/AGENT\_ARCHITECTURE.md} so they are not lost as the system evolves:
+
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{Cross-origin iframes are invisible.} \texttt{Accessibility.getFullAXTree} on the page target reaches same-origin subframes but not out-of-process ones. An injection inside a cross-origin iframe appears in \emph{neither} the semantic state nor the security snapshot -- this is the most significant gap in the security story today; closing it needs CDP target auto-attach and a per-target session.
+\item \textbf{Detection quality is inherited.} With no trained model present, every path runs on the regex rule-based detector; its false negatives are the system's false negatives.
+\item \textbf{The precision rules trade some recall.} An injection phrased without second-person directive language, using only a weak indicator, is deliberately not flagged.
+\item \textbf{\texttt{dom\_snapshot\_content} is captured but never scanned} by either pipeline -- its overlap with the 14 scanned channels is near-total, but the noise from scanning it was not.
+\item \textbf{Scan-then-act is not atomic.} A page could mutate between the snapshot and the action landing; the content hash catches this on the \emph{next} iteration, not within one.
+\item \textbf{Click verification is weak in both directions.} A click that opens a native dialog or starts a download reads as unverified; an unrelated page mutation can make a no-op click read as verified.
+\item \textbf{Approval heuristics are label-based.} A "Place order" button labelled "Continue" will not trigger the financial-action approval rule.
+\item \textbf{Confidence gates approval only} -- it does not influence recovery behaviour.
+\item \textbf{Key codes are best-effort} for punctuation; letters and digits are correct for a US layout. Non-US layouts and IME input are not modelled.
+\item \textbf{Screenshots are uncapped in size} and are not yet fed to the planner -- multimodal/vision planning is deliberately out of scope for now.
+\item \textbf{Browser memory excludes cookies, auth state, and downloads} -- those live in the Electron session where Chromium already manages them; duplicating them would add a weaker second copy of credentials.
+\item \textbf{\texttt{terminal} and \texttt{email} tools are deliberately not registered.} The registry supports the category, but handing shell execution or outbound mail to an agent whose input includes attacker-controlled page text converts a prompt injection into remote code execution or a spam relay.
+\end{itemize}
+
+% =========================================================================
+% SECTION 10: FULL SYSTEM FLOW DIAGRAM
 % =========================================================================
 \section{How Everything Connects --- Full Picture}
 
@@ -846,7 +987,7 @@ When the backend starts up, it checks this directory. If present, it loads the m
         v                                  v                                  v
 +---------------------------------------------------------------------------------+
 |                           FRONTEND (Electron + React)                           |
-| - Browser Shell (Tabs & Toolbar) - AI Assistant (Kimo) - Agent Console Drawer   |
+| - Browser Shell (Tabs & Toolbar) - Kimo Assistant (Chat/Agent) - Provider Modal |
 +-------+----------------------------------+----------------------------------+---+
         | (HTTP Port 8000)                 | (HTTP Port 8000)                 |
         v                                  v                                  v
@@ -873,16 +1014,42 @@ When the backend starts up, it checks this directory. If present, it loads the m
 |                      +-----------+-----------+                                  |
 |                   [UNSAFE]                [SAFE]                                |
 |                      |                       |                                  |
-|             Block & Alert User               +--> POST /llm/chat (OpenCode Zen) |
-|             (Action Aborted)                 +--> CDP Native Input (Click/Type) |
+|             Block & Alert User               +--> POST /llm/chat               |
+|             (Action Aborted)                 |      -> Multi-Provider Gateway   |
+|                                               |         (OpenAI-compat /         |
+|                                               |          Anthropic / Gemini)     |
+|                                               +--> Browser Runtime               |
+|                                                      (native CDP input events)   |
 +---------------------------------------------------------------------------------+
                                        |
                                        v
                               [ RESULT BACK TO YOU ]
 \end{lstlisting}
 
+% =========================================================================
+% SECTION 11: TOOLING & TESTING
+% =========================================================================
+\section{Current Tooling and Validation}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{AX}
+\toprule
+\textbf{Command} & \textbf{What It Runs} \\
+\midrule
+\pth{cd backend \&\& .venv\textbackslash Scripts\textbackslash python -m pytest} & \textbf{182} backend unit/integration tests --- routes, provider gateways, agent/manual scan isolation, chunking, rule-based detection. \\
+\pth{cd frontend \&\& npm run build \&\& npm run lint} & TypeScript project build (\texttt{tsc -b}) + Electron compile + Vite build, then ESLint. \\
+\pth{cd frontend \&\& npx playwright test} & \textbf{16} end-to-end tests (\pth{app.spec.ts}, \pth{agentMode.spec.ts}), including tests that drive a real CDP session. \\
+\bottomrule
+\end{tabularx}
+\caption{Test \& Build Commands}
+\end{table}
+
+The frontend currently pins \textbf{React 19.2}, \textbf{Electron 42.3}, \textbf{TypeScript 6.0}, \textbf{Vite 8}, \textbf{ESLint 10}, and \textbf{Playwright 1.60}. The backend pins \textbf{FastAPI}, \textbf{Pydantic v2}, \textbf{HTTPX}, \textbf{scikit-learn/joblib}, \textbf{BeautifulSoup4}, \textbf{Playwright (Python)}, and \textbf{pytest}, with no Stagehand or other third-party browser-automation package in either dependency tree.
+
 \vfill
 \noindent\rule{\textwidth}{0.4pt}
-\small\textit{Last Updated: August 2026 $\mid$ Project: Prompt Injection Defense in AI-Native Browser (Version 2.0)}
+\small\textit{Last Updated: 23 August 2026 $\mid$ Project: Prompt Injection Defense in AI-Native Browser (Version 3.0)}
 
 \end{document}
