@@ -6,14 +6,13 @@ const BACKEND_HEALTH_URL = 'http://127.0.0.1:8000/api/v1/health'
 const BACKEND_FETCH_TIMEOUT_MS = 1500
 
 type BackendRuntimeInfo = {
-  python: string
-  python_implementation: string
-  fastapi: string
-  uvicorn: string
+  node: string
+  node_implementation: string
+  fastify: string
   platform: string
 }
 
-// The FastAPI process doesn't restart when a webview is inspected, so its
+// The Fastify process doesn't restart when a webview is inspected, so its
 // version info is fetched once per app session rather than on every open.
 let backendRuntimeInfo: Promise<BackendRuntimeInfo | null> | null = null
 
@@ -89,12 +88,11 @@ async function logVersionBanner(guestContents: WebContents) {
     Page: guestContents.getURL(),
     ...(backend
       ? {
-          Python: backend.python_implementation,
-          FastAPI: backend.fastapi,
-          Uvicorn: backend.uvicorn,
+          'Node.js (backend)': backend.node_implementation,
+          Fastify: backend.fastify,
           'Backend OS': backend.platform,
         }
-      : { Backend: 'unreachable (is the FastAPI server running?)' }),
+      : { Backend: 'unreachable (is the Node backend running?)' }),
   }
 
   const script = `
@@ -127,9 +125,9 @@ async function savePageAs(guestContents: WebContents, mainWindow: BrowserWindow)
 }
 
 /**
- * Builds a Chrome-equivalent right-click menu for a guest `<webview>`.
- * Electron's `<webview>` gets no native context menu on its own — this is the
- * one gateway that supplies it, wired per-guest from `did-attach-webview`.
+ * Builds a Chrome-equivalent right-click menu for a guest tab's content.
+ * A `WebContentsView` gets no native context menu on its own — this is the
+ * one gateway that supplies it, wired per-guest when the tab is created.
  */
 export function attachWebviewContextMenu(guestContents: WebContents, mainWindow: BrowserWindow) {
   // Fires on every open, not just the first — a fresh navigation deserves a

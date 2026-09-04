@@ -458,7 +458,7 @@ function BrowserShell() {
    * target id.
    *
    * The runtime addresses tabs by webContents id, which does not exist until
-   * the <webview> has attached — so the id is polled rather than read straight
+   * main resolves the createTab IPC call — so the id is polled rather than read straight
    * after the state update, the same way the assistant resolves the active
    * target. Resolving to null lets the agent replan instead of driving a tab
    * that never appeared.
@@ -647,6 +647,7 @@ function BrowserShell() {
                 ref={(handle) => setWebviewHandle(tab.id, handle)}
                 initialUrl={tab.url}
                 isActive={tab.id === activeTabId}
+                isObscured={promptDrawerOpen || webpageDrawerOpen || isProviderSettingsOpen || isResizingAssistant}
                 tabId={tab.id}
                 onLoadingChange={handleWebViewLoadingChange}
                 onNavigate={handleWebViewNavigate}

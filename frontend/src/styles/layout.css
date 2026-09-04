@@ -3059,7 +3059,7 @@ option, optgroup {
    Blown Shell Grow-In Transition
    ──────────────────────────────────────────────────── */
 
-/* Opacity only, deliberately. This wrapper contains the Electron <webview>,
+/* Opacity only, deliberately. This wrapper sits over the main-owned guest view,
    and scaling it forces the guest to re-raster its whole surface on every
    frame while it is still attaching — the hitch that used to land right as the
    browser appeared. A fade reaches the same place at a fixed cost per frame. */

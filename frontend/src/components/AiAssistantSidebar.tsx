@@ -202,8 +202,9 @@ export function AiAssistantSidebar({
   }
 
   // The drag is tracked on the handle itself via pointer capture: without it
-  // the pointer crosses into the Electron <webview>, whose guest process would
-  // swallow the move events and strand the drag.
+  // the pointer crosses into the guest's native view, whose process would
+  // swallow the move events and strand the drag. isResizingAssistant also
+  // zero-bounds the guest for the duration (see BrowserWebView's isObscured).
   function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
     event.preventDefault()

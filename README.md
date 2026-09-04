@@ -4,7 +4,15 @@
 
 PromptGuard is a desktop browser built to answer a question that ordinary browsers ignore: *when an AI assistant reads a web page on your behalf, who is really giving it instructions?*
 
-It is an Electron + React browser shell backed by a FastAPI security service. Every natural-language instruction — whether typed by the user or scraped from a live web page — passes through a multi-stage detection pipeline **before** it is allowed to reach a Large Language Model. The same pipeline gates an autonomous browsing agent, which is not permitted to click, type, or navigate until the page it is standing on has been scanned and cleared.
+It is an Electron + React browser shell backed by a Node.js/Fastify security service. Every natural-language instruction — whether typed by the user or scraped from a live web page — passes through a multi-stage detection pipeline **before** it is allowed to reach a Large Language Model. The same pipeline gates an autonomous browsing agent, which is not permitted to click, type, or navigate until the page it is standing on has been scanned and cleared.
+
+> **Backend runtime.** The backend was migrated from Python/FastAPI to
+> **TypeScript on Node.js + Fastify** (`backend-node/`). The old Python `backend/`
+> tree has been **removed** — `backend-node/` is the only backend. ONNX Runtime
+> replaces scikit-learn/joblib for ML inference (rule-based fallback unchanged),
+> and the server-side Playwright crawler is gone. See
+> [`backend-node/MIGRATION.md`](backend-node/MIGRATION.md) for the authoritative,
+> phase-by-phase migration record.
 
 <div align="center">
 
@@ -55,7 +63,7 @@ This is **indirect prompt injection**, and it does not require the user to do an
 ### Browser Shell
 - **Full Chromium browsing** — tabbed navigation, address bar with URL normalization, back/forward/reload, loading indicators.
 - **Chrome-parity right-click menu** — Back, Forward, Reload, Save As, Print, View Page Source, Inspect, and a dedicated Console entry. Link, image, editable-field, and text-selection contexts each get their appropriate items (Copy Link Address, Save Image As, Cut/Copy/Paste with live enablement, "Search Google for…").
-- **DevTools version banner** — opening DevTools on any tab prints a table of the full stack: PromptGuard, Electron, Chromium, Node.js, V8, OS, plus the live backend's Python, FastAPI, and Uvicorn versions fetched from the health endpoint.
+- **DevTools version banner** — opening DevTools on any tab prints a table of the full stack: PromptGuard, Electron, Chromium, Node.js, V8, OS, plus the live backend's Node.js and Fastify versions fetched from the health endpoint.
 
 ### Security Pipeline
 - **Dual-path scanning** — user prompts are scanned before inference; page content is scanned on demand via the **Scan Page** button.
@@ -81,10 +89,10 @@ This is **indirect prompt injection**, and it does not require the user to do an
 | **Desktop Shell** | Electron 42 | Cross-platform Chromium host with context isolation and a hardened preload bridge. |
 | **Frontend** | React 19, TypeScript 6, Vite 8 | Browser UI, assistant sidebar, explainability panels, agent console. |
 | **Browser Automation** | Chrome DevTools Protocol | Accessibility-tree inspection, native input dispatch, deep content capture. |
-| **Backend API** | Python 3.12+, FastAPI, Uvicorn | Async endpoints for detection, planning, and LLM proxying. |
-| **Scraping** | BeautifulSoup4, Playwright | DOM parsing and JavaScript-rendered content extraction. |
-| **Machine Learning** | scikit-learn, Joblib | Classification pipeline loading and inference. |
-| **Testing** | Pytest, Playwright Test | 166 backend unit tests; end-to-end suites including real-CDP runtime tests. |
+| **Backend API** | Node.js, TypeScript, Fastify 5 | Async endpoints for detection, planning, and LLM proxying (`backend-node/`). |
+| **Scraping** | cheerio | Server-side DOM parsing of the snapshot the Electron webview captures over CDP. |
+| **Machine Learning** | ONNX Runtime (Node), rule-based fallback | Classification pipeline inference; falls back to the regex detector when no model is present. |
+| **Testing** | Vitest, Playwright Test | 178 backend unit tests (`backend-node`); end-to-end suites including real-CDP runtime tests. |
 
 ---
 
@@ -100,7 +108,7 @@ This is **indirect prompt injection**, and it does not require the user to do an
                                          │ backendApiClient.ts
                                          ▼
                     ┌──────────────────────────────────────────┐
-                    │           FastAPI  /api/v1               │
+                    │           Fastify  /api/v1               │
                     └────────────────────┬─────────────────────┘
                                          ▼
               prompt_preprocessing ──► text_chunking ──► prompt_classifier
@@ -149,8 +157,8 @@ The proposed action is held until the security verdict lands. Only then does the
 
 | Requirement | Version | Notes |
 | :--- | :--- | :--- |
-| **Node.js** | 20 LTS or newer | Ships with npm. |
-| **Python** | 3.12+ | Developed and validated on 3.14.x. |
+| **Node.js** | 20 LTS or newer | Ships with npm. The only runtime the app needs. |
+| **Python** | 3.12+ | **Optional** — only to run the legacy `backend/` reference or to train/export an ONNX model. Not needed for the app. |
 | **Git** | any recent | For cloning. |
 | **OS** | Windows / macOS / Linux | Commands below use Windows paths; see the note under step 2. |
 
@@ -166,14 +174,9 @@ cd Prompt_injection_defense_in_AI_Native_Browser
 ### 2. Set up the backend
 
 ```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS / Linux
-pip install -r requirements.txt
+cd backend-node
+npm install
 ```
-
-> **macOS / Linux users:** the frontend's `npm run backend` script hardcodes the Windows interpreter path (`..\backend\.venv\Scripts\python.exe`). Change it to `../backend/.venv/bin/python` in `frontend/package.json` before using `npm run dev`.
 
 Then create your environment file:
 
@@ -194,24 +197,30 @@ npm run dev
 
 That single command orchestrates four processes concurrently:
 
-1. **FastAPI backend** on `http://127.0.0.1:8000` (using the backend's `.venv`)
+1. **Node/Fastify backend** on `http://127.0.0.1:8000` (`backend-node`, via `tsx watch`)
 2. **Vite dev server** on `http://localhost:5173`
 3. **TypeScript watch build** of the Electron main and preload scripts
 4. **Electron window**, launched once the backend health check and Vite are both live
 
-Closing the Electron window automatically terminates the backend process.
+Closing the Electron window automatically terminates the backend process (`concurrently -k`).
 
 ### Alternative run modes
 
 ```bash
-# Backend standalone
-cd backend && .venv\Scripts\python run_backend.py
+# Backend standalone (dev, watch)
+cd backend-node && npm run dev
+
+# Backend standalone (built)
+cd backend-node && npm run build && npm start
 
 # Production-style build, then run
 cd frontend && npm run electron:start
 
 # Build artifacts only
 cd frontend && npm run build
+
+# Windows installer (NSIS) — see backend-node/MIGRATION.md for the lean-deps note
+cd frontend && npm run package
 ```
 
 ---
@@ -266,7 +275,7 @@ Prompt_injection_defense_in_AI_Native_Browser/
 │   │   ├── components/                   Toolbar, webview, sidebar, analysis panels,
 │   │   │                                 agent console, banners, mascot
 │   │   ├── services/
-│   │   │   ├── backendApiClient.ts       Sole HTTP gateway to FastAPI
+│   │   │   ├── backendApiClient.ts       Sole HTTP gateway to the Node backend
 │   │   │   ├── browserRuntime.ts         Renderer-side Browser Runtime client
 │   │   │   ├── pageContentExtractor.ts   Page capture for manual scans
 │   │   │   ├── agentRuntimeCore.ts       The agent's iteration loop
@@ -282,48 +291,29 @@ Prompt_injection_defense_in_AI_Native_Browser/
 │   ├── e2e/                              Playwright suites (incl. real-CDP runtime tests)
 │   └── package.json
 │
-└── backend/                           FastAPI security service
-    ├── app/
-    │   ├── main.py                       App factory, CORS, router mounting
-    │   ├── api/v1/
-    │   │   ├── api_router.py             Aggregates all routers
-    │   │   ├── health_routes.py          Health + runtime version reporting
-    │   │   ├── security_routes.py        Prompt & webpage scanning (user-initiated)
-    │   │   ├── crawler_routes.py         Playwright-rendered URL fetching
-    │   │   ├── llm_routes.py             OpenCode Zen chat proxy
-    │   │   └── agent_routes.py           Agent planning + agent-only scanning
-    │   ├── core/
-    │   │   ├── config.py                 Settings (pydantic-settings, reads .env)
-    │   │   ├── logging_config.py         Structured logging
-    │   │   └── security_constants.py     Detection patterns and thresholds
-    │   ├── schemas/                      Pydantic request/response contracts
-    │   ├── services/
-    │   │   ├── prompt_preprocessing_service.py   Normalization & sanitization
-    │   │   ├── text_chunking_service.py          Overlapping chunk splitter
-    │   │   ├── prompt_classifier_service.py      ML inference w/ rule-based fallback
-    │   │   ├── rule_based_detector_service.py    Regex detection, 5 attack categories
-    │   │   ├── feature_explanation_service.py    Evidence for the explainability drawer
-    │   │   ├── webpage_parser_service.py         BeautifulSoup DOM extraction
-    │   │   ├── playwright_crawler_service.py     JS-rendered content extraction
-    │   │   ├── llm_opencode_zen_service.py       Upstream LLM client
-    │   │   ├── agent_planner_service.py          Goal → validated tool call
-    │   │   ├── agent_tool_registry.py            The agent's permitted action set
-    │   │   ├── agent_security_service.py         Agent-side scan aggregation
-    │   │   ├── security_event_store.py           Manual scan history
-    │   │   └── agent_security_event_store.py     Agent scan history (kept separate)
-    │   ├── ml_models/prompt_injection_model/     Trained .joblib model goes here
-    │   ├── test_data/                            Safe/malicious prompt & HTML fixtures
-    │   └── tests/                                166 Pytest unit tests
-    ├── requirements.txt
-    ├── run_backend.py
-    └── .env.example
+└── backend-node/                      Node.js + Fastify security service (the only backend)
+    ├── src/
+    │   ├── server.ts                    Fastify bootstrap, port 8000, graceful shutdown
+    │   ├── app.ts                       App factory, CORS, route registration
+    │   ├── routes/                      health · security · llm · agent · providers
+    │   ├── schemas/                     TypeBox request/response contracts
+    │   ├── services/                    preprocessing · chunking · rule-based detector ·
+    │   │                                classifier · planner · tool registry ·
+    │   │                                agent security · LLM gateways · provider manager
+    │   ├── ml/                          onnxClassifier.ts · modelLoader.ts (rule-based fallback)
+    │   └── config/env.ts                Settings, loaded from .env
+    ├── test/                            178 Vitest unit tests
+    ├── MIGRATION.md                     Phase-by-phase migration record (authoritative)
+    └── package.json
+
+(the former Python `backend/` tree — FastAPI, Pydantic, scikit-learn, Playwright — has been removed)
 ```
 
 ---
 
 ## 🔌 API Reference
 
-All routes are prefixed with `/api/v1`. Interactive Swagger documentation is served at `http://127.0.0.1:8000/docs` (and ReDoc at `/redoc`) whenever `APP_ENV=development`; both are disabled in any other environment.
+All routes are prefixed with `/api/v1` and are served by Fastify on `http://127.0.0.1:8000`. Request/response shapes, status codes, and fail-closed behavior are preserved field-for-field from the Python contracts (`4xx` bodies keep the `{"detail": "..."}` shape).
 
 | Method | Endpoint | Purpose |
 | :--- | :--- | :--- |
@@ -331,12 +321,16 @@ All routes are prefixed with `/api/v1`. Interactive Swagger documentation is ser
 | `POST` | `/security/check-prompt` | Scan a user-entered prompt. |
 | `POST` | `/security/check-webpage` | Scan page content. **User-initiated Scan Page only.** |
 | `GET` | `/security/events` | Manual scan verdict history. |
-| `POST` | `/llm/chat` | Proxy a cleared prompt to OpenCode Zen. |
-| `POST` | `/crawler/render-url` | Fetch and render a URL with Playwright. |
+| `POST` | `/llm/chat` | Proxy a cleared prompt to the active LLM provider. |
 | `POST` | `/agent/plan` | Decide the agent's next action. |
 | `POST` | `/agent/scan-active-page` | Scan the page the agent is about to act on. **Agent only.** |
 | `GET` | `/agent/security/events` | Agent scan history, optionally filtered by `task_id`. |
 | `GET` | `/agent/tools` | Introspect the agent's permitted tool set. |
+| `GET`/`POST`/`DELETE` | `/providers/*` | Provider presets, model listing, connection test, active-provider lifecycle. |
+
+> `POST /crawler/render-url` (server-side Playwright render) has been **removed** —
+> it had no frontend caller. Page content is captured by the Electron webview over
+> CDP and parsed with cheerio.
 
 **Agent tools:** `click` · `fill` · `type` · `press_key` · `navigate` · `open_tab` · `scroll` · `upload` · `wait` · `extract` · `finish`
 
@@ -344,11 +338,12 @@ All routes are prefixed with `/api/v1`. Interactive Swagger documentation is ser
 
 ## ⚙️ Configuration
 
-Every backend runtime setting lives in `backend/app/core/config.py` (`Settings`, loaded from `.env`). Check there before hardcoding a value anywhere else.
+Every backend runtime setting lives in `backend-node/src/config/env.ts` (`settings`, loaded from `.env`). Check there before hardcoding a value anywhere else.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `APP_ENV` | `development` | `development` enables uvicorn auto-reload. |
+| `APP_ENV` | `development` | Environment marker. |
+| `PORT` | `8000` | Fastify bind port (loopback only). |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins. |
 | `MODEL_DIR` | `app/ml_models/prompt_injection_model` | Where the trained pipeline is looked up. |
 | `CLASSIFIER_THRESHOLD` | `0.70` | Confidence at or above which content is blocked. |
@@ -367,13 +362,15 @@ Every backend runtime setting lives in `backend/app/core/config.py` (`Settings`,
 ### Backend
 
 ```bash
-cd backend
-.venv\Scripts\python -m pytest              # all 166 tests
-.venv\Scripts\python -m pytest -v           # verbose
-.venv\Scripts\python -m pytest app/tests/test_rule_based_detector_service.py
+cd backend-node
+npm test                                    # all 178 Vitest tests
+npm run test:watch                          # watch mode
+npx vitest run test/ruleBasedDetectorPrecision.test.ts
 ```
 
-Coverage spans the rule-based detector, classifier service, chunking limits, schema contracts, agent tool registry and queue, planner behavior, both scan routes, and — critically — `test_agent_and_manual_scan_agree.py`, which enforces that the manual and agent scanners never disagree about the same page.
+Coverage spans the rule-based detector, classifier service, chunking limits, schema contracts, agent tool registry and queue, planner behavior, both scan routes, the provider gateways (OpenAI-compatible / Anthropic / Gemini), and — critically — `ruleBasedDetectorPrecision.test.ts` plus the channel-list re-export, which enforce that the manual and agent scanners never disagree about the same page.
+
+The Vitest suites are 1:1 ports of the original Python `pytest` assertions (rule-based detector, chunking, classifier fallback, schema contracts, both scan routes, planner, provider gateways). The Python `backend/` and its suite have been removed — `backend-node/MIGRATION.md` records the parity mapping.
 
 ### Frontend
 
@@ -392,7 +389,7 @@ npm run test            # build, then e2e
 > [!NOTE]
 > **The trained model file is not bundled with this repository.**
 
-The intended classifier is a stacking ensemble (Random Forest, Linear SVM, and XGBoost base estimators under a Logistic Regression meta-learner). Until its artifacts are placed in `backend/app/ml_models/prompt_injection_model/`, the system runs on its rule-based detector instead.
+The intended classifier is a stacking ensemble (Random Forest, Linear SVM, and XGBoost base estimators under a Logistic Regression meta-learner), exported to ONNX. Until a `prompt_injection_pipeline.onnx` is placed in `backend-node/`'s `MODEL_DIR` (`ml_models/prompt_injection_model/`), the system runs on its rule-based detector instead. See `backend-node/src/ml/modelLoader.ts`.
 
 **This is a designed fallback, not a degraded state.** `prompt_classifier_service` checks for the model at startup and transparently routes to `rule_based_detector_service` when it is absent. Regex vectors cover five attack categories — role override, jailbreak attempts, hidden webpage directions, system prompt reveal, and exfiltration attempts. All diagnostics, explainability metrics, and per-chunk scores populate normally; the application is fully functional either way, and the health endpoint reports which mode is active via `classifier_mode`.
 
@@ -420,11 +417,11 @@ To enable ML inference, drop these two files into the model directory:
 | :--- | :--- |
 | Electron window never appears | The launcher waits on both Vite and the backend health check. Confirm `http://127.0.0.1:8000/api/v1/health` responds. |
 | `npm run dev` fails immediately on macOS/Linux | The `backend` script uses a Windows interpreter path. Update it in `frontend/package.json` as described in setup. |
-| Chat returns a 503 | `OPENCODE_ZEN_API_KEY` is unset or invalid in `backend/.env`. |
+| Chat returns a 503 | `OPENCODE_ZEN_API_KEY` is unset or invalid in `backend-node/.env`. |
 | Agent refuses to plan | Same cause — the planner will not fabricate an action to drive a real browser without a configured model. |
 | Right-click menu or DevTools banner missing | Main-process changes require a **full application restart**, not a page refresh. |
 | SSL errors reaching OpenCode Zen | Behind a corporate proxy, set `OPENCODE_ZEN_VERIFY_SSL="False"`. |
-| Backend port already in use | Another instance is still running. Terminate it, or change the port in `run_backend.py`. |
+| Backend port already in use | Another instance is still running. Terminate it, or change `PORT` in `backend-node/.env`. |
 
 ---
 

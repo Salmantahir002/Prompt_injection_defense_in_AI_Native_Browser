@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import { RUNTIME_INVOKE_CHANNEL } from './browserRuntime/runtimeContract.js'
+
+/** Mirrors the shape main.ts sends over 'browser:tab-event' (see BrowserTabEvent in src/vite-env.d.ts). */
+type BrowserTabEvent = {
+  webContentsId: number
+  type: 'did-start-loading' | 'did-stop-loading' | 'did-navigate' | 'did-navigate-in-page' | 'did-fail-load'
+  url?: string
+  errorCode?: number
+  errorDescription?: string
+}
 
 const allowedInvokeChannels = [
   'app:get-version',
@@ -25,6 +35,26 @@ const electronAPI = {
   extractPageContent: () => Promise.resolve(null),
   scanWebview: (webContentsId: number) => ipcRenderer.invoke('security:scan-webview', webContentsId) as Promise<unknown>,
   runtimeInvoke: (request: unknown) => ipcRenderer.invoke(RUNTIME_INVOKE_CHANNEL, request) as Promise<unknown>,
+  // Guest tabs are hosted as main-owned WebContentsViews (see main.ts), keyed
+  // by webContents id — never exposed to the renderer as a DOM element.
+  browser: {
+    createTab: (url: string) => ipcRenderer.invoke('browser:create-tab', url) as Promise<{ webContentsId: number } | null>,
+    closeTab: (webContentsId: number) => ipcRenderer.invoke('browser:close-tab', webContentsId) as Promise<void>,
+    navigate: (webContentsId: number, url: string) => ipcRenderer.invoke('browser:navigate', webContentsId, url) as Promise<void>,
+    goBack: (webContentsId: number) => ipcRenderer.invoke('browser:go-back', webContentsId) as Promise<void>,
+    goForward: (webContentsId: number) => ipcRenderer.invoke('browser:go-forward', webContentsId) as Promise<void>,
+    reload: (webContentsId: number) => ipcRenderer.invoke('browser:reload', webContentsId) as Promise<void>,
+    executeJavaScript: (webContentsId: number, code: string) => ipcRenderer.invoke('browser:execute-javascript', webContentsId, code) as Promise<unknown>,
+    // Fire-and-forget: this fires on every resize/tab-switch, an invoke round trip isn't worth it.
+    setBounds: (webContentsId: number, bounds: { x: number; y: number; width: number; height: number }) => {
+      ipcRenderer.send('browser:set-bounds', webContentsId, bounds)
+    },
+    onTabEvent: (listener: (event: BrowserTabEvent) => void) => {
+      const handler = (_event: IpcRendererEvent, payload: BrowserTabEvent) => listener(payload)
+      ipcRenderer.on('browser:tab-event', handler)
+      return () => ipcRenderer.removeListener('browser:tab-event', handler)
+    },
+  },
   // Secure Provider Storage APIs
   providers: {
     getAll: () => ipcRenderer.invoke('providers:get-all') as Promise<any[]>,

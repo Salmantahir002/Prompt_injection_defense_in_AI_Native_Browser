@@ -30,6 +30,12 @@ function formatModelName(modelId: string, modelName?: string): { title: string; 
   const isFree = raw.toLowerCase().includes('free') || modelId.toLowerCase().includes('free')
 
   let title = raw
+  if (modelId === 'openrouter/auto' || title === 'openrouter/auto' || modelId === 'auto') {
+    return { title: 'Auto (Best for prompt)', isFree: false }
+  }
+  if (modelId === 'z-ai/glm-5.3-free' || title === 'z-ai/glm-5.3-free') {
+    return { title: 'GLM 5.3 Free', isFree: true }
+  }
   if (title === 'mimo-v2.5-free') title = 'MiMo V2.5 Free'
   else if (title === 'deepseek-v4-flash-free') title = 'DeepSeek V4 Flash Free'
   else if (title === 'hy3-free') title = 'Hy3 Free'
@@ -120,15 +126,44 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
     if (!activeInfo || !activeInfo.is_active) {
       return []
     }
-    if (currentProvider?.models && currentProvider.models.length > 0) {
-      return currentProvider.models
-    }
-    if (activeInfo.models && activeInfo.models.length > 0) {
-      return activeInfo.models
-    }
     const id = (activeInfo.id || currentProvider?.id || '').toLowerCase()
-    if (id.includes('gemini') || id.includes('google')) {
-      return [
+    let rawList: ModelInfo[] = []
+
+    if (currentProvider?.models && currentProvider.models.length > 0) {
+      rawList = currentProvider.models
+    } else if (activeInfo.models && activeInfo.models.length > 0) {
+      rawList = activeInfo.models
+    } else if (id.includes('openrouter')) {
+      rawList = [
+        { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+        { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
+        { id: 'openai/gpt-4o', name: 'GPT-4o' },
+        { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
+        { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+      ]
+    } else if (id.includes('tokenrouter')) {
+      rawList = [
+        { id: 'z-ai/glm-5.3-free', name: 'GLM 5.3 Free (z-ai)' },
+        { id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
+        { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2' },
+        { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+        { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5' },
+      ]
+    } else if (id.includes('nara')) {
+      rawList = [
+        { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet' },
+        { id: 'gpt-4o', name: 'GPT-4o' },
+        { id: 'deepseek-r1', name: 'DeepSeek R1' },
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+      ]
+    } else if (id.includes('openadapter') || id.includes('adapter')) {
+      rawList = [
+        { id: 'gpt-4o', name: 'GPT-4o' },
+        { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+      ]
+    } else if (id.includes('gemini') || id.includes('google')) {
+      rawList = [
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
         { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
         { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
@@ -136,9 +171,8 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
         { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
         { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
       ]
-    }
-    if (id.includes('cloudflare') || id.includes('workers') || id.includes('cf')) {
-      return [
+    } else if (id.includes('cloudflare') || id.includes('workers') || id.includes('cf')) {
+      rawList = [
         { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', name: 'Llama 3.3 70B Instruct' },
         { id: '@cf/meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B Instruct' },
         { id: '@cf/meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B Instruct' },
@@ -150,31 +184,47 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
         { id: '@cf/mistral/mistral-7b-instruct-v0.1', name: 'Mistral 7B Instruct' },
         { id: '@cf/google/gemma-2-27b-it', name: 'Gemma 2 27B IT' },
       ]
-    }
-    if (id.includes('anthropic') || id.includes('claude')) {
-      return [
+    } else if (id.includes('anthropic') || id.includes('claude')) {
+      rawList = [
         { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet' },
         { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
         { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
         { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus' },
       ]
-    }
-    if (id.includes('openai') || id.includes('gpt')) {
-      return [
+    } else if (id.includes('openai') || id.includes('gpt')) {
+      rawList = [
         { id: 'gpt-4o', name: 'GPT-4o' },
         { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
         { id: 'gpt-4.5-preview', name: 'GPT-4.5 Preview' },
         { id: 'o3-mini', name: 'o3-mini' },
         { id: 'o1', name: 'o1' },
       ]
+    } else if (id === 'opencode' || id === 'opencode_zen') {
+      rawList = OPENCODE_ZEN_MODELS
+    } else if (activeInfo.selected_model) {
+      rawList = [{ id: activeInfo.selected_model, name: activeInfo.selected_model }]
     }
-    if (id === 'opencode' || id === 'opencode_zen') {
-      return OPENCODE_ZEN_MODELS
+
+    if (id.includes('openrouter')) {
+      const filtered = rawList.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+      return [
+        { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+        ...filtered,
+      ]
     }
-    if (activeInfo.selected_model) {
-      return [{ id: activeInfo.selected_model, name: activeInfo.selected_model }]
+
+    if (id.includes('tokenrouter')) {
+      const glmFree = rawList.find((m) => m.id === 'z-ai/glm-5.3-free')
+      if (glmFree) {
+        const filtered = rawList.filter((m) => m.id !== 'z-ai/glm-5.3-free')
+        return [
+          { id: 'z-ai/glm-5.3-free', name: glmFree.name || 'GLM 5.3 Free (z-ai)' },
+          ...filtered,
+        ]
+      }
     }
-    return []
+
+    return rawList
   }, [currentProvider, activeInfo])
 
   const handleToggle = async () => {
@@ -196,7 +246,15 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
       try {
         const fetched = await fetchProviderModels(currentProvider)
         if (fetched && fetched.length > 0) {
-          currentProvider.models = fetched
+          if (currentProvider.id.includes('openrouter')) {
+            const filtered = fetched.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+            currentProvider.models = [
+              { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+              ...filtered,
+            ]
+          } else {
+            currentProvider.models = fetched
+          }
           setSavedProviders([...savedProviders])
         }
       } catch {

@@ -87,6 +87,47 @@ export function CloudflareBrandIcon({ size = 18 }: { size?: number }) {
   )
 }
 
+export function OpenRouterBrandIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="#8b5cf6" strokeWidth="2.2" />
+      <path d="M8 12L12 8L16 12L12 16Z" fill="#a78bfa" />
+      <circle cx="12" cy="12" r="1.5" fill="#ffffff" />
+    </svg>
+  )
+}
+
+export function TokenRouterBrandIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="#0284c7" strokeWidth="2.2" />
+      <path d="M8 9H16M12 9V17" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="15" cy="15" r="1.8" fill="#0284c7" />
+    </svg>
+  )
+}
+
+export function NaraRouterBrandIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2" fill="#10b981" />
+      <rect x="13" y="13" width="7.5" height="7.5" rx="2" fill="#34d399" />
+      <path d="M11 7H14.5C15.9 7 17 8.1 17 9.5V13" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function OpenAdapterBrandIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" stroke="#f59e0b" strokeWidth="2.2" />
+      <circle cx="8.5" cy="12" r="2" fill="#fbbf24" />
+      <circle cx="15.5" cy="12" r="2" fill="#fbbf24" />
+      <path d="M10.5 12H13.5" stroke="#f59e0b" strokeWidth="2.2" />
+    </svg>
+  )
+}
+
 export function getProviderLogo(id?: string | null, size = 18): ReactNode {
   if (!id) return <ZenBrandIcon size={size} />
   const norm = id.toLowerCase()
@@ -96,6 +137,10 @@ export function getProviderLogo(id?: string | null, size = 18): ReactNode {
   if (norm.includes('openai') || norm.includes('gpt')) return <OpenAiBrandIcon size={size} />
   if (norm.includes('nvidia') || norm.includes('nim')) return <NvidiaBrandIcon size={size} />
   if (norm.includes('cloudflare') || norm.includes('workers_ai') || norm.includes('cf')) return <CloudflareBrandIcon size={size} />
+  if (norm.includes('openrouter')) return <OpenRouterBrandIcon size={size} />
+  if (norm.includes('tokenrouter')) return <TokenRouterBrandIcon size={size} />
+  if (norm.includes('nara')) return <NaraRouterBrandIcon size={size} />
+  if (norm.includes('openadapter') || norm.includes('adapter')) return <OpenAdapterBrandIcon size={size} />
   if (norm.includes('agentrouter') || norm.includes('router')) return <RouterBrandIcon size={size} />
   return <CustomBrandIcon size={size} />
 }

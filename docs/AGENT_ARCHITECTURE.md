@@ -75,9 +75,9 @@ verdict is in.**
 | Approval policy | `agentApprovalPolicy.ts` | Which actions need human consent |
 | Browser memory | `agentBrowserMemory.ts` | Reusable per-origin site knowledge |
 | Working memory | `agentWorkingMemory.ts` | Per-task structured summary |
-| Planner | `backend/app/services/agent_planner_service.py` | Goal + memory + state → tool calls |
-| Tool registry | `backend/app/services/agent_tool_registry.py` | Prompt docs + validation, one source |
-| Agent security | `backend/app/services/agent_security_service.py` | Per-channel injection scan |
+| Planner | `backend-node/src/services/agentPlannerService.ts` | Goal + memory + state → tool calls |
+| Tool registry | `backend-node/src/services/agentToolRegistry.ts` | Prompt docs + validation, one source |
+| Agent security | `backend-node/src/services/agentSecurityService.ts` | Per-channel injection scan |
 
 ---
 
@@ -221,8 +221,8 @@ actually reasoned about — and never across roles.
 ## Testing
 
 ```bash
-# Backend
-cd backend && .venv\Scripts\python -m pytest          # 131 tests
+# Backend (Node/Fastify — current runtime)
+cd backend-node && npm test                            # 178 Vitest tests
 
 # Frontend build + lint
 cd frontend && npm run build && npm run lint
@@ -230,6 +230,12 @@ cd frontend && npm run build && npm run lint
 # End-to-end, including 8 tests driving real CDP
 cd frontend && npx playwright test                     # 16 tests
 ```
+
+> The backend has been migrated from Python/FastAPI to TypeScript/Node.js +
+> Fastify (`backend-node/`), and the old Python `backend/` tree has been removed.
+> All agent security guarantees below are preserved byte-for-byte; the Vitest
+> suites are 1:1 ports of the original `pytest` assertions. See
+> `backend-node/MIGRATION.md`.
 
 Additional harness-based checks for the agent internals live in the session
 scratchpad (`checkPhase3/5/6/7.mjs`). They bundle the services with esbuild and

@@ -1,25 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react'
 import type { WebpageContent } from '../types/securityTypes'
 
-type WebViewDomElement = HTMLElement & {
-  canGoBack: () => boolean
-  canGoForward: () => boolean
-  executeJavaScript: (code: string) => Promise<unknown>
-  getWebContentsId: () => number
-  getURL: () => string
-  goBack: () => void
-  goForward: () => void
-  loadURL: (url: string) => Promise<void>
-  reload: () => void
-  src: string
-}
-
-type NavigationEvent = Event & {
-  errorCode?: number
-  errorDescription?: string
-  url?: string
-}
-
 export type BrowserWebViewHandle = {
   extractContent: () => Promise<WebpageContent | null>
   /** Browser Runtime target id for this tab; null before the webview attaches. */
@@ -34,6 +15,9 @@ export type BrowserWebViewHandle = {
 type BrowserWebViewProps = {
   initialUrl: string
   isActive: boolean
+  /** True while a drawer/modal must paint over this tab, or a drag (e.g. the assistant
+   *  panel resize) must not have its pointer events swallowed by the guest content. */
+  isObscured?: boolean
   tabId: string
   onLoadingChange: (tabId: string, isLoading: boolean) => void
   onNavigate: (tabId: string, url: string) => void
@@ -196,161 +180,141 @@ function HomePage({ onSearch }: HomePageProps) {
   )
 }
 
-const EXTRACT_CONTENT_SCRIPT = `
-(function() {
-  function getComments(root) {
-    var comments = [];
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT, null, false);
-    var node;
-    while (node = walker.nextNode()) { comments.push(node.nodeValue || ''); }
-    return comments.join(' ');
-  }
-
-  function getHidden() {
-    var hidden = [];
-    document.querySelectorAll('[hidden],[aria-hidden="true"]').forEach(function(el) {
-      if (el.textContent) hidden.push(el.textContent.trim());
-    });
-    document.querySelectorAll('[style]').forEach(function(el) {
-      var s = el.getAttribute('style') || '';
-      if (s.includes('display:none') || s.includes('display: none') ||
-          s.includes('visibility:hidden') || s.includes('visibility: hidden')) {
-        if (el.textContent) hidden.push(el.textContent.trim());
-      }
-    });
-    return hidden.join(' ');
-  }
-
-  function getMeta() {
-    var metas = [];
-    document.querySelectorAll('meta[content]').forEach(function(m) {
-      metas.push(m.getAttribute('content'));
-    });
-    return metas.join(' ');
-  }
-
-  function getInputs() {
-    var inputs = [];
-    document.querySelectorAll('input,textarea').forEach(function(el) {
-      var v = el.value || el.textContent || '';
-      if (v.trim()) inputs.push(v.trim());
-    });
-    return inputs.join(' ');
-  }
-
-  return {
-    visible_text: document.body ? document.body.innerText.substring(0, 50000) : '',
-    hidden_text: getHidden().substring(0, 10000),
-    html_comments: getComments(document).substring(0, 10000),
-    meta_tags: getMeta().substring(0, 5000),
-    input_values: getInputs().substring(0, 5000),
-    page_title: document.title || '',
-    url: location.href || ''
-  };
-})()
-`
-
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
-  function BrowserWebView({ initialUrl, isActive, tabId, onLoadingChange, onNavigate, onSearch }, ref) {
-    const webviewRef = useRef<WebViewDomElement | null>(null)
-    // Electron treats a changed `src` attribute as a new navigation. Keep the
-    // mount URL stable; subsequent navigation always goes through loadURL().
+  function BrowserWebView({ initialUrl, isActive, isObscured = false, tabId, onLoadingChange, onNavigate, onSearch }, ref) {
+    const containerRef = useRef<HTMLDivElement | null>(null)
+    const webContentsIdRef = useRef<number | null>(null)
+    // The tab is created once, at mount, from this URL. Subsequent navigation
+    // always goes through loadURL().
     const webviewInitialUrlRef = useRef(initialUrl)
     const [activeUrl, setActiveUrl] = useState(initialUrl)
     const [errorMessage, setErrorMessage] = useState('')
     const isElectronRuntime = Boolean(window.electronAPI)
     const isHomePage = activeUrl === HOMEPAGE_URL
 
-    const setWebviewRef = useCallback((element: HTMLElement | null) => {
-      webviewRef.current = element as WebViewDomElement | null
+    // The guest content is a native view main composites on top of this whole
+    // window — nothing in our own DOM can paint over it with CSS. Whenever
+    // something needs to show instead (the New Tab UI, a load error, a
+    // drawer/modal, or an inactive tab), we hide the guest by shrinking it to
+    // zero size rather than trying to layer on top of it.
+    const shouldShowGuest = isActive && !isHomePage && !errorMessage && !isObscured
+    const shouldShowGuestRef = useRef(shouldShowGuest)
+    useEffect(() => {
+      shouldShowGuestRef.current = shouldShowGuest
+    }, [shouldShowGuest])
+
+    const pushBounds = useCallback(() => {
+      const webContentsId = webContentsIdRef.current
+      const container = containerRef.current
+      if (webContentsId === null || !container || !window.electronAPI) return
+
+      if (!shouldShowGuestRef.current) {
+        window.electronAPI.browser.setBounds(webContentsId, { x: 0, y: 0, width: 0, height: 0 })
+        return
+      }
+
+      const rect = container.getBoundingClientRect()
+      window.electronAPI.browser.setBounds(webContentsId, { x: rect.x, y: rect.y, width: rect.width, height: rect.height })
     }, [])
 
     useImperativeHandle(ref, () => ({
       extractContent: async () => {
-        if (!webviewRef.current) return null
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId === null) return null
         try {
-          if (window.electronAPI?.scanWebview) {
-            const result = await window.electronAPI.scanWebview(webviewRef.current.getWebContentsId())
-            if (result) return result as WebpageContent
-          }
-          const result = await webviewRef.current.executeJavaScript(EXTRACT_CONTENT_SCRIPT)
-          return result as WebpageContent
+          const result = await window.electronAPI?.scanWebview(webContentsId)
+          return (result as WebpageContent) ?? null
         } catch {
           return null
         }
       },
-      getWebContentsId: () => {
-        try {
-          return webviewRef.current?.getWebContentsId() ?? null
-        } catch {
-          return null
-        }
-      },
-      getURL: () => webviewRef.current?.getURL() ?? activeUrl,
+      getWebContentsId: () => webContentsIdRef.current,
+      getURL: () => activeUrl,
       goBack: () => {
-        if (webviewRef.current?.canGoBack()) {
-          webviewRef.current.goBack()
-        }
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) window.electronAPI?.browser.goBack(webContentsId)
       },
       goForward: () => {
-        if (webviewRef.current?.canGoForward()) {
-          webviewRef.current.goForward()
-        }
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) window.electronAPI?.browser.goForward(webContentsId)
       },
       loadURL: (url: string) => {
         setErrorMessage('')
         setActiveUrl(url)
-        if (webviewRef.current) {
-          webviewRef.current.loadURL(url).catch((err: any) => {
-            if (err && err.code !== 'ERR_ABORTED' && err.errno !== -3) {
-              console.error('[webview] loadURL failed:', err)
-            }
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) {
+          window.electronAPI?.browser.navigate(webContentsId, url).catch((err: any) => {
+            console.error('[browser] navigate failed:', err)
           })
         }
       },
       reload: () => {
-        webviewRef.current?.reload()
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) window.electronAPI?.browser.reload(webContentsId)
       },
     }), [activeUrl])
 
+    // Creates this tab's guest view in main on mount, tears it down on unmount.
+    // Runs once per component instance — a tab never changes which guest it owns.
     useEffect(() => {
-      if (!isElectronRuntime || !webviewRef.current) {
-        return undefined
-      }
+      if (!isElectronRuntime) return undefined
+      let cancelled = false
 
-      const webview = webviewRef.current
-      const handleStartLoading = () => onLoadingChange(tabId, true)
-      const handleStopLoading = () => onLoadingChange(tabId, false)
-      const handleNavigate = (event: Event) => {
-        const nextUrl = (event as NavigationEvent).url
-        if (nextUrl) {
-          setActiveUrl(nextUrl)
-          onNavigate(tabId, nextUrl)
-        }
-      }
-      const handleFailure = (event: Event) => {
-        const failure = event as NavigationEvent
-        if (failure.errorCode === -3) {
-          return
-        }
-
-        setErrorMessage(failure.errorDescription ?? 'Page failed to load')
-        onLoadingChange(tabId, false)
-      }
-
-      webview.addEventListener('did-start-loading', handleStartLoading)
-      webview.addEventListener('did-stop-loading', handleStopLoading)
-      webview.addEventListener('did-navigate', handleNavigate)
-      webview.addEventListener('did-navigate-in-page', handleNavigate)
-      webview.addEventListener('did-fail-load', handleFailure)
+      window.electronAPI!.browser.createTab(webviewInitialUrlRef.current).then((result) => {
+        if (cancelled || !result) return
+        webContentsIdRef.current = result.webContentsId
+        containerRef.current?.setAttribute('data-webcontents-id', String(result.webContentsId))
+        pushBounds()
+      })
 
       return () => {
-        webview.removeEventListener('did-start-loading', handleStartLoading)
-        webview.removeEventListener('did-stop-loading', handleStopLoading)
-        webview.removeEventListener('did-navigate', handleNavigate)
-        webview.removeEventListener('did-navigate-in-page', handleNavigate)
-        webview.removeEventListener('did-fail-load', handleFailure)
+        cancelled = true
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) void window.electronAPI?.browser.closeTab(webContentsId)
       }
+    }, [isElectronRuntime, pushBounds])
+
+    // Keeps the guest's bounds in sync with this container's on-screen rect —
+    // window resizes, the assistant panel opening, and active/obscured toggles
+    // all reflow it.
+    useEffect(() => {
+      if (!isElectronRuntime) return undefined
+      pushBounds()
+
+      const container = containerRef.current
+      if (!container) return undefined
+      const observer = new ResizeObserver(pushBounds)
+      observer.observe(container)
+      return () => observer.disconnect()
+    }, [isElectronRuntime, shouldShowGuest, pushBounds])
+
+    useEffect(() => {
+      if (!isElectronRuntime) return undefined
+
+      return window.electronAPI!.browser.onTabEvent((event) => {
+        if (event.webContentsId !== webContentsIdRef.current) return
+
+        switch (event.type) {
+          case 'did-start-loading':
+            onLoadingChange(tabId, true)
+            break
+          case 'did-stop-loading':
+            onLoadingChange(tabId, false)
+            break
+          case 'did-navigate':
+          case 'did-navigate-in-page':
+            if (event.url) {
+              setActiveUrl(event.url)
+              onNavigate(tabId, event.url)
+            }
+            break
+          case 'did-fail-load':
+            if (event.errorCode === -3) break // aborted by a subsequent navigation
+            setErrorMessage(event.errorDescription ?? 'Page failed to load')
+            onLoadingChange(tabId, false)
+            break
+        }
+      })
     }, [isElectronRuntime, onLoadingChange, onNavigate, tabId])
 
     if (!isElectronRuntime) {
@@ -365,11 +329,9 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
 
     return (
       <section className={`webview-stage ${isActive ? '' : 'webview-stage--inactive'}`} aria-hidden={!isActive} aria-label="Browser web view">
-        <webview
-          ref={setWebviewRef}
-          className="browser-webview"
-          src={webviewInitialUrlRef.current}
-        />
+        {/* Empty on purpose: the actual page is a WebContentsView main composites
+            over this rect (see pushBounds above), not a child of this DOM tree. */}
+        <div ref={containerRef} className="browser-webview" />
         {isHomePage ? <HomePage onSearch={(query) => onSearch(tabId, query)} /> : null}
         {errorMessage ? <div className="webview-error" role="alert">{errorMessage}</div> : null}
       </section>

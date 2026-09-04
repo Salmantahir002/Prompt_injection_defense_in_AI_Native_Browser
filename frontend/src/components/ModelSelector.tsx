@@ -76,7 +76,23 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
       if (currentStored && availableModels.length === 0 && currentStored.has_key) {
         setIsLoadingModels(true)
         try {
-          const models = await fetchProviderModels(currentStored)
+          let models = await fetchProviderModels(currentStored)
+          if (currentStored.id.includes('openrouter')) {
+            const filtered = models.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+            models = [
+              { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+              ...filtered,
+            ]
+          } else if (currentStored.id.includes('tokenrouter')) {
+            const glmFree = models.find((m) => m.id === 'z-ai/glm-5.3-free')
+            if (glmFree) {
+              const filtered = models.filter((m) => m.id !== 'z-ai/glm-5.3-free')
+              models = [
+                { id: 'z-ai/glm-5.3-free', name: glmFree.name || 'GLM 5.3 Free (z-ai)' },
+                ...filtered,
+              ]
+            }
+          }
           setAvailableModels(models)
         } catch {
           // If live fetch fails, keep current
@@ -98,7 +114,8 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
 
   const handleSelectProvider = async (providerId: string, defaultModel?: string) => {
     setIsOpen(false)
-    await setActiveStoredProvider(providerId, defaultModel)
+    const modelToSet = defaultModel || (providerId.includes('openrouter') ? 'openrouter/auto' : undefined)
+    await setActiveStoredProvider(providerId, modelToSet)
     setAvailableModels([])
     refreshActiveInfo()
     window.dispatchEvent(new CustomEvent('promptguard:providers-updated'))
@@ -106,7 +123,12 @@ export function ModelSelector({ onOpenSettings, compact: _compact = false, class
 
   const hasActive = Boolean(activeInfo && activeInfo.is_active)
   const providerLabel = activeInfo?.name || 'No Provider'
-  const modelLabel = activeInfo?.selected_model || (hasActive ? 'Default Model' : 'None')
+  const modelLabel =
+    activeInfo?.selected_model === 'openrouter/auto'
+      ? 'Auto (OpenRouter)'
+      : activeInfo?.selected_model === 'z-ai/glm-5.3-free'
+      ? 'GLM 5.3 Free'
+      : activeInfo?.selected_model || (hasActive ? 'Default Model' : 'None')
 
   return (
     <div className={`model-selector-wrapper ${className}`} ref={dropdownRef}>

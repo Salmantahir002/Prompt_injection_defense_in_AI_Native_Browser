@@ -132,6 +132,35 @@ const SUPPORTED_CATALOG: ProviderCatalogItem[] = [
     providerType: 'openai_compatible',
   },
   {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    recommended: true,
+    description: 'Unified gateway for hundreds of AI models with smart auto-routing',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    providerType: 'openai_compatible',
+  },
+  {
+    id: 'tokenrouter',
+    name: 'TokenRouter',
+    description: 'Unified multi-model routing gateway with dynamic global paths',
+    defaultBaseUrl: 'https://api.tokenrouter.com/v1',
+    providerType: 'openai_compatible',
+  },
+  {
+    id: 'nararouter',
+    name: 'NaraRouter',
+    description: 'Unified OpenAI-compatible gateway for coding agents and models',
+    defaultBaseUrl: 'https://router.bynara.id/v1',
+    providerType: 'openai_compatible',
+  },
+  {
+    id: 'openadapter',
+    name: 'OpenAdapter',
+    description: 'Multi-provider AI gateway with drop-in OpenAI-compatible endpoint',
+    defaultBaseUrl: 'https://api.openadapter.in/v1',
+    providerType: 'openai_compatible',
+  },
+  {
     id: 'custom',
     name: 'Custom Provider',
     description: 'OpenAI-compatible gateway, vLLM, Ollama, Groq, or custom proxy',
@@ -211,8 +240,23 @@ export function ProviderSettingsModal({ isOpen, onClose, onProviderChanged }: Pr
     setConnectProtocol(existing ? existing.provider_type : preset.providerType)
     setConnectApiKey('')
     setConnectVerifySsl(existing?.verify_ssl ?? true)
-    setConnectModel(existing?.selected_model || '')
-    setFetchedModels(existing?.models && existing.models.length > 0 ? existing.models : (existing?.selected_model ? [{ id: existing.selected_model, name: existing.selected_model }] : []))
+    const isOpenRouter = preset.id === 'openrouter'
+    const isTokenRouter = preset.id === 'tokenrouter'
+    setConnectModel(
+      existing?.selected_model ||
+        (isOpenRouter ? 'openrouter/auto' : isTokenRouter ? 'z-ai/glm-5.3-free' : '')
+    )
+    setFetchedModels(
+      existing?.models && existing.models.length > 0
+        ? existing.models
+        : isOpenRouter
+          ? [{ id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' }]
+          : isTokenRouter
+            ? [{ id: 'z-ai/glm-5.3-free', name: 'GLM 5.3 Free (z-ai)' }]
+            : existing?.selected_model
+              ? [{ id: existing.selected_model, name: existing.selected_model }]
+              : []
+    )
     setTestResult(null)
     setFormError('')
   }
@@ -262,13 +306,35 @@ export function ProviderSettingsModal({ isOpen, onClose, onProviderChanged }: Pr
     }
 
     try {
-      const models = await fetchProviderModels(candidate)
+      let models = await fetchProviderModels(candidate)
+      if (connectId === 'openrouter') {
+        const filtered = models.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+        models = [
+          { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+          ...filtered,
+        ]
+      } else if (connectId === 'tokenrouter') {
+        const glmFree = models.find((m) => m.id === 'z-ai/glm-5.3-free')
+        if (glmFree) {
+          const filtered = models.filter((m) => m.id !== 'z-ai/glm-5.3-free')
+          models = [
+            { id: 'z-ai/glm-5.3-free', name: glmFree.name || 'GLM 5.3 Free (z-ai)' },
+            ...filtered,
+          ]
+        }
+      }
       if (!models || models.length === 0) {
         throw new Error('No models found at this endpoint.')
       }
       setFetchedModels(models)
       if (!connectModel || !models.some((m) => m.id === connectModel)) {
-        setConnectModel(models[0].id)
+        setConnectModel(
+          connectId === 'openrouter'
+            ? 'openrouter/auto'
+            : connectId === 'tokenrouter' && models.some((m) => m.id === 'z-ai/glm-5.3-free')
+              ? 'z-ai/glm-5.3-free'
+              : models[0].id,
+        )
       }
       setTestResult({
         success: true,
@@ -316,8 +382,33 @@ export function ProviderSettingsModal({ isOpen, onClose, onProviderChanged }: Pr
       const res = await testProviderConnection(candidate)
       setTestResult(res)
       if (res.success && res.models && res.models.length > 0) {
-        setFetchedModels(res.models)
-        if (!connectModel) setConnectModel(res.models[0].id)
+        let models = res.models
+        if (connectId === 'openrouter') {
+          const filtered = models.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+          models = [
+            { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+            ...filtered,
+          ]
+        } else if (connectId === 'tokenrouter') {
+          const glmFree = models.find((m) => m.id === 'z-ai/glm-5.3-free')
+          if (glmFree) {
+            const filtered = models.filter((m) => m.id !== 'z-ai/glm-5.3-free')
+            models = [
+              { id: 'z-ai/glm-5.3-free', name: glmFree.name || 'GLM 5.3 Free (z-ai)' },
+              ...filtered,
+            ]
+          }
+        }
+        setFetchedModels(models)
+        if (!connectModel) {
+          setConnectModel(
+            connectId === 'openrouter'
+              ? 'openrouter/auto'
+              : connectId === 'tokenrouter' && models.some((m) => m.id === 'z-ai/glm-5.3-free')
+                ? 'z-ai/glm-5.3-free'
+                : models[0].id,
+          )
+        }
       }
     } catch (err: any) {
       setTestResult({
@@ -368,7 +459,32 @@ export function ProviderSettingsModal({ isOpen, onClose, onProviderChanged }: Pr
         }
       }
 
-      const chosenModel = connectModel.trim() || (modelsToSave.length > 0 ? modelsToSave[0].id : existing?.selected_model || 'default')
+      if (connectId === 'openrouter') {
+        const filtered = modelsToSave.filter((m) => m.id !== 'openrouter/auto' && m.id !== 'auto')
+        modelsToSave = [
+          { id: 'openrouter/auto', name: 'Auto (Best for prompt / routes automatically)' },
+          ...filtered,
+        ]
+      } else if (connectId === 'tokenrouter') {
+        const glmFree = modelsToSave.find((m) => m.id === 'z-ai/glm-5.3-free')
+        if (glmFree) {
+          const filtered = modelsToSave.filter((m) => m.id !== 'z-ai/glm-5.3-free')
+          modelsToSave = [
+            { id: 'z-ai/glm-5.3-free', name: glmFree.name || 'GLM 5.3 Free (z-ai)' },
+            ...filtered,
+          ]
+        }
+      }
+
+      const chosenModel =
+        connectModel.trim() ||
+        (connectId === 'openrouter'
+          ? 'openrouter/auto'
+          : connectId === 'tokenrouter' && modelsToSave.some((m) => m.id === 'z-ai/glm-5.3-free')
+            ? 'z-ai/glm-5.3-free'
+            : modelsToSave.length > 0
+              ? modelsToSave[0].id
+              : existing?.selected_model || 'default')
       const configToSave: ClientProviderConfig & { set_active?: boolean } = {
         id: connectId.trim(),
         name: connectName.trim() || connectId.trim(),
@@ -634,10 +750,35 @@ export function ProviderSettingsModal({ isOpen, onClose, onProviderChanged }: Pr
                   </div>
                 ) : null}
 
+                {/* Default Model Selection if models available */}
+                {fetchedModels.length > 0 ? (
+                  <div className="oc-form-group">
+                    <div className="oc-label-row">
+                      <label className="oc-label">Default Model</label>
+                      {connectId === 'openrouter' ? (
+                        <span className="oc-hint-text" style={{ fontSize: '11px', color: '#818cf8' }}>
+                          ⚡ Auto-routing active
+                        </span>
+                      ) : null}
+                    </div>
+                    <select
+                      className="oc-select"
+                      value={connectModel}
+                      onChange={(e) => setConnectModel(e.target.value)}
+                    >
+                      {fetchedModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name || m.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
                 {/* Model count badge indicator if fetched */}
                 {fetchedModels.length > 0 ? (
                   <div className="oc-fetched-summary">
-                    <span className="oc-badge oc-badge--active">✓ {fetchedModels.length} models fetched</span>
+                    <span className="oc-badge oc-badge--active">✓ {fetchedModels.length} model{fetchedModels.length === 1 ? '' : 's'} available</span>
                     <span className="oc-hint-text">All models will be instantly selectable directly inside the prompt box.</span>
                   </div>
                 ) : null}

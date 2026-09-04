@@ -74,7 +74,7 @@ export async function requestPlan(
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
-    throw new AgentPlanError('network', 'Agent backend is not reachable. Ensure the Python backend is running on port 8000.')
+    throw new AgentPlanError('network', 'Agent backend is not reachable. Ensure the Node.js backend is running on port 8000.')
   }
 
   if (!response.ok) {

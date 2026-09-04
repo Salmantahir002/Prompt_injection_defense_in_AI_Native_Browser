@@ -56,27 +56,33 @@ test.describe('Browser Runtime over real CDP', () => {
     await app?.close()
   })
 
+  /** Reads the active tab's runtime target id off the container BrowserWebView.tsx tags with it. */
+  async function activeTargetId(): Promise<number> {
+    return await window.evaluate(() => {
+      const container = document.querySelector('.browser-webview[data-webcontents-id]') as HTMLElement
+      return Number(container.dataset.webcontentsId)
+    })
+  }
+
   /** Loads the fixture page into the active tab and returns its runtime target id. */
   async function loadTestPage(): Promise<number> {
-    await window.evaluate((url) => {
-      const webview = document.querySelector('webview') as unknown as { loadURL: (u: string) => Promise<void> }
-      return webview.loadURL(url)
-    }, TEST_PAGE)
+    const targetId = await activeTargetId()
+    await window.evaluate(
+      ([id, url]) => window.electronAPI!.browser.navigate(id as number, url as string),
+      [targetId, TEST_PAGE] as const,
+    )
 
     // Wait for the runtime to report the page, rather than sleeping.
-    return await expect.poll(async () => {
-      return await window.evaluate(async () => {
-        const webview = document.querySelector('webview') as unknown as { getWebContentsId: () => number }
-        const targetId = webview.getWebContentsId()
+    await expect.poll(async () => {
+      return await window.evaluate(async (id) => {
         const described = await window.electronAPI!.runtimeInvoke({
-          targetId, name: 'describeTarget', params: {},
+          targetId: id, name: 'describeTarget', params: {},
         }) as RuntimeResult<{ url: string }>
-        return described.ok && described.data.url.startsWith('data:') ? targetId : null
-      })
-    }, { timeout: 20000 }).not.toBeNull().then(async () => window.evaluate(() => {
-      const webview = document.querySelector('webview') as unknown as { getWebContentsId: () => number }
-      return webview.getWebContentsId()
-    }))
+        return described.ok && described.data.url.startsWith('data:') ? id : null
+      }, targetId)
+    }, { timeout: 20000 }).not.toBeNull()
+
+    return targetId
   }
 
   async function invoke<T>(targetId: number, name: string, params: Record<string, unknown> = {}) {
@@ -125,12 +131,10 @@ test.describe('Browser Runtime over real CDP', () => {
     expect(filled.data.verification.verified, filled.data.verification.reason).toBe(true)
 
     // And the page really received it, not just the accessibility layer.
-    const value = await window.evaluate(async () => {
-      const webview = document.querySelector('webview') as unknown as {
-        executeJavaScript: (code: string) => Promise<unknown>
-      }
-      return webview.executeJavaScript('document.getElementById("q").value')
-    })
+    const value = await window.evaluate(
+      (id) => window.electronAPI!.browser.executeJavaScript(id, 'document.getElementById("q").value'),
+      targetId,
+    )
     expect(value).toBe('hello agent')
   })
 
@@ -151,12 +155,10 @@ test.describe('Browser Runtime over real CDP', () => {
     expect(clicked.ok).toBe(true)
 
     // The click must have run the page's own onclick handler.
-    const output = await window.evaluate(async () => {
-      const webview = document.querySelector('webview') as unknown as {
-        executeJavaScript: (code: string) => Promise<unknown>
-      }
-      return webview.executeJavaScript('document.getElementById("out").textContent')
-    })
+    const output = await window.evaluate(
+      (id) => window.electronAPI!.browser.executeJavaScript(id, 'document.getElementById("out").textContent'),
+      targetId,
+    )
     expect(output).toBe('clicked:shoes')
   })
 

@@ -294,7 +294,7 @@ export class ProviderSecureStore {
   }
 
   /**
-   * Synchronize the active provider configuration with the FastAPI backend.
+   * Synchronize the active provider configuration with the Node backend.
    */
   async syncWithBackend(backendUrl: string = 'http://127.0.0.1:8000/api/v1'): Promise<void> {
     const active = this.getDecryptedActiveConfig()

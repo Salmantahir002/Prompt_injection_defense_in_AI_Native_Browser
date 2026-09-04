@@ -1,0 +1,158 @@
+// Port of backend/app/tests/test_agent_planner_service.py — planner reply
+// parsing, confidence handling, and prompt shape. No network: parsePlan and
+// buildMessages are pure.
+import { describe, expect, it } from 'vitest'
+import { agentPlannerService } from '../src/services/agentPlannerService.js'
+import { ToolValidationError } from '../src/services/agentToolRegistry.js'
+import type { AgentPageState, AgentWorkingMemory } from '../src/schemas/agent.schemas.js'
+
+const KNOWN_IDS = ['e1', 'e2']
+
+describe('JSON parsing', () => {
+  it('plain JSON is parsed', () => {
+    const [actions, confidence, reason] = agentPlannerService.parsePlan(
+      '{"tool": "click", "arguments": {"target": "e1"}, "confidence": 0.9, "reason": "the login button"}',
+      KNOWN_IDS,
+    )
+    expect(actions).toEqual([['click', { target: 'e1' }]])
+    expect(confidence).toBe(0.9)
+    expect(reason).toBe('the login button')
+  })
+
+  it('JSON wrapped in a markdown fence is parsed', () => {
+    const [actions] = agentPlannerService.parsePlan('```json\n{"tool": "wait", "confidence": 0.5}\n```', KNOWN_IDS)
+    expect(actions[0]![0]).toBe('wait')
+  })
+
+  it('JSON surrounded by prose is parsed', () => {
+    const [actions] = agentPlannerService.parsePlan(
+      'Sure! Here is the next step:\n{"tool": "finish", "arguments": {"summary": "done"}}\nHope that helps.',
+      KNOWN_IDS,
+    )
+    expect(actions).toEqual([['finish', { summary: 'done' }]])
+  })
+
+  it('braces inside string values do not end the scan', () => {
+    const [actions] = agentPlannerService.parsePlan(
+      '{"tool": "type", "arguments": {"text": "a } brace { inside"}, "confidence": 0.8}',
+      KNOWN_IDS,
+    )
+    expect(actions[0]![0]).toBe('type')
+    expect(actions[0]![1].text).toBe('a } brace { inside')
+  })
+
+  it('escaped quotes inside a string are handled', () => {
+    const [actions] = agentPlannerService.parsePlan('{"tool": "type", "arguments": {"text": "say \\"hi\\""}}', KNOWN_IDS)
+    expect(actions[0]![1].text).toBe('say "hi"')
+  })
+
+  it('an empty response is rejected', () => {
+    expect(() => agentPlannerService.parsePlan('', KNOWN_IDS)).toThrow(/empty response/)
+  })
+
+  it('a response without JSON is rejected', () => {
+    expect(() => agentPlannerService.parsePlan('I cannot help with that.', KNOWN_IDS)).toThrow(/no JSON object/)
+  })
+
+  it('unterminated JSON is rejected', () => {
+    expect(() => agentPlannerService.parsePlan('{"tool": "click", "arguments": {', KNOWN_IDS)).toThrow(/unterminated/)
+  })
+
+  it('malformed JSON is rejected', () => {
+    expect(() => agentPlannerService.parsePlan('{"tool": "click",,}', KNOWN_IDS)).toThrow(/not valid JSON/)
+  })
+})
+
+describe('confidence', () => {
+  it('missing confidence defaults to the midpoint', () => {
+    const [, confidence] = agentPlannerService.parsePlan('{"tool": "wait"}', KNOWN_IDS)
+    expect(confidence).toBe(0.5)
+  })
+
+  it.each([
+    ['5', 1.0],
+    ['-2', 0.0],
+    ['"high"', 0.5],
+    ['true', 0.5],
+  ])('confidence %s clamps/type-checks to %s', (rawValue, expected) => {
+    const [, confidence] = agentPlannerService.parsePlan(`{"tool": "wait", "confidence": ${rawValue}}`, KNOWN_IDS)
+    expect(confidence).toBe(expected)
+  })
+
+  it('a hallucinated element id fails validation through the planner', () => {
+    expect(() => agentPlannerService.parsePlan('{"tool": "click", "arguments": {"target": "e42"}}', KNOWN_IDS)).toThrow(
+      /unknown element/,
+    )
+  })
+})
+
+function sampleState(): AgentPageState {
+  return {
+    url: 'https://shop.test/cart',
+    title: 'Cart',
+    elements: [
+      { id: 'e1', role: 'textbox', name: 'Coupon', required: true },
+      { id: 'e2', role: 'button', name: 'Apply', disabled: true },
+    ],
+    focusedElementId: 'e1',
+    dialogs: [{ id: 'e3', role: 'dialog', name: 'Cookies', modal: true }],
+  }
+}
+
+describe('prompt shape', () => {
+  it('the prompt carries goal, memory, and state only', () => {
+    const memory: AgentWorkingMemory = {
+      goal: 'apply a coupon',
+      completed_steps: [{ tool: 'navigate', summary: 'opened cart', succeeded: true }],
+      failures: [{ tool: 'click', reason: 'element gone', code: 'ELEMENT_NOT_FOUND' }],
+      retries: 1,
+    }
+    const messages = agentPlannerService.buildMessages('apply a coupon', memory, sampleState())
+    expect(messages.map((m) => m.role)).toEqual(['system', 'user'])
+
+    const userPrompt = messages[1]!.content
+    expect(userPrompt).toContain('apply a coupon')
+    expect(userPrompt).toContain('opened cart')
+    expect(userPrompt).toContain('ELEMENT_NOT_FOUND')
+    expect(userPrompt).toContain('e1 [textbox] "Coupon"')
+    expect(userPrompt).toContain('e2 [button] "Apply"')
+    expect(userPrompt).toContain('disabled')
+    expect(userPrompt).toContain('modal dialog')
+  })
+
+  it('page content is fenced as untrusted, after the goal', () => {
+    const messages = agentPlannerService.buildMessages('x', { goal: 'x' }, sampleState())
+    const userPrompt = messages[1]!.content
+    expect(userPrompt).toContain('BEGIN UNTRUSTED PAGE CONTENT')
+    expect(userPrompt).toContain('END UNTRUSTED PAGE CONTENT')
+    expect(userPrompt.indexOf('GOAL:')).toBeLessThan(userPrompt.indexOf('BEGIN UNTRUSTED PAGE CONTENT'))
+  })
+
+  it('the system prompt documents every tool and the injection rule', () => {
+    const messages = agentPlannerService.buildMessages('x', { goal: 'x' }, sampleState())
+    const systemPrompt = messages[0]!.content
+    for (const name of ['click', 'fill', 'navigate', 'finish']) {
+      expect(systemPrompt).toContain(`- ${name}:`)
+    }
+    expect(systemPrompt).toContain('CRITICAL SECURITY RULE')
+    expect(systemPrompt).not.toContain('{tool_catalogue}')
+  })
+
+  it('empty memory renders a first-step marker', () => {
+    const messages = agentPlannerService.buildMessages('x', { goal: 'x' }, sampleState())
+    expect(messages[1]!.content).toContain('this is the first step')
+  })
+
+  it('the system prompt includes the search and input guidelines', () => {
+    const messages = agentPlannerService.buildMessages('search for grok bot', { goal: 'search' }, sampleState())
+    const systemPrompt = messages[0]!.content
+    expect(systemPrompt).toContain('CROSS-WEBSITE AUTOMATION GUIDELINES')
+    expect(systemPrompt).toContain('NEVER click a search button while the search box is empty')
+    expect(systemPrompt).toContain('press_key')
+  })
+})
+
+it('the planner singleton is exported and functional', () => {
+  expect(typeof agentPlannerService.parsePlan).toBe('function')
+  expect(() => agentPlannerService.parsePlan('nope', KNOWN_IDS)).toThrow(ToolValidationError)
+})
