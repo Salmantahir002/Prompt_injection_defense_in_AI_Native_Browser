@@ -1,10 +1,14 @@
-# PromptGuard
+<p align="center">
+  <img src="frontend/public/favicon.svg" width="96" height="96" alt="Orbit Logo" />
+</p>
 
-**Real-Time Prompt Injection Defense in an AI-Native Browser**
+# Orbit: Agentic AI Browser with Prompt Defense
 
-PromptGuard is an AI-native desktop web browser engineered to defend against prompt injection attacks in real time. When an AI assistant browses or reads web content on a user's behalf, malicious actors can weaponize web pages with hidden instructions (Indirect Prompt Injection) or supply hostile prompts (Direct Prompt Injection) to manipulate the model.
+**Real-Time Prompt Injection Defense in an Autonomous, AI-Native Browser**
 
-PromptGuard implements a multi-stage security pipeline that inspects both user prompts and live web pages across 22 distinct content channels before text can reach a Large Language Model (LLM) or trigger browser automation.
+**Orbit** is an AI-native desktop web browser engineered to defend against prompt injection attacks in real time. When an AI assistant browses or reads web content on a user's behalf, malicious actors can weaponize web pages with hidden instructions (Indirect Prompt Injection) or supply hostile prompts (Direct Prompt Injection) to manipulate the model.
+
+Orbit implements a multi-stage security pipeline that inspects both user prompts and live web pages across 22 distinct content channels before text can reach a Large Language Model (LLM) or trigger browser automation.
 
 The system is built entirely in TypeScript, pairing an Electron desktop shell and React frontend with a high-performance Fastify 5 security service on Node.js.
 
@@ -12,7 +16,7 @@ The system is built entirely in TypeScript, pairing an Electron desktop shell an
 
 ## Architecture and Process Model
 
-PromptGuard partitions responsibilities across four isolated operating system and runtime layers:
+Orbit partitions responsibilities across four isolated operating system and runtime layers:
 
 ```
 ┌─────────────────────────────────┐        IPC (Context Bridge)     ┌────────────────────────────────────┐

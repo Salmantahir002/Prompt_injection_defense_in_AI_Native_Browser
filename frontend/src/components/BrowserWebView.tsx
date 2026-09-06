@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react'
 import type { WebpageContent } from '../types/securityTypes'
+import { BrowserLogo } from './BrowserLogo'
 
 export type BrowserWebViewHandle = {
   extractContent: () => Promise<WebpageContent | null>
@@ -10,6 +11,7 @@ export type BrowserWebViewHandle = {
   goForward: () => void
   loadURL: (url: string) => void
   reload: () => void
+  stop: () => void
 }
 
 type BrowserWebViewProps = {
@@ -21,6 +23,8 @@ type BrowserWebViewProps = {
   tabId: string
   onLoadingChange: (tabId: string, isLoading: boolean) => void
   onNavigate: (tabId: string, url: string) => void
+  onFaviconChange?: (tabId: string, favicon: string) => void
+  onTitleChange?: (tabId: string, title: string) => void
   onSearch: (tabId: string, query: string) => void
 }
 
@@ -125,7 +129,13 @@ function HomePage({ onSearch }: HomePageProps) {
   return (
     <div className={`homepage-message ${isSearchOpen ? 'homepage-message--search-open' : ''}`}>
       <div className="homepage-content">
-        <p>Explore boldly—Prompt Defense quietly shields every page from hidden instruction attacks.</p>
+        <div className="homepage-hero">
+          <div className="homepage-hero-icon-wrap">
+            <BrowserLogo size={46} className="homepage-hero-logo" />
+          </div>
+          <h1 className="homepage-hero-title">orbit</h1>
+          <p className="homepage-hero-subtitle">A BROWSER FOR AGENTIC SEARCH WITH PROMPT DEFENSE</p>
+        </div>
         <button className="homepage-start-button" type="button" onClick={() => setIsSearchOpen(true)}>
           Start browsing
           <ArrowIcon />
@@ -181,7 +191,17 @@ function HomePage({ onSearch }: HomePageProps) {
 }
 
 export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewProps>(
-  function BrowserWebView({ initialUrl, isActive, isObscured = false, tabId, onLoadingChange, onNavigate, onSearch }, ref) {
+  function BrowserWebView({
+    initialUrl,
+    isActive,
+    isObscured = false,
+    tabId,
+    onLoadingChange,
+    onNavigate,
+    onFaviconChange,
+    onTitleChange,
+    onSearch,
+  }, ref) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const webContentsIdRef = useRef<number | null>(null)
     // The tab is created once, at mount, from this URL. Subsequent navigation
@@ -252,6 +272,10 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
         const webContentsId = webContentsIdRef.current
         if (webContentsId !== null) window.electronAPI?.browser.reload(webContentsId)
       },
+      stop: () => {
+        const webContentsId = webContentsIdRef.current
+        if (webContentsId !== null) window.electronAPI?.browser.stop(webContentsId)
+      },
     }), [activeUrl])
 
     // Creates this tab's guest view in main on mount, tears it down on unmount.
@@ -299,6 +323,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
             onLoadingChange(tabId, true)
             break
           case 'did-stop-loading':
+          case 'did-finish-load':
             onLoadingChange(tabId, false)
             break
           case 'did-navigate':
@@ -308,6 +333,16 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
               onNavigate(tabId, event.url)
             }
             break
+          case 'page-favicon-updated':
+            if (event.favicon) {
+              onFaviconChange?.(tabId, event.favicon)
+            }
+            break
+          case 'page-title-updated':
+            if (event.title) {
+              onTitleChange?.(tabId, event.title)
+            }
+            break
           case 'did-fail-load':
             if (event.errorCode === -3) break // aborted by a subsequent navigation
             setErrorMessage(event.errorDescription ?? 'Page failed to load')
@@ -315,7 +350,7 @@ export const BrowserWebView = forwardRef<BrowserWebViewHandle, BrowserWebViewPro
             break
         }
       })
-    }, [isElectronRuntime, onLoadingChange, onNavigate, tabId])
+    }, [isElectronRuntime, onFaviconChange, onLoadingChange, onNavigate, onTitleChange, tabId])
 
     if (!isElectronRuntime) {
       return (

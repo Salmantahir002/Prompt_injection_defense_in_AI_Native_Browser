@@ -5,8 +5,10 @@ import { RUNTIME_INVOKE_CHANNEL } from './browserRuntime/runtimeContract.js'
 /** Mirrors the shape main.ts sends over 'browser:tab-event' (see BrowserTabEvent in src/vite-env.d.ts). */
 type BrowserTabEvent = {
   webContentsId: number
-  type: 'did-start-loading' | 'did-stop-loading' | 'did-navigate' | 'did-navigate-in-page' | 'did-fail-load'
+  type: 'did-start-loading' | 'did-stop-loading' | 'did-finish-load' | 'dom-ready' | 'did-navigate' | 'did-navigate-in-page' | 'did-fail-load' | 'page-favicon-updated' | 'page-title-updated'
   url?: string
+  title?: string
+  favicon?: string
   errorCode?: number
   errorDescription?: string
 }
@@ -44,6 +46,7 @@ const electronAPI = {
     goBack: (webContentsId: number) => ipcRenderer.invoke('browser:go-back', webContentsId) as Promise<void>,
     goForward: (webContentsId: number) => ipcRenderer.invoke('browser:go-forward', webContentsId) as Promise<void>,
     reload: (webContentsId: number) => ipcRenderer.invoke('browser:reload', webContentsId) as Promise<void>,
+    stop: (webContentsId: number) => ipcRenderer.invoke('browser:stop', webContentsId) as Promise<void>,
     executeJavaScript: (webContentsId: number, code: string) => ipcRenderer.invoke('browser:execute-javascript', webContentsId, code) as Promise<unknown>,
     // Fire-and-forget: this fires on every resize/tab-switch, an invoke round trip isn't worth it.
     setBounds: (webContentsId: number, bounds: { x: number; y: number; width: number; height: number }) => {

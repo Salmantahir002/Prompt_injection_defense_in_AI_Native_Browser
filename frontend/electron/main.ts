@@ -89,8 +89,18 @@ function attachGuestBehaviour(view: WebContentsView) {
   const id = contents.id
   contents.on('did-start-loading', () => sendTabEvent(id, { type: 'did-start-loading' }))
   contents.on('did-stop-loading', () => sendTabEvent(id, { type: 'did-stop-loading' }))
+  contents.on('did-finish-load', () => sendTabEvent(id, { type: 'did-finish-load' }))
+  contents.on('dom-ready', () => sendTabEvent(id, { type: 'dom-ready' }))
   contents.on('did-navigate', (_event, url) => sendTabEvent(id, { type: 'did-navigate', url }))
   contents.on('did-navigate-in-page', (_event, url) => sendTabEvent(id, { type: 'did-navigate-in-page', url }))
+  contents.on('page-favicon-updated', (_event, favicons) => {
+    if (favicons && favicons.length > 0) {
+      sendTabEvent(id, { type: 'page-favicon-updated', favicon: favicons[0] })
+    }
+  })
+  contents.on('page-title-updated', (_event, title) => {
+    sendTabEvent(id, { type: 'page-title-updated', title })
+  })
   contents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     if (errorCode === -3) return // aborted by a subsequent navigation, not a real failure
     sendTabEvent(id, { type: 'did-fail-load', errorCode, errorDescription })
@@ -211,6 +221,11 @@ ipcMain.handle('browser:go-forward', (event, webContentsId: unknown) => {
 ipcMain.handle('browser:reload', (event, webContentsId: unknown) => {
   requireTabView(event, webContentsId)?.webContents.reload()
 })
+
+ipcMain.handle('browser:stop', (event, webContentsId: unknown) => {
+  requireTabView(event, webContentsId)?.webContents.stop()
+})
+
 
 ipcMain.handle('browser:execute-javascript', (event, webContentsId: unknown, code: unknown) => {
   const view = requireTabView(event, webContentsId)

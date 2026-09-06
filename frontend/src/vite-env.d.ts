@@ -3,8 +3,10 @@
 /** Pushed from main for the tab whose guest content the event happened on. */
 type BrowserTabEvent = {
   webContentsId: number
-  type: 'did-start-loading' | 'did-stop-loading' | 'did-navigate' | 'did-navigate-in-page' | 'did-fail-load'
+  type: 'did-start-loading' | 'did-stop-loading' | 'did-finish-load' | 'dom-ready' | 'did-navigate' | 'did-navigate-in-page' | 'did-fail-load' | 'page-favicon-updated' | 'page-title-updated'
   url?: string
+  title?: string
+  favicon?: string
   errorCode?: number
   errorDescription?: string
 }
@@ -25,6 +27,7 @@ interface Window {
       goBack: (webContentsId: number) => Promise<void>
       goForward: (webContentsId: number) => Promise<void>
       reload: (webContentsId: number) => Promise<void>
+      stop: (webContentsId: number) => Promise<void>
       executeJavaScript: (webContentsId: number, code: string) => Promise<unknown>
       setBounds: (webContentsId: number, bounds: { x: number; y: number; width: number; height: number }) => void
       onTabEvent: (listener: (event: BrowserTabEvent) => void) => () => void

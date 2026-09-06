@@ -161,7 +161,7 @@
   inset: -22%;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 50%, rgba(245, 150, 60, 0.3) 0%, rgba(196, 69, 35, 0.14) 42%, transparent 68%);
+  background: radial-gradient(circle at 48% 46%, rgba(56, 178, 168, 0.28) 0%, rgba(245, 150, 60, 0.24) 38%, rgba(196, 69, 35, 0.12) 56%, transparent 70%);
   animation: orbGlow 3.5s ease-in-out infinite alternate;
   will-change: opacity;
   transform: translateZ(0);
@@ -173,80 +173,32 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: hidden;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 20%, rgba(246, 134, 123, 0.34), transparent 27%),
-    radial-gradient(circle at 45% 30%, #8e2a28, transparent 43%),
-    linear-gradient(155deg, var(--orb-red), var(--orb-ember) 58%, var(--orb-shadow));
-  /* Static: only the two inset shades and the drop shadow stay on the orb. The
-     outer bloom moved to .orb-wrap::before so nothing here repaints. */
+  display: grid;
+  place-items: center;
   box-shadow:
-    inset -48px -32px 66px rgba(0, 0, 0, 0.62),
-    inset 38px 26px 58px rgba(255, 166, 88, 0.19),
-    32px 50px 50px rgba(0, 0, 0, 0.58);
+    32px 50px 50px rgba(0, 0, 0, 0.58),
+    0 0 50px rgba(245, 150, 60, 0.16),
+    0 0 80px rgba(56, 178, 168, 0.12);
   animation: orbFloatAndPulse 6.5s ease-in-out infinite;
   /* Allocate the composited layer before the transition starts so the full
      explosion can begin without a first-frame texture upload. */
   will-change: transform, opacity;
   backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
 }
 
-.defense-orb::before {
-  content: '';
-  position: absolute;
-  inset: -18%;
-  border-radius: 45%;
-  background:
-    radial-gradient(circle at 35% 42%, rgba(255, 213, 156, 0.16), transparent 25%),
-    linear-gradient(168deg, rgba(60, 11, 16, 0.02), rgba(153, 64, 16, 0.76) 58%, rgba(18, 8, 7, 0.04));
-  transform: rotate(-10deg);
-  animation: beltDrift 9s linear infinite;
-  will-change: transform;
-  backface-visibility: hidden;
-}
-
-.defense-orb::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px);
-  background-size: 3px 3px;
-  opacity: 0.22;
-  animation: grainShimmer 8s ease-in-out infinite alternate;
-  will-change: opacity;
-}
-
-.orb-shade {
-  position: absolute;
-  border-radius: 999px;
+.defense-orb-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
   pointer-events: none;
-}
-
-.orb-shade--top {
-  inset: 0 0 auto;
-  height: 46%;
-  background: radial-gradient(ellipse at center, rgba(92, 16, 24, 0.56), rgba(47, 8, 12, 0.04) 68%);
-}
-
-.orb-shade--belt {
-  left: 6%;
-  right: -8%;
-  bottom: 18%;
-  height: 32%;
-  background: rgba(194, 81, 20, 0.38);
-  transform: rotate(8deg);
-  filter: blur(1px);
-  animation: beltPulse 5s ease-in-out infinite alternate;
-}
-
-.orb-shade--glow {
-  inset: auto 8% 0;
-  height: 26%;
-  background: radial-gradient(ellipse at center, rgba(212, 124, 54, 0.22), transparent 69%);
-  animation: glowPulse 3s ease-in-out infinite alternate;
-  will-change: opacity;
+  user-select: none;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 .start-button {
@@ -312,57 +264,129 @@
 }
 
 /* ────────────────────────────────────────────────────
-   Browser Shell – Chromium Style
+   Browser Shell – Modern Chromium / Chrome Style
    ──────────────────────────────────────────────────── */
 
 .browser-shell {
   height: 100vh;
   max-height: 100vh;
-  background: #1a1d1f;
+  background: #1f1f23;
   color: var(--text);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Tab Strip */
+/* Row 1: Tab Strip */
 .tab-strip {
-  height: 40px;
+  height: 36px;
   display: flex;
-  align-items: flex-end;
-  gap: 0;
+  align-items: center;
   padding: 0 8px;
-  background: #202225;
+  background: #1f1f23;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.tab-strip-items {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.tab-strip-drag-region {
+  flex: 1;
+  height: 100%;
   -webkit-app-region: drag;
 }
 
 .tab {
   position: relative;
-  height: 34px;
-  min-width: 200px;
-  max-width: 260px;
+  height: 28px;
+  width: 192px;
+  min-width: 130px;
+  max-width: 205px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
-  border-radius: 8px 8px 0 0;
-  background: #2d3134;
-  color: rgba(255, 255, 255, 0.7);
+  padding: 0 10px;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   border: 0;
   cursor: pointer;
   font: inherit;
   text-align: left;
   -webkit-app-region: no-drag;
-  transition: background 0.15s ease;
+  transition: background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.1s ease,
+              width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  border-radius: 7px;
+}
+
+.tab:active {
+  transform: scale(0.99);
+}
+
+.active-tab,
+.active-tab:hover {
+  background: #2b2c30;
+  color: #f1f3f4;
+  font-weight: 500;
+  border-radius: 7px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
 .tab:focus-visible,
 .new-tab-btn:focus-visible,
 .tab-close-btn:focus-visible {
-  outline: 2px solid rgba(251, 191, 36, 0.92);
-  outline-offset: -3px;
+  outline: 2px solid rgba(168, 177, 255, 0.85);
+  outline-offset: -2px;
+}
+
+.tab-favicon-img {
+  width: 15px;
+  height: 15px;
+  border-radius: 2px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+
+.tab-asterisk-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #a8b1ff;
+  display: inline-block;
+}
+
+.tab-spinner {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  display: block;
+  animation: tabSpinnerRotate 0.85s linear infinite;
+}
+
+@keyframes tabSpinnerRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tab-title {
@@ -372,58 +396,58 @@
   white-space: nowrap;
 }
 
-.active-tab {
-  background: #1a1d1f;
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.tab-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #4ca6ff, #fafafa 47%, #35b36f 49%, #f6c642 70%, #e6463a 71%);
-  flex-shrink: 0;
-}
-
 .tab-close-btn {
   margin-left: auto;
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tab-close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.new-tab-btn {
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
   display: inline-grid;
   place-items: center;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 18px;
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.tab-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.tab-close-btn:active {
+  transform: scale(0.92);
+}
+
+.new-tab-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 16px;
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 2px;
+  margin-bottom: 0;
 }
 
 .new-tab-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
+  color: #fff;
+  transform: scale(1.04);
 }
+
+.new-tab-btn:active {
+  transform: scale(0.96);
+}
+
 
 /* Browser Frame */
 .browser-frame {
@@ -431,29 +455,36 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 
-/* Toolbar */
+/* Row 2: Toolbar (Omnibox & Controls) */
 .toolbar-row {
   position: relative;
   height: 44px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 12px;
-  background: #1a1d1f;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 6px;
+  padding: 0 10px;
+  background: #28292c;
+}
+
+.toolbar-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .nav-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: inline-grid;
   place-items: center;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: #9aa0a6;
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
@@ -461,11 +492,20 @@
 
 .nav-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
+  color: #e8eaed;
 }
 
 .nav-btn:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.nav-btn--loading {
+  color: #8ab4f8;
+}
+
+.nav-btn--loading:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
 }
 
 .nav-btn svg {
@@ -478,34 +518,35 @@
   position: relative;
   flex: 1;
   min-width: 180px;
-  height: 32px;
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 6px 0 12px;
+  padding: 0 10px 0 14px;
   margin: 0 4px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 999px;
-  background: #2a2e31;
-  transition: all 0.2s ease;
+  background: #1b1c1e;
+  border: 1.5px solid transparent;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .address-form:focus-within {
-  border-color: rgba(138, 180, 248, 0.5);
-  background: #2f3336;
-  box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.1);
+  border-color: #a8b1ff;
+  background: #17181a;
+  box-shadow: 0 0 0 2px rgba(168, 177, 255, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
-.lock-icon {
+.omnibox-search-icon {
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: #9aa0a6;
   display: flex;
   align-items: center;
 }
 
-.lock-icon svg {
-  width: 14px;
-  height: 14px;
+.omnibox-search-icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .address-input {
@@ -514,87 +555,63 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.88);
+  color: #e8eaed;
   font-size: 13px;
   font-family: inherit;
 }
 
 .address-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: #5f6368;
 }
 
 .address-input::selection {
-  background: rgba(138, 180, 248, 0.3);
+  background: rgba(168, 177, 255, 0.35);
 }
 
-.go-button {
-  height: 24px;
-  min-width: 36px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(138, 180, 248, 0.15);
-  color: #8ab4f8;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.go-button:hover {
-  background: rgba(138, 180, 248, 0.25);
-}
-
-/* Toolbar actions */
-select {
-  color-scheme: dark;
-}
-
-option, optgroup {
-  background-color: #111815;
-  color: #f8fafc;
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.toolbar-action-btn {
-  width: 32px;
-  height: 32px;
+.omnibox-star-btn {
+  width: 26px;
+  height: 26px;
   display: inline-grid;
   place-items: center;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: #9aa0a6;
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
 }
 
-.toolbar-action-btn:hover {
+.omnibox-star-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
+  color: #e8eaed;
 }
 
-.toolbar-action-btn svg {
-  width: 18px;
-  height: 18px;
+.omnibox-star-btn--active {
+  color: #8ab4f8;
+}
+
+.omnibox-star-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Toolbar Right Actions Group */
+.toolbar-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .scan-button {
   height: 28px;
-  min-width: 80px;
-  padding: 0 12px;
-  border: 1px solid rgba(52, 211, 153, 0.2);
+  padding: 0 10px;
+  border: 1px solid rgba(52, 211, 153, 0.25);
   border-radius: 999px;
   background: rgba(52, 211, 153, 0.08);
   color: #34d399;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   display: inline-flex;
@@ -603,8 +620,8 @@ option, optgroup {
 }
 
 .scan-button:hover {
-  background: rgba(52, 211, 153, 0.15);
-  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(52, 211, 153, 0.45);
 }
 
 .scan-button:disabled {
@@ -619,41 +636,69 @@ option, optgroup {
 
 .assistant-pill {
   height: 28px;
-  padding: 0 14px;
-  border: 1px solid transparent;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .assistant-pill:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.8);
+  color: #fff;
 }
 
 .assistant-pill--active {
-  border-color: rgba(138, 180, 248, 0.3);
-  background: rgba(138, 180, 248, 0.1);
+  border-color: rgba(138, 180, 248, 0.35);
+  background: rgba(138, 180, 248, 0.12);
   color: #8ab4f8;
 }
 
 .assistant-pill svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
+}
+
+.brave-menu-btn,
+.chrome-menu-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #9aa0a6;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.brave-menu-btn:hover,
+.chrome-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+}
+
+.brave-menu-btn svg,
+.chrome-menu-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .toolbar-error {
   position: absolute;
   left: 146px;
   top: 44px;
-  z-index: 5;
+  z-index: 50;
   padding: 8px 12px;
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
@@ -661,18 +706,423 @@ option, optgroup {
   color: #fca5a5;
   font-size: 12px;
   backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
+
+/* ────────────────────────────────────────────────────
+   Row 3: Bookmarks Bar (Chromium Style)
+   ──────────────────────────────────────────────────── */
+
+.bookmark-bar {
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 8px;
+  background: #28292c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  user-select: none;
+  font-size: 11px;
+}
+
+.bookmark-bar-fixed-left {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.bookmark-app-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9aa0a6;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.bookmark-app-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+}
+
+.bookmark-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+.bookmark-items-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  height: 100%;
+}
+
+.bookmark-item-btn {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #bdc1c6;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 400;
+  cursor: pointer;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.12s ease;
+}
+
+.bookmark-item-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f3f4;
+}
+
+.bookmark-icon {
+  display: flex;
+  align-items: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #9aa0a6;
+}
+
+.bookmark-favicon {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.bookmark-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-empty-hint {
+  display: flex;
+  align-items: center;
+}
+
+.bookmark-add-hint-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bookmark-add-hint-btn:hover {
+  border-color: rgba(168, 177, 255, 0.4);
+  color: #a8b1ff;
+  background: rgba(168, 177, 255, 0.06);
+}
+
+.bookmark-bar-fixed-right {
+  display: flex;
+  align-items: center;
+}
+
+.bookmark-overflow-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9aa0a6;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.bookmark-overflow-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+}
+
+/* Chrome-style Loading Progress Bar */
+.loading-progress-bar-container {
+  position: relative;
+  height: 2.5px;
+  margin-top: -2.5px;
+  width: 100%;
+  overflow: hidden;
+  z-index: 45;
+  pointer-events: none;
+  background: transparent;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8ab4f8 0%, #38bdf8 55%, #c084fc 100%);
+  box-shadow: 0 0 8px rgba(138, 180, 248, 0.8), 0 0 3px rgba(56, 189, 248, 0.9);
+  transition: width 0.28s cubic-bezier(0.1, 0.85, 0.25, 1), opacity 0.25s ease;
+  border-radius: 0 2px 2px 0;
+}
+
+.loading-progress-bar--complete {
+  transition: width 0.15s ease-out, opacity 0.35s ease-out;
+}
+
+/* Bookmark Context Menu */
+.bookmark-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 170px;
+  background: #28292c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  transform-origin: top left;
+  animation: menuPopIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.bookmark-context-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #e8eaed;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.bookmark-context-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bookmark-context-danger {
+  color: #fca5a5;
+}
+
+.bookmark-context-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.bookmark-context-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+/* Bookmark Overflow Menu */
+.bookmark-overflow-menu {
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  z-index: 1000;
+  min-width: 180px;
+  max-width: 260px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #28292c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  transform-origin: top right;
+  animation: menuPopIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.bookmark-overflow-empty {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+.bookmark-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #e8eaed;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.bookmark-overflow-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bookmark-overflow-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bookmark Add/Edit Modal Dialog */
+.bookmark-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  animation: modalBackdropFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.bookmark-modal-dialog {
+  width: 360px;
+  background: #28292c;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: modalDialogScaleUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.bookmark-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.bookmark-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f3f4;
+}
+
+.bookmark-modal-close {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.bookmark-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.bookmark-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bookmark-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.bookmark-modal-input {
+  height: 32px;
+  padding: 0 10px;
+  background: #1b1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #f1f3f4;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.bookmark-modal-input:focus {
+  border-color: #a8b1ff;
+  box-shadow: 0 0 0 1.5px rgba(168, 177, 255, 0.3);
+}
+
+.bookmark-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.bookmark-modal-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 0;
+  transition: all 0.15s ease;
+}
+
+.bookmark-modal-btn-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+}
+
+.bookmark-modal-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.bookmark-modal-btn-save {
+  background: #a8b1ff;
+  color: #17181a;
+  font-weight: 600;
+}
+
+.bookmark-modal-btn-save:hover {
+  background: #b9c1ff;
+}
+
 
 /* Content Grid */
 .content-grid {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
   min-height: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .content-grid--assistant-open {
-  grid-template-columns: minmax(0, 1fr) var(--assistant-width, 400px);
+  /* retained for container modifier matching */
 }
 
 /* While the edge is dragged the webview must not take the pointer: the guest
@@ -687,10 +1137,41 @@ option, optgroup {
 }
 
 .webview-stack {
-  position: relative;
+  flex: 1;
   min-width: 0;
   min-height: 0;
+  position: relative;
   overflow: hidden;
+}
+
+/* Assistant Sidebar Animated Container */
+.assistant-sidebar-container {
+  width: var(--assistant-width, 400px);
+  min-width: 0;
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, visibility 0.3s;
+}
+
+.assistant-sidebar-container--closed {
+  width: 0 !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.assistant-sidebar-container--open {
+  width: var(--assistant-width, 400px);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.content-grid--resizing .assistant-sidebar-container {
+  transition: none !important;
 }
 
 /* WebView Stage */
@@ -738,9 +1219,11 @@ option, optgroup {
 }
 
 .homepage-content {
-  display: grid;
-  justify-items: center;
-  gap: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   max-width: 920px;
   animation: homepage-enter 460ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
   transition: filter 240ms ease, opacity 240ms ease, transform 240ms ease;
@@ -753,19 +1236,49 @@ option, optgroup {
   transform: scale(0.975);
 }
 
-.homepage-content p {
-  max-width: 760px;
+.homepage-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.homepage-hero-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.homepage-hero-logo {
+  color: rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.35));
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.homepage-hero-title {
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2rem, 4.3vw, 4.8rem);
+  font-size: clamp(4.2rem, 9.5vw, 7.2rem);
   font-weight: 400;
-  letter-spacing: -0.045em;
-  line-height: 1.06;
-  text-align: center;
-  text-wrap: balance;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 4px 28px rgba(0, 0, 0, 0.5);
+}
+
+.homepage-hero-subtitle {
+  margin: 12px 0 0;
+  font-family: 'Trebuchet MS', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: clamp(10.5px, 1.15vw, 12.5px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .homepage-start-button {
+  margin-top: 34px;
   display: inline-flex;
   align-items: center;
   gap: 12px;
@@ -823,7 +1336,7 @@ option, optgroup {
   background: rgba(26, 29, 29, 0.96);
   box-shadow: 0 28px 72px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
   transform: translate(-50%, -50%);
-  animation: search-popup-enter 200ms ease-out both;
+  animation: search-popup-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .homepage-search-backdrop {
@@ -832,10 +1345,10 @@ option, optgroup {
   z-index: 1;
   padding: 0;
   border: 0;
-  background: rgba(3, 8, 6, 0.28);
+  background: rgba(3, 8, 6, 0.35);
   cursor: default;
   backdrop-filter: blur(9px) saturate(0.78);
-  animation: homepage-backdrop-enter 200ms ease-out both;
+  animation: homepage-backdrop-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .homepage-search-popup form {
@@ -941,20 +1454,22 @@ option, optgroup {
 @keyframes search-popup-enter {
   from {
     opacity: 0;
-    transform: translate(-50%, -46%);
+    transform: translate(-50%, -46%) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
 @keyframes homepage-backdrop-enter {
   from {
     opacity: 0;
+    backdrop-filter: blur(0px);
   }
   to {
     opacity: 1;
+    backdrop-filter: blur(9px) saturate(0.78);
   }
 }
 
@@ -1016,6 +1531,9 @@ option, optgroup {
    surfaces, however, are the browser's own greys — the panel is part of the
    window, not a differently-coloured app pinned to its side. */
 .assistant-panel {
+  width: var(--assistant-width, 400px);
+  min-width: var(--assistant-width, 400px);
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1025,6 +1543,19 @@ option, optgroup {
   letter-spacing: -0.006em;
   background: #1a1d1f;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.assistant-sidebar-container--closed .assistant-panel {
+  transform: translateX(28px);
+}
+
+.assistant-sidebar-container--open .assistant-panel {
+  transform: translateX(0);
+}
+
+.content-grid--resizing .assistant-panel {
+  transition: none !important;
 }
 
 /* Drag edge, sitting on the panel's own border so it reads as the seam between
@@ -2089,11 +2620,11 @@ option, optgroup {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.28s ease;
 }
 
 .analysis-drawer-overlay--open {
@@ -2120,7 +2651,7 @@ option, optgroup {
     -12px 0 60px rgba(0, 0, 0, 0.7),
     -2px 0 20px rgba(251, 191, 36, 0.03);
   transform: translateX(100%);
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2845,9 +3376,10 @@ option, optgroup {
   will-change: transform, opacity;
 }
 
-/* Make solar system expand, spin rapidly, and fade out during transitioning */
+/* Solar system during transition: keep centered, particles continue orbiting smoothly, then fades out */
 .startup-screen--transitioning .solar-system {
-  animation: solarTransition 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: solarFadeOut 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
 }
 
 .orbit {
@@ -2923,22 +3455,26 @@ option, optgroup {
   background: radial-gradient(circle, #fca5a5, #fbbf24);
 }
 
-/* Smoothly change border-color and scale up planets, avoiding keyframe resets & reflows */
+/* Hyper-acceleration particle orbiting during transition */
 .startup-screen--transitioning .orbit--1 {
-  border-color: rgba(52, 211, 153, 0.6);
+  border-color: rgba(52, 211, 153, 0.7);
+  animation: spinOrbit1 1.4s linear infinite;
 }
 
 .startup-screen--transitioning .orbit--2 {
-  border-color: rgba(138, 180, 248, 0.6);
+  border-color: rgba(138, 180, 248, 0.7);
+  animation: spinOrbit2 1.8s linear infinite;
 }
 
 .startup-screen--transitioning .orbit--3 {
-  border-color: rgba(251, 191, 36, 0.6);
+  border-color: rgba(251, 191, 36, 0.7);
+  animation: spinOrbit3 2.2s linear infinite;
 }
 
 .startup-screen--transitioning .planet {
-  transform: scale(2.2) translateZ(0);
-  box-shadow: 0 0 30px currentColor;
+  transform: scale(1.6) translateZ(0);
+  box-shadow: 0 0 25px currentColor;
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* Base spins */
@@ -2993,65 +3529,62 @@ option, optgroup {
   transform: translate3d(-50%, 50%, 0) scale(0.8);
 }
 
-/* Explosion of the Orb */
+/* Planet orb during transition: stays at scale(1) without zooming into the planet, then smoothly fades */
 .startup-screen--transitioning .defense-orb {
-  animation: orbExplode 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
+  animation: orbFadeOut 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
   backface-visibility: hidden;
 }
 
-/* The orb grows to 5× here. Anything textured or blurred inside it would have
-   to be re-rastered at every step of that growth, which is exactly where the
-   frame budget went. None of it is legible at that scale anyway, so the
-   decoration is switched off for the duration and the explosion gets the
-   whole frame to itself. */
-.startup-screen--transitioning .defense-orb::before,
-.startup-screen--transitioning .defense-orb::after,
-.startup-screen--transitioning .orb-shade--belt,
-.startup-screen--transitioning .orb-shade--glow,
+.startup-screen--transitioning .defense-orb-img {
+  backface-visibility: hidden;
+}
+
+/* Fading background layers smoothly during transition */
 .startup-screen--transitioning .aurora-layer,
 .startup-screen--transitioning .orb-wrap::before {
   animation: none;
   opacity: 0;
   filter: none;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.8s ease 0.6s;
 }
 
 .startup-screen--transitioning .grain-layer {
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.8s ease 0.6s;
 }
 
-@keyframes orbExplode {
+@keyframes orbFadeOut {
   0% {
-    transform: scale(1) translate3d(0, 0, 0);
     opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
   }
 
-  60% {
+  65% {
     opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
   }
 
   100% {
-    transform: scale(5) translate3d(0, 0, 0);
     opacity: 0;
+    transform: scale(1) translate3d(0, 0, 0);
   }
 }
 
-@keyframes solarTransition {
+@keyframes solarFadeOut {
   0% {
     opacity: 0.85;
-    transform: scale(1) rotateZ(0deg) translateZ(0px);
+    transform: scale(1) translateZ(0);
   }
-  15% {
+
+  65% {
     opacity: 1;
+    transform: scale(1) translateZ(0);
   }
-  85% {
-    opacity: 1;
-  }
+
   100% {
     opacity: 0;
-    transform: scale(2.0) rotateZ(360deg) translateZ(180px);
+    transform: scale(1) translateZ(0);
   }
 }
 
@@ -4086,14 +4619,14 @@ option, optgroup {
 .oc-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
   padding: 20px;
-  animation: ocFadeIn 0.15s ease-out;
+  animation: ocFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -4104,12 +4637,12 @@ option, optgroup {
   max-height: 88vh;
   background: #141414;
   border: 1px solid #262626;
-  border-radius: 10px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: ocScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ocScaleUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .oc-header-bar {
@@ -4580,13 +5113,70 @@ option, optgroup {
 
 /* Modal Animations */
 @keyframes ocFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+  }
 }
 
 @keyframes ocScaleUp {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+@keyframes modalDialogScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes menuPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 

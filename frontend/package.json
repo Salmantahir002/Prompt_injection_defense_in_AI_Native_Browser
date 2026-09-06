@@ -1,5 +1,6 @@
 {
-  "name": "prompt-defense-browser",
+  "name": "orbit-browser",
+  "description": "Orbit: Agentic AI Browser with Prompt Defense",
   "private": true,
   "version": "0.1.0",
   "type": "module",

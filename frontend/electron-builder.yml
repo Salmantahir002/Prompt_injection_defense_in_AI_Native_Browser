@@ -17,8 +17,8 @@
 # `npm ci --omit=dev` inside ../backend-node before `npm run package` so only
 # fastify/pino/cheerio/@sinclair/typebox/dotenv are copied.
 
-appId: com.promptguard.browser
-productName: PromptGuard
+appId: com.orbit.browser
+productName: Orbit
 
 directories:
   output: release

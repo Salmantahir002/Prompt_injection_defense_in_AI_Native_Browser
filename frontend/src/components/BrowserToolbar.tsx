@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { normalizeUrl } from '../services/urlUtils'
+import { BrowserLogo } from './BrowserLogo'
 
 type BrowserToolbarProps = {
   addressValue: string
@@ -7,34 +8,39 @@ type BrowserToolbarProps = {
   currentUrl: string
   isLoading: boolean
   isScanning: boolean
+  isBookmarked?: boolean
   onAddressChange: (value: string) => void
   onAssistantToggle: () => void
   onBack: () => void
   onForward: () => void
   onNavigate: (url: string) => void
   onReload: () => void
+  onStop?: () => void
   onScanPage: () => void
+  onToggleBookmark?: () => void
 }
 
 function BackIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
     </svg>
   )
 }
 
 function ForwardIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
     </svg>
   )
 }
 
 function ReloadIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="23 4 23 10 17 10" />
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
     </svg>
@@ -43,34 +49,53 @@ function ReloadIcon() {
 
 function StopIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   )
 }
 
-function LockIcon() {
+function SearchMagnifierIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  )
+}
+
+function StarOutlineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+
+function StarFilledIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="#8ab4f8" stroke="#8ab4f8" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   )
 }
 
 function ShieldIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   )
 }
 
-function SparklesIcon() {
+
+function BraveMenuIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
     </svg>
   )
 }
@@ -80,13 +105,16 @@ export function BrowserToolbar({
   assistantOpen,
   isLoading,
   isScanning,
+  isBookmarked = false,
   onAddressChange,
   onAssistantToggle,
   onBack,
   onForward,
   onNavigate,
   onReload,
+  onStop,
   onScanPage,
+  onToggleBookmark,
 }: BrowserToolbarProps) {
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -104,45 +132,81 @@ export function BrowserToolbar({
 
   return (
     <div className="toolbar-row" aria-label="Browser toolbar">
-      <nav className="toolbar-actions" style={{ marginRight: 4 }}>
+      <nav className="toolbar-nav-group" aria-label="Navigation controls">
         <button className="nav-btn" type="button" onClick={onBack} aria-label="Back">
           <BackIcon />
         </button>
         <button className="nav-btn" type="button" onClick={onForward} aria-label="Forward">
           <ForwardIcon />
         </button>
-        <button className="nav-btn" type="button" onClick={onReload} aria-label={isLoading ? 'Stop' : 'Reload'}>
+        <button
+          className={`nav-btn ${isLoading ? 'nav-btn--loading' : ''}`}
+          type="button"
+          onClick={isLoading ? (onStop ?? onReload) : onReload}
+          aria-label={isLoading ? 'Stop loading this page' : 'Reload this page'}
+          title={isLoading ? 'Stop loading this page' : 'Reload this page'}
+        >
           {isLoading ? <StopIcon /> : <ReloadIcon />}
         </button>
       </nav>
 
       <form className="address-form" onSubmit={handleSubmit}>
-        <span className="lock-icon"><LockIcon /></span>
+        <span className="omnibox-search-icon" aria-hidden="true">
+          <SearchMagnifierIcon />
+        </span>
         <input
-          aria-label="URL"
+          aria-label="Address and search bar"
           className="address-input"
           spellCheck={false}
-          placeholder="Search or enter URL"
+          placeholder="Search Google or type a URL"
           value={addressValue}
           onChange={(event) => onAddressChange(event.target.value)}
         />
-        <button className="go-button" type="submit">Go</button>
+        {onToggleBookmark ? (
+          <button
+            type="button"
+            className={`omnibox-star-btn ${isBookmarked ? 'omnibox-star-btn--active' : ''}`}
+            onClick={onToggleBookmark}
+            title={isBookmarked ? 'Bookmark added for this tab' : 'Bookmark this tab'}
+            aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this tab'}
+          >
+            {isBookmarked ? <StarFilledIcon /> : <StarOutlineIcon />}
+          </button>
+        ) : null}
       </form>
 
-      <div className="toolbar-actions">
-        <button className="scan-button" type="button" onClick={onScanPage} disabled={isScanning}>
+      <div className="toolbar-actions-group">
+        <button
+          className={`scan-button ${isScanning ? 'scan-button--scanning' : ''}`}
+          type="button"
+          onClick={onScanPage}
+          disabled={isScanning}
+          title="Scan page for prompt injection attacks"
+          aria-label="Scan page"
+        >
           <ShieldIcon />
-          {isScanning ? 'Scanning Page...' : 'Scan Page'}
+          <span>{isScanning ? 'Scanning...' : 'Scan'}</span>
         </button>
+
         <button
           className={`assistant-pill ${assistantOpen ? 'assistant-pill--active' : ''}`}
           type="button"
-          aria-label="Toggle Kimo"
+          aria-label="Toggle AI Agent"
           aria-pressed={assistantOpen}
           onClick={onAssistantToggle}
+          title="Toggle AI Agent"
         >
-          <SparklesIcon />
-          Kimo
+          <BrowserLogo size={14} />
+          <span>Ai Agent</span>
+        </button>
+
+        <button
+          className="brave-menu-btn"
+          type="button"
+          aria-label="Customize and control browser"
+          title="Customize and control browser"
+        >
+          <BraveMenuIcon />
         </button>
       </div>
 

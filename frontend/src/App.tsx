@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { AiAssistantSidebar } from './components/AiAssistantSidebar'
+import { BookmarkBar } from './components/BookmarkBar'
 import { BrowserToolbar } from './components/BrowserToolbar'
 import { BrowserWebView, type BrowserWebViewHandle } from './components/BrowserWebView'
+import { BrowserLogo } from './components/BrowserLogo'
 import { PromptAnalysisDetailsPanel } from './components/PromptAnalysisDetailsPanel'
 import { WebpageAnalysisDetailsPanel } from './components/WebpageAnalysisDetailsPanel'
 import { ProviderSettingsModal } from './components/ProviderSettingsModal'
+import { LoadingProgressBar } from './components/LoadingProgressBar'
 import { extractPageContent } from './services/pageContentExtractor'
 import { checkWebpage } from './services/backendApiClient'
 import type { AnalysisDetails } from './types/analysisDetailsTypes'
+import type { BookmarkItem } from './types/bookmarkTypes'
 import type { SecurityCheckResponse, WebpageContent } from './types/securityTypes'
+import { extractDomainForFavicon, getFaviconCandidates, resolveNavigationUrl } from './services/urlUtils'
+import sunSphereImage from './assets/sun-sphere.webp'
 import './styles/layout.css'
 
 const DEFAULT_BROWSER_URL = 'about:blank'
-const HOMEPAGE_TAB_TITLE = 'New Tab'
+const HOMEPAGE_TAB_TITLE = 'New tab'
 
 /** How long to wait for an agent-opened tab's webview to attach: 20 × 150ms. */
 const AGENT_TAB_ATTACH_ATTEMPTS = 20
@@ -31,6 +37,8 @@ type BrowserTab = {
   id: string
   title: string
   url: string
+  favicon?: string
+  isLoading?: boolean
 }
 
 function getTabTitle(url: string) {
@@ -295,7 +303,7 @@ function StartupScreen({
           type="button"
           aria-controls="defense-guide"
           aria-expanded={isGuideOpen}
-          aria-label="How Prompt Defense works"
+          aria-label="How Orbit works"
           onClick={() => setIsGuideOpen((isOpen) => !isOpen)}
         >
           <span aria-hidden="true">?</span>
@@ -303,21 +311,26 @@ function StartupScreen({
       </header>
 
       {isGuideOpen ? (
-        <aside className="startup-guide" id="defense-guide" aria-label="How Prompt Defense works">
-          <h2>How your defense works</h2>
-          <p>Browse normally, then scan a page or ask the Assistant to detect hidden instructions before they can influence your next action.</p>
+        <aside className="startup-guide" id="defense-guide" aria-label="How Orbit works">
+          <h2>How Orbit works</h2>
+          <p>Browse normally, then scan a page or ask the AI Agent to detect hidden instructions before they can influence your next action.</p>
         </aside>
       ) : null}
 
       <section className="welcome-stage" aria-labelledby="welcome-title">
         <h1 id="welcome-title" className="welcome-title">
-          Welcome to Prompt Defense
+          Welcome to Orbit
         </h1>
         <div className="orb-wrap" aria-hidden="true">
           <div className="defense-orb">
-            <span className="orb-shade orb-shade--top" />
-            <span className="orb-shade orb-shade--belt" />
-            <span className="orb-shade orb-shade--glow" />
+            <img
+              src={sunSphereImage}
+              alt=""
+              className="defense-orb-img"
+              draggable={false}
+              decoding="sync"
+              loading="eager"
+            />
           </div>
 
           {/* Solar System Orbits */}
@@ -364,16 +377,70 @@ function readStoredAssistantWidth(): number {
   return Number.isFinite(stored) && stored > 0 ? clampAssistantWidth(stored) : ASSISTANT_DEFAULT_WIDTH
 }
 
+const BOOKMARKS_STORAGE_KEY = 'promptguard.bookmarks'
+
+function readStoredBookmarks(): BookmarkItem[] {
+  try {
+    const stored = window.localStorage.getItem(BOOKMARKS_STORAGE_KEY)
+    if (!stored) return []
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function getFaviconUrl(url: string, explicitFavicon?: string): string | null {
+  const candidates = getFaviconCandidates(url, explicitFavicon)
+  return candidates.length > 0 ? candidates[0] : null
+}
+
+function AsteriskTabIcon() {
+  return <BrowserLogo size={14} className="tab-asterisk-icon" />
+}
+
+function TabFaviconContent({ url, favicon }: { url: string; favicon?: string }) {
+  const [candidateIndex, setCandidateIndex] = useState(0)
+  const candidates = getFaviconCandidates(url, favicon)
+  const activeSrc = candidates[candidateIndex]
+
+  if (!activeSrc || candidateIndex >= candidates.length) {
+    return <AsteriskTabIcon />
+  }
+
+  return (
+    <img
+      src={activeSrc}
+      alt=""
+      className="tab-favicon-img"
+      onError={() => setCandidateIndex((prev) => prev + 1)}
+    />
+  )
+}
+
+function TabIcon({ url, favicon }: { url: string; favicon?: string }) {
+  return <TabFaviconContent key={`${url}::${favicon || ''}`} url={url} favicon={favicon} />
+}
+
+function TabSpinner() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="tab-spinner" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="rgba(255, 255, 255, 0.18)" />
+      <path d="M12 3a9 9 0 0 1 9 9" stroke="#8ab4f8" />
+    </svg>
+  )
+}
+
 function BrowserShell() {
   const webviewHandlesRef = useRef(new Map<string, BrowserWebViewHandle>())
+  const loadingWatchdogsRef = useRef<Map<string, number>>(new Map())
   const nextTabId = useRef(2)
   const [tabs, setTabs] = useState<BrowserTab[]>([
-    { id: 'tab-1', title: HOMEPAGE_TAB_TITLE, url: DEFAULT_BROWSER_URL },
+    { id: 'tab-1', title: HOMEPAGE_TAB_TITLE, url: DEFAULT_BROWSER_URL, isLoading: false },
   ])
   const [activeTabId, setActiveTabId] = useState('tab-1')
   const [currentUrl, setCurrentUrl] = useState(DEFAULT_BROWSER_URL)
   const [addressValue, setAddressValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [assistantWidth, setAssistantWidth] = useState(readStoredAssistantWidth)
   const [isResizingAssistant, setIsResizingAssistant] = useState(false)
@@ -387,35 +454,151 @@ function BrowserShell() {
   const [webpageScanContent, setWebpageScanContent] = useState<WebpageContent | null>(null)
   const [isScanningPage, setIsScanningPage] = useState(false)
   const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false)
-  // Resolved lazily: the webview only has a webContents id once it attaches.
   const [activeTargetId, setActiveTargetId] = useState<number | null>(null)
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>(readStoredBookmarks)
 
-  const updateTabUrl = useCallback((tabId: string, url: string) => {
-    setTabs((previousTabs) => previousTabs.map((tab) => (
-      tab.id === tabId ? { ...tab, title: getTabTitle(url), url } : tab
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks))
+    } catch (err) {
+      console.error('[bookmarks] failed to persist:', err)
+    }
+  }, [bookmarks])
+
+  const handleAddBookmark = useCallback((title: string, url: string) => {
+    const resolvedUrl = resolveNavigationUrl(url)
+    setBookmarks((prev) => {
+      if (prev.some((b) => b.url === resolvedUrl)) return prev
+      return [
+        ...prev,
+        {
+          id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title,
+          url: resolvedUrl,
+          favicon: getFaviconUrl(resolvedUrl) || undefined,
+          createdAt: Date.now(),
+        },
+      ]
+    })
+  }, [])
+
+  const handleEditBookmark = useCallback((id: string, title: string, url: string) => {
+    const resolvedUrl = resolveNavigationUrl(url)
+    setBookmarks((prev) => prev.map((b) => (
+      b.id === id ? { ...b, title, url: resolvedUrl, favicon: getFaviconUrl(resolvedUrl) || b.favicon } : b
     )))
   }, [])
 
+  const handleDeleteBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => prev.filter((b) => b.id !== id))
+  }, [])
+
+  const handleToggleBookmarkCurrentPage = useCallback(() => {
+    if (!currentUrl || currentUrl === DEFAULT_BROWSER_URL) return
+    const activeTab = tabs.find((t) => t.id === activeTabId)
+    const activeTitle = activeTab?.title || HOMEPAGE_TAB_TITLE
+    const activeFavicon = activeTab?.favicon || getFaviconUrl(currentUrl) || undefined
+
+    setBookmarks((prev) => {
+      const existing = prev.find((b) => b.url === currentUrl)
+      if (existing) {
+        return prev.filter((b) => b.id !== existing.id)
+      }
+      return [
+        ...prev,
+        {
+          id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: activeTitle,
+          url: currentUrl,
+          favicon: activeFavicon,
+          createdAt: Date.now(),
+        },
+      ]
+    })
+  }, [activeTabId, currentUrl, tabs])
+
+  const isCurrentUrlBookmarked = bookmarks.some(
+    (b) => b.url === currentUrl && currentUrl !== DEFAULT_BROWSER_URL
+  )
+
+  const updateTabUrl = useCallback((tabId: string, url: string, title?: string, favicon?: string) => {
+    setTabs((previousTabs) => previousTabs.map((tab) => {
+      if (tab.id !== tabId) return tab
+      const nextTitle = title || (url === DEFAULT_BROWSER_URL ? HOMEPAGE_TAB_TITLE : getTabTitle(url))
+      const domain = extractDomainForFavicon(url)
+      const domainFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined
+      const nextFavicon = favicon || (url === tab.url ? tab.favicon : domainFavicon) || domainFavicon
+      return { ...tab, title: nextTitle, url, favicon: nextFavicon }
+    }))
+  }, [])
+
+  const handleTabFaviconChange = useCallback((tabId: string, favicon: string) => {
+    setTabs((previousTabs) => previousTabs.map((tab) => (
+      tab.id === tabId ? { ...tab, favicon } : tab
+    )))
+  }, [])
+
+  const handleTabTitleChange = useCallback((tabId: string, title: string) => {
+    setTabs((previousTabs) => previousTabs.map((tab) => (
+      tab.id === tabId ? { ...tab, title } : tab
+    )))
+  }, [])
+
+  const handleWebViewLoadingChange = useCallback((tabId: string, loading: boolean) => {
+    const existingTimer = loadingWatchdogsRef.current.get(tabId)
+    if (existingTimer) {
+      window.clearTimeout(existingTimer)
+      loadingWatchdogsRef.current.delete(tabId)
+    }
+
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isLoading: loading } : t)))
+
+    if (loading) {
+      // Safety watchdog: ensure loading state never hangs permanently (e.g. background websockets/streaming)
+      const timer = window.setTimeout(() => {
+        loadingWatchdogsRef.current.delete(tabId)
+        setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, isLoading: false } : t)))
+      }, 8000)
+      loadingWatchdogsRef.current.set(tabId, timer)
+    }
+  }, [])
+
+  const handleReload = useCallback(() => {
+    handleWebViewLoadingChange(activeTabId, true)
+    webviewHandlesRef.current.get(activeTabId)?.reload()
+  }, [activeTabId, handleWebViewLoadingChange])
+
+  const handleStop = useCallback(() => {
+    webviewHandlesRef.current.get(activeTabId)?.stop()
+    handleWebViewLoadingChange(activeTabId, false)
+  }, [activeTabId, handleWebViewLoadingChange])
+
   const handleNavigate = useCallback((url: string) => {
-    setCurrentUrl(url)
-    setAddressValue(url)
-    updateTabUrl(activeTabId, url)
-    webviewHandlesRef.current.get(activeTabId)?.loadURL(url)
-  }, [activeTabId, updateTabUrl])
+    let resolved: string
+    try {
+      resolved = resolveNavigationUrl(url)
+    } catch {
+      resolved = url
+    }
+    const domain = extractDomainForFavicon(resolved)
+    const initialFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined
+
+    setCurrentUrl(resolved)
+    setAddressValue(resolved === DEFAULT_BROWSER_URL ? '' : resolved)
+    updateTabUrl(activeTabId, resolved, undefined, initialFavicon)
+    handleWebViewLoadingChange(activeTabId, true)
+    webviewHandlesRef.current.get(activeTabId)?.loadURL(resolved)
+  }, [activeTabId, handleWebViewLoadingChange, updateTabUrl])
 
   const handleWebViewNavigate = useCallback((tabId: string, url: string) => {
-    updateTabUrl(tabId, url)
+    const domain = extractDomainForFavicon(url)
+    const initialFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined
+    updateTabUrl(tabId, url, undefined, initialFavicon)
     if (tabId === activeTabId) {
       setCurrentUrl(url)
       setAddressValue(url === DEFAULT_BROWSER_URL ? '' : url)
     }
   }, [activeTabId, updateTabUrl])
-
-  const handleWebViewLoadingChange = useCallback((tabId: string, loading: boolean) => {
-    if (tabId === activeTabId) {
-      setIsLoading(loading)
-    }
-  }, [activeTabId])
 
   const handleWebViewSearch = useCallback((tabId: string, query: string) => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`
@@ -439,7 +622,6 @@ function BrowserShell() {
     setActiveTabId(tab.id)
     setCurrentUrl(tab.url)
     setAddressValue(tab.url === DEFAULT_BROWSER_URL ? '' : tab.url)
-    setIsLoading(false)
   }, [])
 
   const handleNewTab = useCallback(() => {
@@ -449,6 +631,26 @@ function BrowserShell() {
       url: DEFAULT_BROWSER_URL,
     }
 
+    setTabs((previousTabs) => [...previousTabs, tab])
+    handleSelectTab(tab)
+  }, [handleSelectTab])
+
+  const handleOpenBookmarkInNewTab = useCallback((url: string) => {
+    let resolved: string
+    try {
+      resolved = resolveNavigationUrl(url)
+    } catch {
+      resolved = url
+    }
+    const domain = extractDomainForFavicon(resolved)
+    const initialFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined
+
+    const tab: BrowserTab = {
+      id: `tab-${nextTabId.current++}`,
+      title: resolved === DEFAULT_BROWSER_URL ? HOMEPAGE_TAB_TITLE : getTabTitle(resolved),
+      url: resolved,
+      favicon: initialFavicon,
+    }
     setTabs((previousTabs) => [...previousTabs, tab])
     handleSelectTab(tab)
   }, [handleSelectTab])
@@ -464,11 +666,15 @@ function BrowserShell() {
    * that never appeared.
    */
   const handleAgentOpenTab = useCallback(async (url?: string): Promise<number | null> => {
-    const tabUrl = url ?? DEFAULT_BROWSER_URL
+    const tabUrl = url ? resolveNavigationUrl(url) : DEFAULT_BROWSER_URL
+    const domain = extractDomainForFavicon(tabUrl)
+    const initialFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : undefined
+
     const tab: BrowserTab = {
       id: `tab-${nextTabId.current++}`,
       title: tabUrl === DEFAULT_BROWSER_URL ? HOMEPAGE_TAB_TITLE : getTabTitle(tabUrl),
       url: tabUrl,
+      favicon: initialFavicon,
     }
 
     setTabs((previousTabs) => [...previousTabs, tab])
@@ -583,41 +789,60 @@ function BrowserShell() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Cleanup loading watchdog timers on unmount
+  useEffect(() => {
+    const watchdogs = loadingWatchdogsRef.current
+    return () => {
+      watchdogs.forEach((timer) => window.clearTimeout(timer))
+      watchdogs.clear()
+    }
+  }, [])
+
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+  const isCurrentTabLoading = Boolean(activeTab?.isLoading)
+
   return (
     <main className="browser-shell">
       {/* Tab Strip */}
       <div className="tab-strip" role="tablist" aria-label="Browser tabs">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            aria-selected={tab.id === activeTabId}
-            className={`tab ${tab.id === activeTabId ? 'active-tab' : ''}`}
-            onClick={() => handleSelectTab(tab)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                handleSelectTab(tab)
-              }
-            }}
-            role="tab"
-            tabIndex={tab.id === activeTabId ? 0 : -1}
-          >
-            <span className="tab-dot" />
-            <span className="tab-title">{tab.title}</span>
-            <button
-              className="tab-close-btn"
-              type="button"
-              aria-label={`Close ${tab.title}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                handleCloseTab(tab.id)
+        <div className="tab-strip-items">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              aria-selected={tab.id === activeTabId}
+              className={`tab ${tab.id === activeTabId ? 'active-tab' : ''}`}
+              onClick={() => handleSelectTab(tab)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  handleSelectTab(tab)
+                }
               }}
+              role="tab"
+              tabIndex={tab.id === activeTabId ? 0 : -1}
             >
-              ✕
-            </button>
-          </div>
-        ))}
-        <button className="new-tab-btn" type="button" aria-label="New tab" onClick={handleNewTab}>+</button>
+              {tab.isLoading ? (
+                <TabSpinner />
+              ) : (
+                <TabIcon url={tab.url} favicon={tab.favicon} />
+              )}
+              <span className="tab-title">{tab.title}</span>
+              <button
+                className="tab-close-btn"
+                type="button"
+                aria-label={`Close ${tab.title}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleCloseTab(tab.id)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button className="new-tab-btn" type="button" aria-label="New tab" onClick={handleNewTab}>+</button>
+        </div>
+        <div className="tab-strip-drag-region" aria-hidden="true" />
       </div>
 
       {/* Browser Frame */}
@@ -626,16 +851,30 @@ function BrowserShell() {
           addressValue={addressValue}
           assistantOpen={assistantOpen}
           currentUrl={currentUrl}
-          isLoading={isLoading}
+          isLoading={isCurrentTabLoading}
           isScanning={isScanningPage}
+          isBookmarked={isCurrentUrlBookmarked}
           onAddressChange={setAddressValue}
           onAssistantToggle={() => setAssistantOpen((isOpen) => !isOpen)}
           onBack={() => webviewHandlesRef.current.get(activeTabId)?.goBack()}
           onForward={() => webviewHandlesRef.current.get(activeTabId)?.goForward()}
           onNavigate={handleNavigate}
-          onReload={() => webviewHandlesRef.current.get(activeTabId)?.reload()}
+          onReload={handleReload}
+          onStop={handleStop}
           onScanPage={handleScanPage}
+          onToggleBookmark={handleToggleBookmarkCurrentPage}
         />
+        <BookmarkBar
+          bookmarks={bookmarks}
+          currentUrl={currentUrl}
+          currentTitle={activeTab?.title || HOMEPAGE_TAB_TITLE}
+          onNavigate={handleNavigate}
+          onOpenInNewTab={handleOpenBookmarkInNewTab}
+          onAddBookmark={handleAddBookmark}
+          onEditBookmark={handleEditBookmark}
+          onDeleteBookmark={handleDeleteBookmark}
+        />
+        <LoadingProgressBar isLoading={isCurrentTabLoading} />
         <div
           className={`content-grid ${assistantOpen ? 'content-grid--assistant-open' : ''} ${isResizingAssistant ? 'content-grid--resizing' : ''}`}
           style={{ '--assistant-width': `${assistantWidth}px` } as CSSProperties}
@@ -651,11 +890,16 @@ function BrowserShell() {
                 tabId={tab.id}
                 onLoadingChange={handleWebViewLoadingChange}
                 onNavigate={handleWebViewNavigate}
+                onFaviconChange={handleTabFaviconChange}
+                onTitleChange={handleTabTitleChange}
                 onSearch={handleWebViewSearch}
               />
             ))}
           </div>
-          {assistantOpen ? (
+          <div
+            className={`assistant-sidebar-container ${assistantOpen ? 'assistant-sidebar-container--open' : 'assistant-sidebar-container--closed'}`}
+            aria-hidden={!assistantOpen}
+          >
             <AiAssistantSidebar
               activeTargetId={activeTargetId}
               activeTabTitle={tabs.find((tab) => tab.id === activeTabId)?.title}
@@ -667,7 +911,7 @@ function BrowserShell() {
               onWidthChange={handleAssistantWidthChange}
               width={assistantWidth}
             />
-          ) : null}
+          </div>
         </div>
       </div>
 
