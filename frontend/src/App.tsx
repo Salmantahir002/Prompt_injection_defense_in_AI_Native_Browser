@@ -348,10 +348,6 @@ function StartupScreen({
         </div>
         <SlideStartButton onStart={onStart} />
       </section>
-
-      <p className="terms-copy">
-        By continuing, you agree to the Terms of Service and Privacy Policy
-      </p>
     </main>
   )
 }
