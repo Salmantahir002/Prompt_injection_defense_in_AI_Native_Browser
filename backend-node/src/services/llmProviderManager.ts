@@ -4,6 +4,9 @@
 // assumed as default.
 import { ProviderGateway, type ModelInfo, type ProviderConfig } from './llmGateways/base.js'
 import { createGateway } from './llmGateways/factory.js'
+import { GeminiGateway } from './llmGateways/gemini.js'
+import { extractDocumentContent } from './documentTextExtractor.js'
+
 
 export interface TestConnectionResult {
   success: boolean
@@ -22,6 +25,12 @@ export interface ChatResponse {
 export class LlmProviderManager {
   private activeConfig: ProviderConfig | null = null
   private activeGateway: ProviderGateway | null = null
+  private configuredProviders: ProviderConfig[] = []
+
+  /** Register all known configured providers for fallback operations like audio transcription. */
+  setConfiguredProviders(configs: ProviderConfig[]): void {
+    this.configuredProviders = configs
+  }
 
   /** Check if a custom provider is active with a valid API key. */
   get isConfigured(): boolean {
@@ -89,8 +98,16 @@ export class LlmProviderManager {
     pageContent?: string
     model?: string
     history?: Array<{ role: string; content: string }>
+    attachments?: Array<{
+      name: string
+      type: string
+      data: string
+      isImage: boolean
+      size?: number
+      textContent?: string
+    }>
   }): Promise<ChatResponse> {
-    const { prompt, pageUrl, pageTitle, pageContent, model, history } = params
+    const { prompt, pageUrl, pageTitle, pageContent, model, history, attachments } = params
 
     const systemMessage =
       'You are Kimo, an intelligent, helpful, and concise AI assistant embedded inside an AI-native web browser. ' +
@@ -99,6 +116,35 @@ export class LlmProviderManager {
       "If webpage context is provided, rely on it to directly and accurately answer the user's questions."
 
     let userContent = prompt
+
+    // Incorporate any document and text file attachments into user prompt grounding
+    if (attachments && attachments.length > 0) {
+      const fileSummaries: string[] = []
+      for (const att of attachments) {
+        if (!att.isImage) {
+          let text = att.textContent || ''
+          if (!text && att.data) {
+            try {
+              text = extractDocumentContent(att.data, att.name, att.type)
+            } catch (err) {
+              console.warn(`Failed to extract document content for ${att.name}:`, err)
+            }
+          }
+
+          if (text && text.trim()) {
+            fileSummaries.push(
+              `--- ATTACHED FILE: ${att.name} (${att.type || 'document'}) ---\n` +
+              `${text.trim().slice(0, 50000)}\n` +
+              `--- END ATTACHED FILE ---`,
+            )
+          }
+        }
+      }
+      if (fileSummaries.length > 0) {
+        userContent = `${fileSummaries.join('\n\n')}\n\n${userContent}`
+      }
+    }
+
     if (pageContent && pageContent.trim()) {
       const pageInfo: string[] = []
       if (pageTitle) pageInfo.push(`Title: ${pageTitle.trim()}`)
@@ -112,7 +158,7 @@ export class LlmProviderManager {
         `--- BEGIN WEBPAGE CONTENT ---\n` +
         `${trimmedContent}\n` +
         `--- END WEBPAGE CONTENT ---\n\n` +
-        `User Request:\n${prompt}`
+        `User Request:\n${userContent}`
     }
 
     // Sliding window: keep up to the last 20 messages (10 turns) to fit provider context limits
@@ -134,7 +180,9 @@ export class LlmProviderManager {
           model: targetModel,
           temperature: 0.5,
           maxTokens: 1536,
+          attachments,
         })
+
         return {
           response: result.response,
           model: result.model,
@@ -169,12 +217,15 @@ export class LlmProviderManager {
     }
 
     throw new Error(
-      'No LLM provider is currently active. Please configure and activate a provider (OpenAI, Gemini, Anthropic, OpenCode Zen, OpenRouter, TokenRouter, NaraRouter, OpenAdapter, NVIDIA, Cloudflare, or Custom) in Settings.',
+      'No LLM provider is currently active. Please configure and activate a provider in Settings.',
     )
   }
 
+
+
   /** Return a response when no AI provider is configured. */
   placeholderResponse(prompt: string): ChatResponse {
+
     const wordCount = prompt.split(/\s+/).filter(Boolean).length
     return {
       response:

@@ -9,7 +9,11 @@ import llmRoutes from './routes/llm.routes.js'
 import providerRoutes from './routes/providers.routes.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: fastifyLoggerOptions })
+  const app = Fastify({
+    logger: fastifyLoggerOptions,
+    bodyLimit: 50 * 1024 * 1024, // 50 MB to allow images and file uploads
+  })
+
 
   await app.register(cors, {
     origin: settings.CORS_ALLOWED_ORIGINS,

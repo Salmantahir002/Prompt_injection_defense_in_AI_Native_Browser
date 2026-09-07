@@ -72,20 +72,60 @@ export class AnthropicGateway extends ProviderGateway {
 
   async chatCompletion(
     messages: Array<{ role: string; content: string }>,
-    options: { model?: string | null; temperature?: number; maxTokens?: number } = {},
+    options: {
+      model?: string | null
+      temperature?: number
+      maxTokens?: number
+      attachments?: Array<{ name: string; type: string; data: string; isImage: boolean }>
+    } = {},
   ): Promise<ChatResult> {
     const targetModel = options.model || this.config.selected_model || 'claude-3-5-sonnet-20241022'
     const headers = this.headers()
     const url = `${this.baseUrl}/messages`
 
     const systemPrompts: string[] = []
-    const anthropicMessages: Array<{ role: string; content: string }> = []
-    for (const msg of messages) {
+    const anthropicMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }> = []
+
+    let lastUserIdx = -1
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const cur = messages[i]
+      if (cur && cur.role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (!msg) continue
       if (msg.role === 'system') {
         systemPrompts.push(msg.content)
       } else {
         const role = msg.role === 'assistant' || msg.role === 'model' ? 'assistant' : 'user'
-        anthropicMessages.push({ role, content: msg.content })
+
+
+        if (i === lastUserIdx && options.attachments && options.attachments.some((a) => a.isImage && a.data)) {
+          const blocks: Array<Record<string, unknown>> = []
+          for (const att of options.attachments) {
+            if (att.isImage && att.data) {
+              const match = att.data.match(/^data:([^;]+);base64,(.+)$/)
+              const media_type = match ? match[1] : att.type || 'image/jpeg'
+              const data = match ? match[2] : att.data
+              blocks.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type,
+                  data,
+                },
+              })
+            }
+          }
+          blocks.push({ type: 'text', text: msg.content })
+          anthropicMessages.push({ role, content: blocks })
+        } else {
+          anthropicMessages.push({ role, content: msg.content })
+        }
       }
     }
     if (anthropicMessages.length === 0) anthropicMessages.push({ role: 'user', content: 'Hello' })
@@ -96,6 +136,7 @@ export class AnthropicGateway extends ProviderGateway {
       temperature: options.temperature ?? 0.5,
       messages: anthropicMessages,
     }
+
     if (systemPrompts.length > 0) payload.system = systemPrompts.join('\n\n')
 
     const maxRetries = 3

@@ -303,5 +303,85 @@ describe('provider manager', () => {
     const models = await gw.listModels()
     expect(models[0].id).toBe('z-ai/glm-5.3-free')
   })
+
+  it('correctly includes image attachments in Gemini generateContent payload', async () => {
+    let capturedBody: any = null
+    const fetchMock = vi.fn(async (_url: any, init: any) => {
+      capturedBody = JSON.parse(init.body)
+      return jsonResponse({
+        candidates: [{ content: { parts: [{ text: 'Here is the image description' }] } }],
+        usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 20 },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const gemini = new GeminiGateway(
+      defaultProviderConfig({
+        id: 'gemini',
+        name: 'Google Gemini',
+        api_key: 'test-key',
+      }),
+    )
+
+    const result = await gemini.chatCompletion([{ role: 'user', content: 'What is in this picture?' }], {
+      attachments: [
+        {
+          name: 'test.png',
+          type: 'image/png',
+          data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          isImage: true,
+        },
+      ],
+    })
+
+    expect(result.response).toBe('Here is the image description')
+    expect(capturedBody.contents[0].parts).toHaveLength(2)
+    expect(capturedBody.contents[0].parts[1].inlineData).toEqual({
+      mimeType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    })
+  })
+
+  it('correctly includes text file attachments in LlmProviderManager.chat context', async () => {
+    const manager = new LlmProviderManager()
+    let capturedMessages: any = null
+
+    const mockGateway = {
+      chatCompletion: vi.fn(async (messages: any) => {
+        capturedMessages = messages
+        return {
+          response: 'Code reviewed successfully',
+          model: 'gemini-1.5-flash',
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }
+      }),
+    } as any
+
+    ;(manager as any).activeGateway = mockGateway
+    ;(manager as any).activeConfig = {
+      id: 'gemini',
+      name: 'Google Gemini',
+      api_key: 'test-key',
+      selected_model: 'gemini-1.5-flash',
+    }
+
+    await manager.chat({
+      prompt: 'Review this script',
+      attachments: [
+        {
+          name: 'test.py',
+          type: 'text/x-python',
+          data: '',
+          isImage: false,
+          textContent: 'print("hello world")',
+        },
+      ],
+    })
+
+    const userMessage = capturedMessages.find((m: any) => m.role === 'user')
+    expect(userMessage.content).toContain('--- ATTACHED FILE: test.py')
+    expect(userMessage.content).toContain('print("hello world")')
+  })
 })
+
 

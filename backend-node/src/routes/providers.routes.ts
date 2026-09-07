@@ -131,4 +131,13 @@ export default async function providerRoutes(app: FastifyInstance): Promise<void
     { schema: { response: { 200: ActiveProviderInfoSchema } } },
     async () => activeProviderInfo(llmProviderManager.activeProviderConfig),
   )
+
+  app.post<{ Body: { providers: ProviderConfigRequest[] } }>(
+    '/providers/configured',
+    async (request) => {
+      const providers = (request.body?.providers || []).map(toProviderConfig)
+      llmProviderManager.setConfiguredProviders(providers)
+      return { success: true, count: providers.length }
+    },
+  )
 }

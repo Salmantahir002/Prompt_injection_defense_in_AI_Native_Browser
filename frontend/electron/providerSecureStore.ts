@@ -294,10 +294,43 @@ export class ProviderSecureStore {
   }
 
   /**
-   * Synchronize the active provider configuration with the Node backend.
+   * Returns all stored provider configs with decrypted API keys for backend fallback operations.
+   */
+  getAllDecryptedConfigs(): Array<{
+    id: string
+    name: string
+    provider_type: ProviderType
+    base_url?: string
+    api_key: string
+    verify_ssl: boolean
+    selected_model?: string
+  }> {
+    const data = this.load()
+    const result = []
+    for (const stored of Object.values(data.providers)) {
+      const apiKey = this.decryptApiKey(stored.encrypted_api_key)
+      if (apiKey) {
+        result.push({
+          id: stored.id,
+          name: stored.name,
+          provider_type: stored.provider_type,
+          base_url: stored.base_url,
+          api_key: apiKey,
+          verify_ssl: stored.verify_ssl,
+          selected_model: stored.selected_model,
+        })
+      }
+    }
+    return result
+  }
+
+  /**
+   * Synchronize the active provider configuration and all configured providers with the Node backend.
    */
   async syncWithBackend(backendUrl: string = 'http://127.0.0.1:8000/api/v1'): Promise<void> {
     const active = this.getDecryptedActiveConfig()
+    const all = this.getAllDecryptedConfigs()
+
     try {
       if (active) {
         await fetch(`${backendUrl}/providers/active`, {
@@ -311,6 +344,15 @@ export class ProviderSecureStore {
           method: 'DELETE',
         })
         console.log(`[providerSecureStore] Cleared active provider in backend (no provider active)`)
+      }
+
+      if (all.length > 0) {
+        await fetch(`${backendUrl}/providers/configured`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providers: all }),
+        })
+        console.log(`[providerSecureStore] Synced ${all.length} configured provider(s) to backend for audio fallback`)
       }
     } catch (err) {
       console.warn('[providerSecureStore] Backend not reachable for provider sync on startup:', err)

@@ -4,7 +4,12 @@
 // first, but a malicious prompt is rejected here too, never forwarded.
 import type { FastifyInstance } from 'fastify'
 import { ErrorResponseSchema } from '../schemas/common.js'
-import { LlmChatRequestSchema, LlmChatResponseSchema, type LlmChatRequest } from '../schemas/llm.schemas.js'
+import {
+  LlmChatRequestSchema,
+  LlmChatResponseSchema,
+  type LlmChatRequest,
+} from '../schemas/llm.schemas.js'
+
 import { llmProviderManager } from '../services/llmProviderManager.js'
 import { promptClassifier } from '../services/promptClassifierService.js'
 
@@ -37,7 +42,9 @@ export default async function llmRoutes(app: FastifyInstance): Promise<void> {
         pageTitle: request.body.page_title,
         pageContent: request.body.page_content,
         history: request.body.history,
+        attachments: request.body.attachments,
       })
+
 
       return {
         response: result.response,
@@ -47,3 +54,4 @@ export default async function llmRoutes(app: FastifyInstance): Promise<void> {
     },
   )
 }
+

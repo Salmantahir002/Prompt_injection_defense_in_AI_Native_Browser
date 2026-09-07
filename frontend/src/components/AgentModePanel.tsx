@@ -6,15 +6,6 @@ import type { AgentScanDecision, AgentTaskResult, AgentToolCall } from '../types
 import { AgentThreatDetailsModal } from './AgentThreatDetailsModal'
 import { PromptModelPicker } from './PromptModelPicker'
 
-/**
- * Agent mode: give the agent a goal and watch it work.
- *
- * The panel deliberately shows the security verdict for every step rather than
- * only when something goes wrong. The whole point of the architecture is that
- * each page is scanned before the agent touches it, and that guarantee is
- * worth nothing to a user who cannot see it happening.
- */
-
 type StepEntry = {
   id: string
   step: number
@@ -63,6 +54,8 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
   const [blockState, setBlockState] = useState<CircuitBreakerState | null>(null)
   const [approval, setApproval] = useState<ApprovalRequest | null>(null)
   const [showThreatDetails, setShowThreatDetails] = useState(false)
+
+
 
   const abortRef = useRef<AbortController | null>(null)
   const approvalResolverRef = useRef<((granted: boolean) => void) | null>(null)
@@ -295,6 +288,7 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
           )}
         </div>
       </form>
+
 
       {showThreatDetails && blockState?.decision ? (
         <AgentThreatDetailsModal decision={blockState.decision} onClose={() => setShowThreatDetails(false)} />

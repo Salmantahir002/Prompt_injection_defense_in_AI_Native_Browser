@@ -240,7 +240,12 @@ export class OpenAICompatibleGateway extends ProviderGateway {
 
   async chatCompletion(
     messages: Array<{ role: string; content: string }>,
-    options: { model?: string | null; temperature?: number; maxTokens?: number } = {},
+    options: {
+      model?: string | null
+      temperature?: number
+      maxTokens?: number
+      attachments?: Array<{ name: string; type: string; data: string; isImage: boolean }>
+    } = {},
   ): Promise<ChatResult> {
     let targetModel = options.model || this.config.selected_model
     if ((!targetModel || targetModel === 'default') && this.isOpenRouter()) {
@@ -251,12 +256,47 @@ export class OpenAICompatibleGateway extends ProviderGateway {
     const headers = this.headers()
     const url = `${this.baseUrl}/chat/completions`
 
+    let formattedMessages: Array<{ role: string; content: string | Array<Record<string, unknown>> }> = messages
+
+    if (options.attachments && options.attachments.some((a) => a.isImage && a.data)) {
+      let lastUserIdx = -1
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const cur = messages[i]
+        if (cur && cur.role === 'user') {
+          lastUserIdx = i
+          break
+        }
+      }
+
+
+      if (lastUserIdx >= 0) {
+        formattedMessages = messages.map((m, idx) => {
+          if (idx !== lastUserIdx) return m
+
+          const contentArray: Array<Record<string, unknown>> = [{ type: 'text', text: m.content }]
+          for (const att of options.attachments || []) {
+            if (att.isImage && att.data) {
+              const url = att.data.startsWith('data:')
+                ? att.data
+                : `data:${att.type || 'image/jpeg'};base64,${att.data}`
+              contentArray.push({
+                type: 'image_url',
+                image_url: { url },
+              })
+            }
+          }
+          return { role: m.role, content: contentArray }
+        })
+      }
+    }
+
     const payload = {
       model: targetModel,
-      messages,
+      messages: formattedMessages,
       temperature: options.temperature ?? 0.5,
       max_tokens: options.maxTokens ?? 1536,
     }
+
 
     const maxRetries = 3
     let backoff = 1.0

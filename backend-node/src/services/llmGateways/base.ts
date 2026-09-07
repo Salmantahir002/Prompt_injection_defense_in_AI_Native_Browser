@@ -49,6 +49,15 @@ export function defaultProviderConfig(partial: Pick<ProviderConfig, 'id' | 'name
   }
 }
 
+export interface GatewayAttachment {
+  name: string
+  type: string
+  data: string
+  isImage: boolean
+  size?: number
+  textContent?: string
+}
+
 /** Abstract interface that every LLM provider gateway must implement. */
 export abstract class ProviderGateway {
   constructor(public readonly config: ProviderConfig) {}
@@ -75,9 +84,15 @@ export abstract class ProviderGateway {
   /** Send a chat completion request to the provider. */
   abstract chatCompletion(
     messages: Array<{ role: string; content: string }>,
-    options?: { model?: string | null; temperature?: number; maxTokens?: number },
+    options?: {
+      model?: string | null
+      temperature?: number
+      maxTokens?: number
+      attachments?: GatewayAttachment[]
+    },
   ): Promise<ChatResult>
 
   /** Validate whether the credentials and endpoint are working. */
   abstract validateKey(): Promise<boolean>
 }
+

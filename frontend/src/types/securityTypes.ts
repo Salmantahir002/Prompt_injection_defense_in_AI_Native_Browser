@@ -39,6 +39,16 @@ export type ChatHistoryTurn = {
   content: string
 }
 
+export type ChatAttachment = {
+  id: string
+  name: string
+  type: string
+  size: number
+  data: string // data URL or base64 string
+  isImage: boolean
+  textContent?: string
+}
+
 export type WebpageContent = {
   visible_text: string
   hidden_text: string

@@ -60,7 +60,12 @@ export class GeminiGateway extends ProviderGateway {
 
   async chatCompletion(
     messages: Array<{ role: string; content: string }>,
-    options: { model?: string | null; temperature?: number; maxTokens?: number } = {},
+    options: {
+      model?: string | null
+      temperature?: number
+      maxTokens?: number
+      attachments?: Array<{ name: string; type: string; data: string; isImage: boolean }>
+    } = {},
   ): Promise<ChatResult> {
     const targetModel = options.model || this.config.selected_model || 'gemini-1.5-flash'
     const cleanModel = targetModel.replace('models/', '')
@@ -69,15 +74,49 @@ export class GeminiGateway extends ProviderGateway {
 
     const systemPrompts: string[] = []
     const geminiContents: Array<Record<string, unknown>> = []
-    for (const msg of messages) {
+
+    // Locate index of last user message to attach images to
+    let lastUserIdx = -1
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const cur = messages[i]
+      if (cur && cur.role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (!msg) continue
       if (msg.role === 'system') {
         systemPrompts.push(msg.content)
       } else {
         const role = msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user'
-        geminiContents.push({ role, parts: [{ text: msg.content }] })
+        const parts: Array<Record<string, unknown>> = [{ text: msg.content }]
+
+
+        // If this is the last user message and attachments contain images, append inlineData
+        if (i === lastUserIdx && options.attachments && options.attachments.length > 0) {
+          for (const att of options.attachments) {
+            if (att.isImage && att.data) {
+              const match = att.data.match(/^data:([^;]+);base64,(.+)$/)
+              const mimeType = match ? match[1] : att.type || 'image/jpeg'
+              const base64Data = match ? match[2] : att.data
+              parts.push({
+                inlineData: {
+                  mimeType,
+                  data: base64Data,
+                },
+              })
+            }
+          }
+        }
+
+        geminiContents.push({ role, parts })
       }
     }
     if (geminiContents.length === 0) geminiContents.push({ role: 'user', parts: [{ text: 'Hello' }] })
+
 
     const payload: Record<string, unknown> = {
       contents: geminiContents,

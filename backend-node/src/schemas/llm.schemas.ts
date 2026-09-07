@@ -6,6 +6,15 @@ export const LlmHistoryMessageSchema = Type.Object({
   content: Type.String(),
 })
 
+export const LlmAttachmentSchema = Type.Object({
+  name: Type.String(),
+  type: Type.String(),
+  data: Type.String(),
+  isImage: Type.Boolean(),
+  size: Type.Optional(Type.Integer()),
+  textContent: Type.Optional(Type.String()),
+})
+
 export const LlmChatRequestSchema = Type.Object({
   prompt: Type.String(),
   security_check_id: Type.Optional(Type.String()),
@@ -13,7 +22,9 @@ export const LlmChatRequestSchema = Type.Object({
   page_title: Type.Optional(Type.String()),
   page_content: Type.Optional(Type.String()),
   history: Type.Optional(Type.Array(LlmHistoryMessageSchema)),
+  attachments: Type.Optional(Type.Array(LlmAttachmentSchema)),
 })
+
 
 export const LlmUsageSchema = Type.Object({
   prompt_tokens: Type.Integer(),
@@ -28,3 +39,4 @@ export const LlmChatResponseSchema = Type.Object({
 
 export type LlmChatRequest = Static<typeof LlmChatRequestSchema>
 export type LlmChatResponse = Static<typeof LlmChatResponseSchema>
+

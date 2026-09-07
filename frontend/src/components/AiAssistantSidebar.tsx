@@ -4,7 +4,7 @@ import { checkPrompt, chatWithLlm, type ChatPageContext } from '../services/back
 import { extractPageContent } from '../services/pageContentExtractor'
 import type { BrowserWebViewHandle } from './BrowserWebView'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
-import type { ChatHistoryTurn, LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
+import type { ChatAttachment, ChatHistoryTurn, LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
 import { AgentModePanel } from './AgentModePanel'
 import { KimoMascot } from './KimoMascot'
 import { MarkdownMessage } from './MarkdownMessage'
@@ -36,6 +36,7 @@ type ChatMessage = {
   id: string
   sender: 'user' | 'assistant'
   text?: string
+  attachments?: ChatAttachment[]
   securityResult?: SecurityCheckResponse
   llmResponse?: LlmResponse
   errorMessage?: string
@@ -43,6 +44,7 @@ type ChatMessage = {
   pageContextAttached?: boolean
   pageTitle?: string
 }
+
 
 type AiAssistantSidebarProps = {
   onViewDetails?: (details: AnalysisDetails) => void
@@ -185,7 +187,7 @@ export function AiAssistantSidebar({
     }
   }, [messages])
 
-  async function handlePromptSubmit(prompt: string) {
+  async function handlePromptSubmit(prompt: string, attachments?: ChatAttachment[]) {
     const userMsgId = `user-${Date.now()}`
     const assistantMsgId = `assistant-${Date.now()}`
 
@@ -196,6 +198,7 @@ export function AiAssistantSidebar({
         id: userMsgId,
         sender: 'user',
         text: prompt,
+        attachments: attachments && attachments.length > 0 ? attachments : undefined,
         pageContextAttached: isPageContextAttached,
         pageTitle: isPageContextAttached ? (activeTabTitle || 'Current Page') : undefined,
       },
@@ -238,8 +241,9 @@ export function AiAssistantSidebar({
           }
         }
 
-        llmResp = await chatWithLlm(prompt, pageContext, historyTurns)
+        llmResp = await chatWithLlm(prompt, pageContext, historyTurns, attachments)
       }
+
 
       // Update assistant message with result
       setMessages((prev) =>
@@ -521,7 +525,7 @@ export function AiAssistantSidebar({
         <div className="chat-messages">
           {messages.map((msg) => (
             <div key={msg.id} className={`chat-message chat-message--${msg.sender}`}>
-              {msg.sender === 'user' && msg.text ? (
+              {msg.sender === 'user' && (msg.text || (msg.attachments && msg.attachments.length > 0)) ? (
                 <div className="chat-user-message-container">
                   {msg.pageContextAttached ? (
                     <div className="chat-message-context-badge">
@@ -529,9 +533,36 @@ export function AiAssistantSidebar({
                       <span>{msg.pageTitle || 'Page Context'}</span>
                     </div>
                   ) : null}
-                  <div className="chat-bubble chat-bubble--user">{msg.text}</div>
+                  {msg.attachments && msg.attachments.length > 0 ? (
+                    <div className="chat-user-attachments-grid">
+                      {msg.attachments.map((att) =>
+                        att.isImage ? (
+                          <div key={att.id} className="chat-user-image-card">
+                            <img src={att.data} alt={att.name} className="chat-user-img-preview" />
+                            <span className="chat-user-attachment-caption" title={att.name}>
+                              {att.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div key={att.id} className="chat-user-file-card">
+                            <span className="chat-user-file-icon">📄</span>
+                            <div className="chat-user-file-info">
+                              <span className="chat-user-file-name" title={att.name}>
+                                {att.name}
+                              </span>
+                              <span className="chat-user-file-size">
+                                {att.size ? `${Math.round(att.size / 1024)} KB` : 'File'}
+                              </span>
+                            </div>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
+                  {msg.text ? <div className="chat-bubble chat-bubble--user">{msg.text}</div> : null}
                 </div>
               ) : null}
+
 
               {msg.sender === 'assistant' && msg.isChecking ? (
                 <div className="chat-checking">
