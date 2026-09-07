@@ -82,8 +82,15 @@ export class LlmProviderManager {
   }
 
   /** Send a chat prompt to the active LLM provider with webpage grounding. */
-  async chat(params: { prompt: string; pageUrl?: string; pageTitle?: string; pageContent?: string; model?: string }): Promise<ChatResponse> {
-    const { prompt, pageUrl, pageTitle, pageContent, model } = params
+  async chat(params: {
+    prompt: string
+    pageUrl?: string
+    pageTitle?: string
+    pageContent?: string
+    model?: string
+    history?: Array<{ role: string; content: string }>
+  }): Promise<ChatResponse> {
+    const { prompt, pageUrl, pageTitle, pageContent, model, history } = params
 
     const systemMessage =
       'You are Kimo, an intelligent, helpful, and concise AI assistant embedded inside an AI-native web browser. ' +
@@ -108,8 +115,12 @@ export class LlmProviderManager {
         `User Request:\n${prompt}`
     }
 
+    // Sliding window: keep up to the last 20 messages (10 turns) to fit provider context limits
+    const historyTurns = (history || []).slice(-20)
+
     const messages = [
       { role: 'system', content: systemMessage },
+      ...historyTurns,
       { role: 'user', content: userContent },
     ]
 

@@ -34,6 +34,11 @@ export type LlmResponse = {
   usage: Record<string, number>
 }
 
+export type ChatHistoryTurn = {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
 export type WebpageContent = {
   visible_text: string
   hidden_text: string

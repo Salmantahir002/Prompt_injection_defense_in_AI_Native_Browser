@@ -4,6 +4,7 @@ import type {
   SecurityCheckResponse,
   SecurityEvent,
   WebpageContent,
+  ChatHistoryTurn,
 } from '../types/securityTypes'
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
@@ -63,7 +64,11 @@ export type ChatPageContext = {
   page_content?: string
 }
 
-export function chatWithLlm(prompt: string, pageContext?: ChatPageContext): Promise<LlmResponse> {
+export function chatWithLlm(
+  prompt: string,
+  pageContext?: ChatPageContext,
+  history?: ChatHistoryTurn[],
+): Promise<LlmResponse> {
   return requestJson<LlmResponse>('/llm/chat', {
     method: 'POST',
     body: JSON.stringify({
@@ -71,6 +76,7 @@ export function chatWithLlm(prompt: string, pageContext?: ChatPageContext): Prom
       page_url: pageContext?.page_url,
       page_title: pageContext?.page_title,
       page_content: pageContext?.page_content,
+      history,
     }),
   })
 }

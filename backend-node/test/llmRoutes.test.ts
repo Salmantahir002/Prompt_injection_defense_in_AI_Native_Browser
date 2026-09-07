@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../src/app.js'
-import { llmOpenCodeZenService } from '../src/services/llmOpenCodeZenService.js'
+import { llmProviderManager } from '../src/services/llmProviderManager.js'
 
 const PREFIX = '/api/v1'
 let app: FastifyInstance
@@ -33,16 +33,21 @@ it('a malicious prompt is blocked before it reaches the LLM', async () => {
   expect(res.json().detail).toContain('blocked by security pipeline')
 })
 
-it('a safe prompt is forwarded with page context', async () => {
+it('a safe prompt is forwarded with page context and history', async () => {
   const captured: Record<string, unknown> = {}
-  vi.spyOn(llmOpenCodeZenService, 'chat').mockImplementation(async (params) => {
+  vi.spyOn(llmProviderManager, 'chat').mockImplementation(async (params) => {
     Object.assign(captured, params)
     return {
       response: 'Here is a summary of the page.',
-      model: 'zen-mock',
+      model: 'test-model',
       usage: { prompt_tokens: 50, completion_tokens: 10 },
     }
   })
+
+  const history = [
+    { role: 'user', content: 'What is AI?' },
+    { role: 'assistant', content: 'AI stands for Artificial Intelligence.' },
+  ]
 
   const res = await app.inject({
     method: 'POST',
@@ -52,6 +57,7 @@ it('a safe prompt is forwarded with page context', async () => {
       page_url: 'https://example.com/article',
       page_title: 'Example Article',
       page_content: 'This is an article about AI safety.',
+      history,
     },
   })
 
@@ -60,4 +66,5 @@ it('a safe prompt is forwarded with page context', async () => {
   expect(captured.pageUrl).toBe('https://example.com/article')
   expect(captured.pageTitle).toBe('Example Article')
   expect(captured.pageContent).toBe('This is an article about AI safety.')
+  expect(captured.history).toEqual(history)
 })

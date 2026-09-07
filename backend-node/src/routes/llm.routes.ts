@@ -5,7 +5,7 @@
 import type { FastifyInstance } from 'fastify'
 import { ErrorResponseSchema } from '../schemas/common.js'
 import { LlmChatRequestSchema, LlmChatResponseSchema, type LlmChatRequest } from '../schemas/llm.schemas.js'
-import { llmOpenCodeZenService } from '../services/llmOpenCodeZenService.js'
+import { llmProviderManager } from '../services/llmProviderManager.js'
 import { promptClassifier } from '../services/promptClassifierService.js'
 
 export default async function llmRoutes(app: FastifyInstance): Promise<void> {
@@ -31,11 +31,12 @@ export default async function llmRoutes(app: FastifyInstance): Promise<void> {
           .send({ detail: 'Prompt blocked by security pipeline. Malicious content detected — not forwarding to LLM.' })
       }
 
-      const result = await llmOpenCodeZenService.chat({
+      const result = await llmProviderManager.chat({
         prompt,
         pageUrl: request.body.page_url,
         pageTitle: request.body.page_title,
         pageContent: request.body.page_content,
+        history: request.body.history,
       })
 
       return {

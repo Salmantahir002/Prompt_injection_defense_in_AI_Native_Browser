@@ -4,13 +4,33 @@ import { checkPrompt, chatWithLlm, type ChatPageContext } from '../services/back
 import { extractPageContent } from '../services/pageContentExtractor'
 import type { BrowserWebViewHandle } from './BrowserWebView'
 import type { AnalysisDetails } from '../types/analysisDetailsTypes'
-import type { LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
+import type { ChatHistoryTurn, LlmResponse, SecurityCheckResponse } from '../types/securityTypes'
 import { AgentModePanel } from './AgentModePanel'
 import { KimoMascot } from './KimoMascot'
 import { MarkdownMessage } from './MarkdownMessage'
 import { PromptInputBox } from './PromptInputBox'
 
 type SidebarMode = 'chat' | 'agent'
+
+const CHAT_SESSIONS_STORAGE_KEY = 'promptguard.chat_sessions'
+
+export type ChatSession = {
+  id: string
+  title: string
+  updatedAt: number
+  messages: ChatMessage[]
+}
+
+function readStoredSessions(): ChatSession[] {
+  try {
+    const raw = window.localStorage.getItem(CHAT_SESSIONS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
 
 type ChatMessage = {
   id: string
@@ -71,6 +91,24 @@ function SparkIcon() {
   )
 }
 
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ width: 15, height: 15 }}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ width: 13, height: 13 }}>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  )
+}
+
 function NewSessionIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -93,6 +131,9 @@ export function AiAssistantSidebar({
   onOpenSettings,
 }: AiAssistantSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>('chat')
+  const [sessions, setSessions] = useState<ChatSession[]>(readStoredSessions)
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => `session-${Date.now()}`)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isChecking, setIsChecking] = useState(false)
   const [detachedUrl, setDetachedUrl] = useState<string | null>(null)
@@ -106,6 +147,31 @@ export function AiAssistantSidebar({
 
   const hasActivePage = Boolean(currentUrl && currentUrl !== 'about:blank' && !currentUrl.startsWith('about:'))
   const isPageContextAttached = hasActivePage && detachedUrl !== currentUrl
+
+  // Automatically sync active chat session to state and localStorage
+  useEffect(() => {
+    if (messages.length === 0) return
+    setSessions((prev) => {
+      const existingIndex = prev.findIndex((s) => s.id === activeSessionId)
+      const firstUserMsg = messages.find((m) => m.sender === 'user')?.text || 'New Chat'
+      const title = firstUserMsg.length > 40 ? `${firstUserMsg.slice(0, 40)}…` : firstUserMsg
+      const updated: ChatSession = {
+        id: activeSessionId,
+        title: existingIndex >= 0 ? prev[existingIndex].title : title,
+        updatedAt: Date.now(),
+        messages,
+      }
+      const next = existingIndex >= 0
+        ? prev.map((s, i) => (i === existingIndex ? updated : s))
+        : [updated, ...prev]
+      try {
+        window.localStorage.setItem(CHAT_SESSIONS_STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {
+        console.warn('Failed to save chat session', e)
+      }
+      return next
+    })
+  }, [messages, activeSessionId])
 
   useEffect(() => {
     const nextCount = messages.length
@@ -161,7 +227,18 @@ export function AiAssistantSidebar({
 
       let llmResp: LlmResponse | undefined
       if (result.allowed) {
-        llmResp = await chatWithLlm(prompt, pageContext)
+        // Context window: extract prior completed turns from active session
+        const historyTurns: ChatHistoryTurn[] = []
+        for (const m of messages) {
+          if (m.isChecking || m.errorMessage) continue
+          if (m.sender === 'user' && m.text) {
+            historyTurns.push({ role: 'user', content: m.text })
+          } else if (m.sender === 'assistant' && m.llmResponse?.response) {
+            historyTurns.push({ role: 'assistant', content: m.llmResponse.response })
+          }
+        }
+
+        llmResp = await chatWithLlm(prompt, pageContext, historyTurns)
       }
 
       // Update assistant message with result
@@ -192,13 +269,47 @@ export function AiAssistantSidebar({
   /** Starts a fresh session in whichever surface is currently showing. */
   function handleNewSession() {
     if (mode === 'chat') {
+      setActiveSessionId(`session-${Date.now()}`)
       setMessages([])
       setIsChecking(false)
       setDetachedUrl(null)
       setClearSignal((v) => v + 1)
+      setIsHistoryOpen(false)
       return
     }
     setAgentSessionId((id) => id + 1)
+  }
+
+  function handleSelectSession(session: ChatSession) {
+    setActiveSessionId(session.id)
+    setMessages(session.messages)
+    setIsChecking(false)
+    setDetachedUrl(null)
+    setIsHistoryOpen(false)
+  }
+
+  function handleDeleteSession(sessionId: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== sessionId)
+      try {
+        window.localStorage.setItem(CHAT_SESSIONS_STORAGE_KEY, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(`session-${Date.now()}`)
+      setMessages([])
+    }
+  }
+
+  function handleClearAllSessions() {
+    setSessions([])
+    try {
+      window.localStorage.removeItem(CHAT_SESSIONS_STORAGE_KEY)
+    } catch {}
+    setActiveSessionId(`session-${Date.now()}`)
+    setMessages([])
   }
 
   // The drag is tracked on the handle itself via pointer capture: without it
@@ -289,6 +400,18 @@ export function AiAssistantSidebar({
 
           <span className="assistant-header-divider" aria-hidden="true" />
 
+          {mode === 'chat' && (
+            <button
+              className={`assistant-new-button ${isHistoryOpen ? 'assistant-new-button--active' : ''}`}
+              type="button"
+              title={isHistoryOpen ? 'Back to chat' : 'Chat history'}
+              aria-label={isHistoryOpen ? 'Back to chat' : 'Chat history'}
+              onClick={() => setIsHistoryOpen((v) => !v)}
+            >
+              <HistoryIcon />
+            </button>
+          )}
+
           {/* One button, scoped to the visible surface: the other mode's session
               is left untouched behind it. */}
           <button
@@ -319,6 +442,70 @@ export function AiAssistantSidebar({
 
       {mode === 'chat' ? (
         <div className="assistant-pane">
+          {isHistoryOpen ? (
+            <div className="assistant-history-view" role="region" aria-label="Chat history">
+              <div className="assistant-history-header">
+                <div className="assistant-history-header-title">
+                  <HistoryIcon />
+                  <span>Chat History</span>
+                </div>
+                <div className="assistant-history-header-actions">
+                  {sessions.length > 0 && (
+                    <button
+                      type="button"
+                      className="assistant-history-clear-btn"
+                      onClick={handleClearAllSessions}
+                      title="Clear all chat history"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="assistant-history-close-btn"
+                    onClick={() => setIsHistoryOpen(false)}
+                    title="Close history"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="assistant-history-list">
+                {sessions.length === 0 ? (
+                  <div className="assistant-history-empty">
+                    <p>No chat history yet</p>
+                    <span>Conversations you have with Kimo will appear here.</span>
+                  </div>
+                ) : (
+                  sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`assistant-history-card ${session.id === activeSessionId ? 'assistant-history-card--active' : ''}`}
+                      onClick={() => handleSelectSession(session)}
+                    >
+                      <div className="assistant-history-card-body">
+                        <span className="assistant-history-card-title">{session.title}</span>
+                        <div className="assistant-history-card-meta">
+                          <span>{new Date(session.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>·</span>
+                          <span>{session.messages.length} msg{session.messages.length !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="assistant-history-delete-btn"
+                        title="Delete chat"
+                        onClick={(e) => handleDeleteSession(session.id, e)}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
       {/* Welcome state or messages */}
       {!hasMessages ? (
         <div className="assistant-welcome">
@@ -457,6 +644,8 @@ export function AiAssistantSidebar({
           onOpenSettings={onOpenSettings}
         />
       </div>
+            </>
+          )}
         </div>
       ) : null}
     </aside>
