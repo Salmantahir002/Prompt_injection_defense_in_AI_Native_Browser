@@ -4278,7 +4278,7 @@
   left: 0;
   width: 275px;
   max-width: 320px;
-  max-height: 380px;
+  max-height: min(460px, 80vh);
   background: #181b1e !important;
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
   border-radius: 10px !important;
@@ -4378,7 +4378,9 @@
 .prompt-model-list {
   padding: 4px;
   overflow-y: auto;
-  max-height: 220px;
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 240px;
   display: flex !important;
   flex-direction: column !important;
   gap: 1px;
@@ -4481,6 +4483,8 @@
   gap: 2px;
   background: #141719;
   flex-shrink: 0;
+  max-height: 115px;
+  overflow-y: auto;
 }
 
 .prompt-model-section-label {
@@ -4744,6 +4748,7 @@
   padding: 14px 18px;
   border-bottom: 1px solid #222222;
   transition: background 0.12s ease;
+  gap: 12px;
 }
 
 .oc-provider-row:last-child {
@@ -4759,6 +4764,7 @@
   align-items: center;
   gap: 14px;
   min-width: 0;
+  flex: 1;
 }
 
 .oc-provider-logo {
@@ -4782,6 +4788,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .oc-provider-name {

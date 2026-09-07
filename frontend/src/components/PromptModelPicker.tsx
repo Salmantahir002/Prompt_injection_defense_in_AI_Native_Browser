@@ -419,8 +419,8 @@ export function PromptModelPicker({ onOpenSettings, className = '' }: PromptMode
                 ) : null}
               </div>
 
-              {/* Other connected providers list */}
-              {savedProviders.filter((p) => p.id !== activeInfo?.id).length > 0 && (
+              {/* Other connected providers list (hidden while actively searching models) */}
+              {savedProviders.filter((p) => p.id !== activeInfo?.id).length > 0 && !searchTerm.trim() && (
                 <div className="prompt-model-providers-section">
                   <div className="prompt-model-section-label">Other Connected Providers</div>
                   {savedProviders

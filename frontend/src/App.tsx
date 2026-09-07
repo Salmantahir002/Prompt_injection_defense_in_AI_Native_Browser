@@ -906,6 +906,7 @@ function BrowserShell() {
               onViewDetails={handleViewPromptDetails}
               onWidthChange={handleAssistantWidthChange}
               width={assistantWidth}
+              onOpenSettings={() => setIsProviderSettingsOpen(true)}
             />
           </div>
         </div>
