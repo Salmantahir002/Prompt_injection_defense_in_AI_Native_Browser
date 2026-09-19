@@ -12,12 +12,12 @@
 ## Files here
 
 ```
-onnx/model.onnx            fp32, 284,217,797 bytes
-                           sha256 c6f4d2ebf59be36f3557ad484bf11a51f1b356f570958d1ec1cbbe322a8dfddf
-config.json                id2label / architecture
-tokenizer.json             DeBERTa-v2 SentencePiece fast tokenizer (vocab 128,100)
-tokenizer_config.json
-special_tokens_map.json
+prompt_injection_model/onnx/model.onnx            fp32, 284,217,797 bytes
+                                                  sha256 c6f4d2ebf59be36f3557ad484bf11a51f1b356f570958d1ec1cbbe322a8dfddf
+prompt_injection_model/config.json                id2label / architecture
+prompt_injection_model/tokenizer.json             DeBERTa-v2 SentencePiece fast tokenizer (vocab 128,100)
+prompt_injection_model/tokenizer_config.json
+prompt_injection_model/special_tokens_map.json
 ```
 
 The repo ships `model.onnx` at its root; `@huggingface/transformers` resolves ONNX
@@ -43,6 +43,7 @@ once per process.
 The weights are past sensible git limits. Re-fetch with:
 
 ```bash
+cd prompt_injection_model
 mkdir -p onnx
 curl -L -o onnx/model.onnx https://huggingface.co/gravitee-io/Llama-Prompt-Guard-2-22M-onnx/resolve/main/model.onnx
 for f in config.json tokenizer.json tokenizer_config.json special_tokens_map.json; do
