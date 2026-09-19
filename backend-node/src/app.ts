@@ -1,6 +1,7 @@
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import { settings } from './config/env.js'
+import { promptClassifier } from './services/promptClassifierService.js'
 import { fastifyLoggerOptions } from './core/logging.js'
 import healthRoutes from './routes/health.routes.js'
 import securityRoutes from './routes/security.routes.js'
@@ -41,6 +42,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setNotFoundHandler((_request, reply) => {
     reply.code(404).send({ detail: 'Not Found' })
   })
+
+  // Block startup on the DL model finishing its load (or failing to). Without
+  // this, /health and any scan arriving in the first seconds would report
+  // `rule_based_fallback` while the model was still initialising — a downgrade
+  // that is not real, on the exact field operators use to confirm it is not.
+  // Resolves either way; it never rejects. See dl/modelLoader.ts.
+  await promptClassifier.ready()
 
   await app.register(healthRoutes, { prefix: settings.API_V1_PREFIX })
   await app.register(securityRoutes, { prefix: settings.API_V1_PREFIX })

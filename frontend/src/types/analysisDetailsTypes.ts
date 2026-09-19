@@ -1,4 +1,17 @@
-export type ClassifierMode = 'ml_model' | 'rule_based_fallback'
+export type ClassifierMode = 'dl_model' | 'rule_based_fallback'
+export type DetectorSource = 'none' | 'rule_based' | 'dl_model' | 'both'
+
+export type RuleBasedVerdict = {
+  matched: boolean
+  confidence: number
+  matched_patterns: string[]
+}
+
+// `available: false` when no DL model is loaded; `error` is set when the model
+// loaded but inference failed for this chunk, which the backend fails closed on.
+export type DlVerdict =
+  | { available: true; matched: boolean; malicious_score: number; error?: string }
+  | { available: false }
 export type SecurityLabel = 'benign' | 'malicious'
 export type RiskLevel = 'low' | 'medium' | 'high'
 
@@ -35,10 +48,14 @@ export type ChunkResult = {
   reason: string
   excerpt: string
   matched_evidence: string[]
+  detector_source: DetectorSource
+  rule_based: RuleBasedVerdict
+  dl: DlVerdict
 }
 
 export type AnalysisDetails = {
   classifier_mode: ClassifierMode
+  model_precision: 'fp32' | 'none'
   threshold_used: number
   preprocessing: PreprocessingSummary
   chunking: ChunkingInfo

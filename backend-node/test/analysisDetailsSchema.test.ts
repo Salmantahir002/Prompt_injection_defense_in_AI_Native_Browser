@@ -24,6 +24,9 @@ const benignChunk = {
   reason: 'No suspicious patterns.',
   excerpt: 'This is a safe chunk.',
   matched_evidence: [] as string[],
+  detector_source: 'none' as const,
+  rule_based: { matched: false, confidence: 0, matched_patterns: [] as string[] },
+  dl: { available: true as const, matched: false, malicious_score: 0.0003 },
 }
 
 it('preprocessing summary validates', () => {
@@ -87,6 +90,7 @@ it('feature evidence validates', () => {
 it('full AnalysisDetails validates', () => {
   const details = {
     classifier_mode: 'rule_based_fallback' as const,
+    model_precision: 'none' as const,
     threshold_used: 0.7,
     preprocessing: {
       original_length: 100,

@@ -22,8 +22,11 @@ describe('GET /health', () => {
     const body = res.json()
     expect(body.status).toBe('healthy')
     expect(body.version).toBe('1.0.0')
-    expect(body.model_loaded).toBe(false)
-    expect(body.classifier_mode).toBe('rule_based_fallback')
+    // Whether the DL model loads depends on dl_models/ being populated, so
+    // assert the invariant that ties the two fields together rather than a
+    // fixed value — test/dl/ covers each side explicitly.
+    expect(body.classifier_mode).toBe(body.model_loaded ? 'dl_model' : 'rule_based_fallback')
+    expect(body.model_precision).toBe(body.model_loaded ? 'fp32' : 'none')
   })
 })
 

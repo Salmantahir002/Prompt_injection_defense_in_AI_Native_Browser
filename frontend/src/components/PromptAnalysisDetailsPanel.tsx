@@ -228,7 +228,7 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
   const safeChunks = details.chunk_results.filter((c) => c.label !== 'malicious')
   const isSafe = maliciousChunks.length === 0
   const highestConfidence = Math.max(...details.chunk_results.map((c) => c.confidence))
-  const isMLModel = details.classifier_mode === 'ml_model'
+  const isDLModel = details.classifier_mode === 'dl_model'
   const fe = details.feature_evidence
 
   return (
@@ -283,15 +283,15 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
                     flex: 1,
                     padding: '11px 14px',
                     borderRadius: 9,
-                    background: isMLModel ? 'rgba(52,211,153,0.06)' : 'rgba(251,191,36,0.06)',
-                    border: `1px solid ${isMLModel ? 'rgba(52,211,153,0.18)' : 'rgba(251,191,36,0.18)'}`,
+                    background: isDLModel ? 'rgba(52,211,153,0.06)' : 'rgba(251,191,36,0.06)',
+                    border: `1px solid ${isDLModel ? 'rgba(52,211,153,0.18)' : 'rgba(251,191,36,0.18)'}`,
                   }}
                 >
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                     Mode
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: isMLModel ? '#34d399' : '#fbbf24' }}>
-                    {isMLModel ? '🤖  ML Model' : '📏  Rule-Based Fallback'}
+                  <div style={{ fontSize: 13, fontWeight: 700, color: isDLModel ? '#34d399' : '#fbbf24' }}>
+                    {isDLModel ? '🤖  DL Model + Rules' : '📏  Rule-Based Fallback'}
                   </div>
                 </div>
                 <div

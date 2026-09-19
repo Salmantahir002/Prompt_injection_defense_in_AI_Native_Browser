@@ -11,7 +11,7 @@
 // that halts an autonomous process, so it errs toward blocking and reports
 // which content channel carried the threat.
 import { settings } from '../config/env.js'
-import { promptClassifier } from './promptClassifierService.js'
+import { promptClassifier, type DetectorSource } from './promptClassifierService.js'
 import { chunkingService } from './textChunkingService.js'
 
 function riskLevel(confidence: number): 'low' | 'medium' | 'high' {
@@ -42,6 +42,10 @@ export interface AgentThreatFinding {
   matched_patterns: string[]
   matched_evidence: string[]
   excerpt: string
+  /** Which detector(s) flagged this chunk — 'rule_based', 'dl_model' or 'both'. */
+  detector_source: DetectorSource
+  /** Prompt Guard's MALICIOUS probability, or null when no model is loaded. */
+  malicious_score: number | null
 }
 
 export interface AgentScanResult {
@@ -54,6 +58,7 @@ export interface AgentScanResult {
   findings: AgentThreatFinding[]
   scanned_chunks: number
   classifier_mode: string
+  model_precision: string
 }
 
 class AgentSecurityService {
@@ -70,29 +75,39 @@ class AgentSecurityService {
 
     const findings: AgentThreatFinding[] = []
     const aggregatedPatterns: string[] = []
-    let scannedChunks = 0
 
+    // Chunk every channel first, then classify the whole set in one batched
+    // call. This runs on every agent iteration, so N sequential transformer
+    // passes over a 14-channel page would dominate the loop's latency.
+    const chunks: Array<{ source: string; text: string }> = []
     for (const [sourceName, sourceText] of sources) {
       if (!sourceText || !sourceText.trim()) continue
-
       for (const chunk of chunkingService.chunkText(sourceText, chunkSize, overlap)) {
-        scannedChunks += 1
-        const result = await promptClassifier.classify(chunk.text)
-        if (!result.is_malicious) continue
-
-        const evidence = [...new Set(Object.values(result.pattern_evidence).flat())].sort()
-        for (const pattern of result.matched_patterns) {
-          if (!aggregatedPatterns.includes(pattern)) aggregatedPatterns.push(pattern)
-        }
-
-        findings.push({
-          source: sourceName,
-          confidence: result.confidence,
-          matched_patterns: [...result.matched_patterns],
-          matched_evidence: evidence,
-          excerpt: excerpt(chunk.text, evidence),
-        })
+        chunks.push({ source: sourceName, text: chunk.text })
       }
+    }
+
+    const scannedChunks = chunks.length
+    const results = await promptClassifier.classifyMany(chunks.map((chunk) => chunk.text))
+
+    for (const [index, chunk] of chunks.entries()) {
+      const result = results[index]!
+      if (!result.is_malicious) continue
+
+      const evidence = [...new Set(Object.values(result.pattern_evidence).flat())].sort()
+      for (const pattern of result.matched_patterns) {
+        if (!aggregatedPatterns.includes(pattern)) aggregatedPatterns.push(pattern)
+      }
+
+      findings.push({
+        source: chunk.source,
+        confidence: result.confidence,
+        matched_patterns: [...result.matched_patterns],
+        matched_evidence: evidence,
+        excerpt: excerpt(chunk.text, evidence),
+        detector_source: result.detector_source,
+        malicious_score: result.dl.available ? result.dl.malicious_score : null,
+      })
     }
 
     const allowed = findings.length === 0
@@ -122,6 +137,7 @@ class AgentSecurityService {
       findings,
       scanned_chunks: scannedChunks,
       classifier_mode: promptClassifier.classifierMode,
+      model_precision: promptClassifier.modelPrecision,
     }
   }
 }

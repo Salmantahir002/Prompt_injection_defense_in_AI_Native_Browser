@@ -1,3 +1,4 @@
+import pino from 'pino'
 import type { FastifyServerOptions } from 'fastify'
 import { settings } from '../config/env.js'
 
@@ -11,3 +12,8 @@ export const fastifyLoggerOptions: FastifyServerOptions['logger'] = {
       ? { target: 'pino-pretty', options: { translateTime: 'SYS:standard', ignore: 'pid,hostname' } }
       : undefined,
 }
+
+// Standalone logger for code that runs outside a Fastify request (the DL model
+// loader boots at import time, before the server instance exists). Same level
+// and transport as the server logger so both streams read identically.
+export const logger = pino(fastifyLoggerOptions as pino.LoggerOptions)

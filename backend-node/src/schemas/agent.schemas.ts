@@ -52,6 +52,13 @@ export const AgentThreatFindingSchema = Type.Object({
   matched_patterns: Type.Array(Type.String()),
   matched_evidence: Type.Array(Type.String()),
   excerpt: Type.String(),
+  detector_source: Type.Union([
+    Type.Literal('none'),
+    Type.Literal('rule_based'),
+    Type.Literal('dl_model'),
+    Type.Literal('both'),
+  ]),
+  malicious_score: Type.Union([Type.Number(), Type.Null()]),
 })
 
 export const AgentScanResponseSchema = Type.Object({
@@ -67,6 +74,7 @@ export const AgentScanResponseSchema = Type.Object({
   findings: Type.Array(AgentThreatFindingSchema),
   scanned_chunks: Type.Integer(),
   classifier_mode: Type.String(),
+  model_precision: Type.String(),
   scanned_at: Type.String(),
 })
 

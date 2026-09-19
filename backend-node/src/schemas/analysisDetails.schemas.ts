@@ -23,6 +23,25 @@ export const FeatureEvidenceSchema = Type.Object({
   embedding_or_vectorizer_used: Type.String(),
 })
 
+export const RuleBasedVerdictSchema = Type.Object({
+  matched: Type.Boolean(),
+  confidence: Type.Number(),
+  matched_patterns: Type.Array(Type.String()),
+})
+
+// `available: false` means no model is loaded (rule-based-only degradation).
+// `error` is present when the model loaded but inference threw for this chunk,
+// which fails closed — kept distinct from a genuine malicious verdict.
+export const DlVerdictSchema = Type.Union([
+  Type.Object({
+    available: Type.Literal(true),
+    matched: Type.Boolean(),
+    malicious_score: Type.Number(),
+    error: Type.Optional(Type.String()),
+  }),
+  Type.Object({ available: Type.Literal(false) }),
+])
+
 export const ChunkResultSchema = Type.Object({
   chunk_id: Type.String(),
   source: Type.String(),
@@ -33,10 +52,20 @@ export const ChunkResultSchema = Type.Object({
   reason: Type.String(),
   excerpt: Type.String(),
   matched_evidence: Type.Array(Type.String()),
+  detector_source: Type.Union([
+    Type.Literal('none'),
+    Type.Literal('rule_based'),
+    Type.Literal('dl_model'),
+    Type.Literal('both'),
+  ]),
+  rule_based: RuleBasedVerdictSchema,
+  dl: DlVerdictSchema,
 })
 
 export const AnalysisDetailsSchema = Type.Object({
-  classifier_mode: Type.Union([Type.Literal('ml_model'), Type.Literal('rule_based_fallback')]),
+  classifier_mode: Type.Union([Type.Literal('dl_model'), Type.Literal('rule_based_fallback')]),
+  // Externally visible confirmation that the unquantized graph is in use.
+  model_precision: Type.Union([Type.Literal('fp32'), Type.Literal('none')]),
   threshold_used: Type.Number(),
   preprocessing: PreprocessingSummarySchema,
   chunking: ChunkingInfoSchema,

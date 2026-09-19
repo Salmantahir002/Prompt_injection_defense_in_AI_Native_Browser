@@ -24,6 +24,7 @@ export interface Settings {
   CORS_ALLOWED_ORIGINS: string[]
   MODEL_DIR: string
   CLASSIFIER_THRESHOLD: number
+  DL_MALICIOUS_THRESHOLD: number
   DEFAULT_CHUNK_SIZE: number
   DEFAULT_CHUNK_OVERLAP: number
   AGENT_MIN_CONFIDENCE: number
@@ -38,8 +39,12 @@ export const settings: Settings = {
   // to match the existing frontend contract (all three HTTP clients hardcode 127.0.0.1:8000).
   PORT: parseNumber(process.env.PORT, 8000),
   CORS_ALLOWED_ORIGINS: parseCorsOrigins(process.env.CORS_ALLOWED_ORIGINS),
-  MODEL_DIR: process.env.MODEL_DIR ?? 'ml_models/prompt_injection_model',
+  MODEL_DIR: process.env.MODEL_DIR ?? 'dl_models/prompt_injection_model',
   CLASSIFIER_THRESHOLD: parseNumber(process.env.CLASSIFIER_THRESHOLD, 0.7),
+  // Probability on Prompt Guard's MALICIOUS class at which the DL detector
+  // flags a chunk. 0.5 is the model's own decision boundary; lower it to trade
+  // precision for recall without touching code.
+  DL_MALICIOUS_THRESHOLD: parseNumber(process.env.DL_MALICIOUS_THRESHOLD, 0.5),
   DEFAULT_CHUNK_SIZE: parseNumber(process.env.DEFAULT_CHUNK_SIZE, 800),
   DEFAULT_CHUNK_OVERLAP: parseNumber(process.env.DEFAULT_CHUNK_OVERLAP, 100),
   AGENT_MIN_CONFIDENCE: parseNumber(process.env.AGENT_MIN_CONFIDENCE, 0.6),

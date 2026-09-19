@@ -307,7 +307,8 @@ Default environment variables in `backend-node/src/config/env.ts`:
 | :--- | :--- | :--- |
 | `PORT` | `8000` | Loopback port for the Fastify server. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed origins for browser renderer fetch requests. |
-| `MODEL_DIR` | `ml_models/prompt_injection_model` | Directory path for optional ONNX model artifacts. |
+| `MODEL_DIR` | `dl_models/prompt_injection_model` | Directory holding the Llama Prompt Guard 2 artifacts. Absent → rule-based-only. |
+| `DL_MALICIOUS_THRESHOLD` | `0.50` | MALICIOUS probability at which the deep-learning detector flags a chunk. |
 | `CLASSIFIER_THRESHOLD` | `0.70` | Score threshold above which content is marked malicious. |
 | `DEFAULT_CHUNK_SIZE` | `800` | Character count per analysis text chunk. |
 | `DEFAULT_CHUNK_OVERLAP` | `100` | Boundary overlap between adjacent chunks. |

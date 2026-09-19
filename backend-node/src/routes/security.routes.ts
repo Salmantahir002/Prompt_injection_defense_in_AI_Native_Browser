@@ -90,6 +90,11 @@ function chunkReason(
   evidence: readonly string[],
 ): string {
   if (label === 'malicious') {
+    // A DL-only detection has no keyword evidence to quote — the transformer
+    // scores the whole chunk rather than matching terms in it.
+    if (evidence.length === 0) {
+      return `Classified as prompt injection by ${matchedPatterns.join(', ')} without a literal keyword match.`
+    }
     const phrases = evidence.slice(0, 3).map((term) => `“${term}”`).join(', ')
     return `Matched ${matchedPatterns.join(', ')} indicator(s): ${phrases}.`
   }
@@ -123,8 +128,12 @@ export async function analyzeText(
   const chunkResults: ChunkResult[] = []
   const aggregatedEvidence: Record<string, string[]> = {}
 
-  for (const chunk of chunks) {
-    const detectorResult = await promptClassifier.classify(chunk.text)
+  // One batched call rather than one per chunk: the DL detector runs the whole
+  // set as batched forward passes, which is far cheaper than N sequential ones.
+  const detectorResults = await promptClassifier.classifyMany(chunks.map((chunk) => chunk.text))
+
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const detectorResult = detectorResults[chunkIndex]!
     const label = detectorResult.is_malicious ? 'malicious' : 'benign'
     const confidence = label === 'malicious' ? detectorResult.confidence : 0.94
     const matchedPatterns = detectorResult.matched_patterns
@@ -147,6 +156,9 @@ export async function analyzeText(
       reason: chunkReason(label, matchedPatterns, matchedEvidence),
       excerpt: excerptForDisplay(chunk.text, matchedEvidence),
       matched_evidence: matchedEvidence,
+      detector_source: detectorResult.detector_source,
+      rule_based: detectorResult.rule_based,
+      dl: detectorResult.dl,
     })
   }
 
@@ -155,7 +167,11 @@ export async function analyzeText(
   const label = allowed ? 'benign' : 'malicious'
   const confidence = allowed ? 0.94 : Math.max(...maliciousChunks.map((chunk) => chunk.confidence))
   const riskLevel = allowed ? 'low' : riskLevelForConfidence(confidence)
-  const matchedPatterns = Object.keys(aggregatedEvidence).sort()
+  // Union of what the chunks actually reported, not just the rule engine's
+  // evidence categories: a chunk the DL detector alone flagged carries
+  // DL_DETECTION_PATTERN and no keyword evidence, and would otherwise leave
+  // this list empty on a blocked scan.
+  const matchedPatterns = [...new Set(chunkResults.flatMap((chunk) => chunk.matched_patterns))].sort()
   const highestRiskChunk = maliciousChunks.length > 0
     ? maliciousChunks.reduce((highest, chunk) => chunk.confidence > highest.confidence ? chunk : highest)
     : chunkResults[0]
@@ -180,6 +196,7 @@ export async function analyzeText(
 
   const analysisDetails: AnalysisDetails = {
     classifier_mode: promptClassifier.classifierMode,
+    model_precision: promptClassifier.modelPrecision,
     threshold_used: settings.CLASSIFIER_THRESHOLD,
     preprocessing,
     chunking: {

@@ -78,6 +78,10 @@ export type AgentThreatFinding = {
   matched_patterns: string[]
   matched_evidence: string[]
   excerpt: string
+  /** Which detector(s) flagged the chunk: the rule engine, Prompt Guard, or both. */
+  detector_source: 'none' | 'rule_based' | 'dl_model' | 'both'
+  /** Prompt Guard's MALICIOUS probability, or null when no DL model is loaded. */
+  malicious_score: number | null
 }
 
 /** Verdict from POST /api/v1/agent/scan-active-page. */
@@ -94,6 +98,7 @@ export type AgentScanDecision = {
   findings: AgentThreatFinding[]
   scanned_chunks: number
   classifier_mode: string
+  model_precision: string
   scanned_at: string
   /** Set locally when a cached verdict was reused instead of rescanning. */
   fromCache?: boolean

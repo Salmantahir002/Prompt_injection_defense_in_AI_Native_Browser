@@ -204,7 +204,7 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
               <SourceStat label="Network & sockets" value={`${(content.network_responses.length + content.websocket_messages.length).toLocaleString()} chars`} />
               <SourceStat label="Scripts & CSS" value={`${(content.external_javascript.length + content.inline_javascript.length + content.css_content.length).toLocaleString()} chars`} />
               <SourceStat label="Content chunks" value={String(details.chunking.chunk_count)} />
-              <SourceStat label="Classifier" value={details.classifier_mode === 'ml_model' ? 'ML model' : 'Rule based'} />
+              <SourceStat label="Classifier" value={details.classifier_mode === 'dl_model' ? 'DL model + rules' : 'Rule based'} />
             </div>
           </section>
 

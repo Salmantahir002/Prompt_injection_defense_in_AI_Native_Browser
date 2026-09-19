@@ -258,6 +258,12 @@ decision is to leave it uninstalled until explicitly asked (see the
 `promptguard-pending-hybrid-detector` memory), so this ships as a real but
 dormant path:
 
+> **Superseded.** The dormant sklearn path described below was deleted and
+> replaced by `src/dl/`, which loads Llama Prompt Guard 2 (mDeBERTa-v3, fp32
+> ONNX) and runs *alongside* the rule-based detector on every chunk rather than
+> instead of it. See ARCHITECTURE.md §7. Kept here as a record of what the
+> migration originally shipped.
+
 - `src/ml/modelLoader.ts` — looks for `prompt_injection_pipeline.onnx`
   (+ optional `model_metadata.json`) under `settings.MODEL_DIR`; if absent,
   returns `null` and the classifier stays on the rule-based detector — exactly
@@ -422,9 +428,9 @@ Done after e2e went green (16/16) against the Node cutover.
 
 - electron-builder installer build + clean-Windows-machine validation — manual
   (native download / signing; not runnable here).
-- Real ONNX inference — `onnxruntime-node` still uninstalled (sandbox blocks its
-  postinstall); rule-based fallback active. Drop in `prompt_injection_pipeline.onnx`
-  and allow the install to enable it.
+- ~~Real ONNX inference~~ — **done.** `onnxruntime-node`'s postinstall was
+  approved and `src/dl/` now runs Llama Prompt Guard 2 (fp32) layered with the
+  rule-based detector. See ARCHITECTURE.md §7.
 
 ### Phase 5.5 — full e2e pass + CDP MCP browser smoke test
 

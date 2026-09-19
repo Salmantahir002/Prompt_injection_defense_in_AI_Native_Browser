@@ -260,8 +260,9 @@ against a live browser.
   second-person directive language and using only a weak indicator — for
   example bare text reading "developer mode" next to no instruction — will not
   be flagged. That is the deliberate cost of not blocking every page that
-  mentions jailbreaking. A trained classifier in `app/ml_models/` supersedes
-  these heuristics entirely.
+  mentions jailbreaking. The deep-learning detector in `backend-node/src/dl/`
+  now runs alongside these heuristics on every chunk and catches most of what
+  they give up — see ARCHITECTURE.md §7.
 - **`dom_snapshot_content` is captured but never scanned** by either pipeline.
   Text that exists *only* in that string table — not in visible, hidden or
   accessibility text — is therefore unscanned. In practice the overlap is

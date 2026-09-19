@@ -11,6 +11,9 @@ export default async function healthRoutes(app: FastifyInstance): Promise<void> 
     version: '1.0.0',
     model_loaded: promptClassifier.modelLoaded,
     classifier_mode: promptClassifier.classifierMode,
+    // 'fp32' whenever the DL model is active: the unquantized graph is a
+    // deliberate accuracy-over-speed choice and should be visible externally.
+    model_precision: promptClassifier.modelPrecision,
     runtime: {
       node: process.version,
       node_implementation: `Node.js (${process.version})`,

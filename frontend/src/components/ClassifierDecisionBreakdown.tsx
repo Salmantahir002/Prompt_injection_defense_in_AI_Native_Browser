@@ -11,8 +11,10 @@ export function ClassifierDecisionBreakdown({
   thresholdUsed,
   finalRationale,
 }: ClassifierDecisionBreakdownProps) {
-  const isMLModel = classifierMode === 'ml_model'
-  const modeLabel = isMLModel ? 'ML Model' : 'Rule-Based Fallback'
+  const isDLModel = classifierMode === 'dl_model'
+  // When the DL model is loaded both detectors run on every chunk; the
+  // rule-based fallback is what remains when the model could not be loaded.
+  const modeLabel = isDLModel ? 'DL Model + Rules' : 'Rule-Based Fallback'
 
   return (
     <div className="drawer-section">
@@ -23,7 +25,7 @@ export function ClassifierDecisionBreakdown({
       <div className="drawer-section-body">
         <div className="detail-row">
           <span className="detail-label">Classifier Mode</span>
-          <span className="detail-value" style={{ color: isMLModel ? '#34d399' : '#fbbf24' }}>
+          <span className="detail-value" style={{ color: isDLModel ? '#34d399' : '#fbbf24' }}>
             {modeLabel}
           </span>
         </div>
