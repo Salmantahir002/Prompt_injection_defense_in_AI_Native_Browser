@@ -20,7 +20,13 @@ const MIN_SUBCHUNK_CHARS = 100
 // Cap on sequences per forward pass. Everything in a batch is padded to the
 // longest member, so one unbounded batch over a 14-channel page scan would
 // allocate activations for hundreds of 512-token sequences at once.
-const MAX_BATCH = 16
+// Reduced from 16 to 8: smaller batches = less padding waste, less memory
+// pressure, and faster individual forward passes on CPU.
+const MAX_BATCH = 8
+// Per-batch timeout. A batch of 8 sequences on CPU can take several seconds
+// for long inputs; 15 s is a safety net against a stuck ONNX runtime, not a
+// performance lever.
+const BATCH_TIMEOUT_MS = 15_000
 
 const BENIGN_VERDICT: DlVerdict = { label: 'BENIGN', maliciousScore: 0 }
 
@@ -62,8 +68,21 @@ async function scoreAll(classifier: DlPipeline, sequences: string[]): Promise<nu
   const scores: number[] = []
   for (let offset = 0; offset < sequences.length; offset += MAX_BATCH) {
     const batch = sequences.slice(offset, offset + MAX_BATCH)
-    const results = await classifier(batch, { top_k: 2 })
-    for (const entries of results) {
+
+    // Per-batch timeout: if a single forward pass hangs, fail fast rather
+    // than blocking the entire agent loop. The caller (promptClassifierService)
+    // catches this and fails closed.
+    const result = await Promise.race([
+      classifier(batch, { top_k: 2 }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(
+          `DL inference batch timed out after ${BATCH_TIMEOUT_MS / 1000}s ` +
+          `(${batch.length} sequences). The ONNX runtime may be overloaded.`,
+        )), BATCH_TIMEOUT_MS),
+      ),
+    ])
+
+    for (const entries of result) {
       scores.push(maliciousScoreOf(entries))
     }
   }

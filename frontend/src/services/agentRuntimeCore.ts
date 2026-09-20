@@ -1,16 +1,13 @@
 import type {
   AgentAbortReason,
   AgentPlanResponse,
-  AgentScanDecision,
   AgentTaskResult,
   AgentToolCall,
 } from '../types/agentTypes'
 import type { PageStateSnapshot } from '../types/browserRuntimeTypes'
-import { AgentCircuitBreaker, type CircuitBreakerState } from './agentCircuitBreaker'
 import { approvalFor, type ApprovalHandler } from './agentApprovalPolicy'
 import { AgentWorkingMemory } from './agentWorkingMemory'
 import { AgentPlanError, requestPlan } from './agentApiClient'
-import { AgentSecurityPipeline, AgentSecurityScanError } from './agentSecurityPipeline'
 import { extractPageState, invokeRuntime, isBrowserRuntimeAvailable, setAgentOverlay } from './browserRuntime'
 import { isTerminalTool, resolveToolCall } from './agentToolRegistry'
 
@@ -19,15 +16,19 @@ import { isTerminalTool, resolveToolCall } from './agentToolRegistry'
  *
  * Runs entirely in the renderer: every browser action goes out over
  * `invokeRuntime` to the CDP-native Browser Runtime (native input, verified
- * before/after), every plan comes from the backend planner, and every page is
- * scanned for injection before any queued action from that plan executes.
+ * before/after) and every plan comes from the backend planner.
+ *
+ * Security scanning has been removed from the agent execution path to
+ * eliminate the latency overhead of the DL classifier on every iteration.
+ * Users can still manually scan any page via the toolbar "Scan Page" button
+ * which uses its own independent endpoint (POST /security/check-webpage).
+ *
  * There is no main-process agent process to hand off to — this class *is*
  * the orchestrator.
  */
 
 export type AgentTaskEvents = {
-  onStep?: (step: number, toolCall: AgentToolCall, decision: AgentScanDecision) => void
-  onSecurityBlock?: (state: CircuitBreakerState) => void
+  onStep?: (step: number, toolCall: AgentToolCall) => void
   onStatus?: (message: string) => void
 }
 
@@ -85,8 +86,6 @@ export class AgentTask {
   private readonly onOpenTab?: (url?: string) => Promise<number | null>
 
   private readonly memory: AgentWorkingMemory
-  private readonly breaker = new AgentCircuitBreaker()
-  private readonly security: AgentSecurityPipeline
   private stepCount = 0
   /**
    * A malformed plan (missing argument, invented tool, bad JSON) is the LLM
@@ -110,7 +109,6 @@ export class AgentTask {
     this.onApprovalRequest = options.onApprovalRequest
     this.onOpenTab = options.onOpenTab
     this.memory = new AgentWorkingMemory(this.goal)
-    this.security = new AgentSecurityPipeline(this.taskId)
   }
 
   async run(): Promise<AgentTaskResult> {
@@ -128,7 +126,7 @@ export class AgentTask {
           return this.finalResult('failed', 'Task was stopped by the user.', 'cancelled')
         }
 
-        this.events.onStatus?.('Scanning the page and planning the next action…')
+        this.events.onStatus?.('Planning the next action…')
 
         const stateResult = await extractPageState(this.targetId)
         if (!stateResult.ok) {
@@ -139,29 +137,13 @@ export class AgentTask {
         this.memory.setCurrentPage(pageState.url)
 
         let plan: AgentPlanResponse
-        let decision: AgentScanDecision | null
         try {
-          // Planning and the security scan run concurrently — the scan does not
-          // wait on the plan, and no action from the plan executes until the
-          // scan verdict is in.
-          ;[plan, decision] = await Promise.all([
-            requestPlan(this.goal, this.memory, pageState, this.signal),
-            this.security.scanActivePage(this.targetId, this.signal),
-          ])
+          plan = await requestPlan(this.goal, this.memory, pageState, this.signal)
         } catch (error) {
           if (isAbortError(error)) {
             return this.finalResult('failed', 'Task was stopped by the user.', 'cancelled')
           }
-          if (error instanceof AgentSecurityScanError) {
-            return this.finalResult('failed', error.message, 'scan_failed')
-          }
           if (error instanceof AgentPlanError) {
-            // 'unavailable' means no LLM provider is configured at all — no
-            // amount of retrying changes that. Every other kind (malformed
-            // JSON, a missing required argument, a transient provider error)
-            // is the kind of thing the *next* planning call routinely fixes
-            // on its own, especially once the failure itself is visible in
-            // working memory for the model to react to.
             if (error.kind === 'unavailable') {
               return this.finalResult('failed', error.message, 'planner_failed')
             }
@@ -182,29 +164,12 @@ export class AgentTask {
 
         this.plannerFailureStreak = 0
 
-        const allowed = this.breaker.applyScanDecision(decision)
-        if (!allowed) {
-          const state = this.breaker.snapshot
-          this.events.onSecurityBlock?.(state)
-          return {
-            taskId: this.taskId,
-            status: 'blocked',
-            message: state.message,
-            steps: this.stepCount,
-            reason: state.reason ?? undefined,
-            decision: state.decision,
-          }
-        }
-
-        const outcome = await this.executeQueue(plan, pageState, decision)
+        const outcome = await this.executeQueue(plan, pageState)
         if (outcome) return outcome
-        // outcome === null: the whole queue landed cleanly — loop back and plan
-        // the next batch against a freshly extracted page state.
       }
 
       return this.finalResult('failed', `Stopped after reaching the ${this.maxSteps}-step limit.`, 'step_limit')
     } finally {
-      this.security.endTask()
       if (this.visualFeedback) {
         await setAgentOverlay(this.targetId, false).catch(() => undefined)
       }
@@ -215,7 +180,6 @@ export class AgentTask {
   private async executeQueue(
     plan: AgentPlanResponse,
     pageState: PageStateSnapshot,
-    decision: AgentScanDecision,
   ): Promise<ActionOutcome> {
     for (const toolCall of plan.tool_calls) {
       if (this.stepCount >= this.maxSteps) return null // outer loop reports the limit
@@ -248,12 +212,12 @@ export class AgentTask {
         const summary = typeof toolCall.arguments?.summary === 'string' && toolCall.arguments.summary
           ? toolCall.arguments.summary
           : 'Goal achieved.'
-        this.recordStep(toolCall, decision)
+        this.recordStep(toolCall)
         return this.finalResult('completed', summary)
       }
 
       if (toolCall.tool === 'open_tab') {
-        const outcome = await this.runOpenTab(toolCall, decision)
+        const outcome = await this.runOpenTab(toolCall)
         if (outcome) return outcome
         return null // target changed — the old page state is no longer valid
       }
@@ -262,21 +226,21 @@ export class AgentTask {
         const note = typeof toolCall.arguments?.note === 'string' && toolCall.arguments.note
           ? toolCall.arguments.note
           : 'Recorded a finding.'
-        this.recordStep(toolCall, decision)
+        this.recordStep(toolCall)
         this.memory.recordStep('extract', note, true)
         continue
       }
 
       const resolved = resolveToolCall(toolCall)
       if (!resolved) {
-        this.recordStep(toolCall, decision)
+        this.recordStep(toolCall)
         this.memory.recordFailure(toolCall.tool, `${describeToolCall(toolCall)} — not supported by the browser runtime.`)
         this.memory.incrementRetries()
         return null
       }
 
       const execResult = await invokeRuntime(this.targetId, resolved.command, resolved.params as never)
-      this.recordStep(toolCall, decision)
+      this.recordStep(toolCall)
 
       if (this.signal?.aborted) {
         return this.finalResult('failed', 'Task was stopped by the user.', 'cancelled')
@@ -296,8 +260,6 @@ export class AgentTask {
 
       const verification = 'verification' in execResult.data ? execResult.data.verification : undefined
       if (verification && !verification.verified) {
-        // The command dispatched without error, but nothing observable changed —
-        // that is evidence of a wrong element or a no-op, not progress.
         let hint = verification.reason
         if (toolCall.tool === 'press_key' && toolCall.arguments?.key === 'Enter') {
           hint += ' (If submitting a filter or setting, find and click the nearby apply/submit button instead)'
@@ -314,17 +276,19 @@ export class AgentTask {
       )
       this.memory.resetRetries()
 
-      if (toolCall.tool === 'navigate') return null // element ids from the old page are gone
+      if (toolCall.tool === 'navigate') {
+        return null // element ids from the old page are gone
+      }
     }
 
     return null
   }
 
-  private async runOpenTab(toolCall: AgentToolCall, decision: AgentScanDecision): Promise<AgentTaskResult | null> {
+  private async runOpenTab(toolCall: AgentToolCall): Promise<AgentTaskResult | null> {
     const url = typeof toolCall.arguments?.url === 'string' ? toolCall.arguments.url : undefined
 
     if (!this.onOpenTab) {
-      this.recordStep(toolCall, decision)
+      this.recordStep(toolCall)
       this.memory.recordFailure('open_tab', 'Opening new tabs is not supported in this context.')
       this.memory.incrementRetries()
       return null
@@ -334,13 +298,13 @@ export class AgentTask {
     try {
       newTargetId = await this.onOpenTab(url)
     } catch (error) {
-      this.recordStep(toolCall, decision)
+      this.recordStep(toolCall)
       this.memory.recordFailure('open_tab', error instanceof Error ? error.message : 'Failed to open a new tab.')
       this.memory.incrementRetries()
       return null
     }
 
-    this.recordStep(toolCall, decision)
+    this.recordStep(toolCall)
 
     if (newTargetId === null) {
       this.memory.recordFailure('open_tab', 'Opening the tab was cancelled or timed out.')
@@ -354,9 +318,9 @@ export class AgentTask {
     return null
   }
 
-  private recordStep(toolCall: AgentToolCall, decision: AgentScanDecision): void {
+  private recordStep(toolCall: AgentToolCall): void {
     this.stepCount += 1
-    this.events.onStep?.(this.stepCount, toolCall, decision)
+    this.events.onStep?.(this.stepCount, toolCall)
   }
 
   private finalResult(

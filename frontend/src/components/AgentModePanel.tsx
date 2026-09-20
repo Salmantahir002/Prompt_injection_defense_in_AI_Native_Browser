@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { AgentTask } from '../services/agentRuntimeCore'
 import type { ApprovalRequest } from '../services/agentApprovalPolicy'
-import type { CircuitBreakerState } from '../services/agentCircuitBreaker'
-import type { AgentScanDecision, AgentTaskResult, AgentToolCall } from '../types/agentTypes'
-import { AgentThreatDetailsModal } from './AgentThreatDetailsModal'
+import type { AgentTaskResult, AgentToolCall } from '../types/agentTypes'
 import { PromptModelPicker } from './PromptModelPicker'
 
 type StepEntry = {
@@ -11,8 +9,6 @@ type StepEntry = {
   step: number
   tool: string
   detail: string
-  scanned: boolean
-  fromCache: boolean
 }
 
 type AgentModePanelProps = {
@@ -25,15 +21,6 @@ type AgentModePanelProps = {
    */
   onOpenTab?: (url?: string) => Promise<number | null>
   onOpenSettings?: () => void
-}
-
-function ShieldIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <polyline points="9 12 12 15 16 10" />
-    </svg>
-  )
 }
 
 function describeArguments(toolCall: AgentToolCall): string {
@@ -51,9 +38,7 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
   const [steps, setSteps] = useState<StepEntry[]>([])
   const [status, setStatus] = useState('')
   const [result, setResult] = useState<AgentTaskResult | null>(null)
-  const [blockState, setBlockState] = useState<CircuitBreakerState | null>(null)
   const [approval, setApproval] = useState<ApprovalRequest | null>(null)
-  const [showThreatDetails, setShowThreatDetails] = useState(false)
 
 
 
@@ -103,11 +88,9 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
     setIsRunning(true)
     setSteps([])
     setResult(null)
-    setBlockState(null)
-    setShowThreatDetails(false)
     setActiveGoal(trimmedGoal)
     setGoal('')
-    setStatus('Scanning the page and planning the first action…')
+    setStatus('Planning the first action…')
 
     const task = new AgentTask({
       taskId: `task-${Date.now()}`,
@@ -119,15 +102,12 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
       onOpenTab,
       events: {
         onStatus: (message) => setStatus(message),
-        onSecurityBlock: (state) => setBlockState(state),
-        onStep: (step, toolCall, decision: AgentScanDecision) => {
+        onStep: (step, toolCall) => {
           setSteps((previous) => [...previous, {
             id: `${step}-${toolCall.tool}-${previous.length}`,
             step,
             tool: toolCall.tool,
             detail: describeArguments(toolCall),
-            scanned: Boolean(decision),
-            fromCache: Boolean(decision?.fromCache),
           }])
           setStatus(`Running ${toolCall.tool}…`)
         },
@@ -160,25 +140,17 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
 
   const resultTone = result?.status === 'completed'
     ? 'agent-result--ok'
-    : result?.status === 'blocked' ? 'agent-result--blocked' : 'agent-result--failed'
+    : 'agent-result--failed'
 
   return (
     <div className="agent-mode" aria-label="Agent mode">
       {steps.length === 0 && !result && !isRunning ? (
         <div className="agent-intro">
-          <span className="agent-intro-badge">
-            <ShieldIcon />
-            Scanned before every action
-          </span>
           <h3>Agent mode</h3>
           <p>
-            Give the agent a goal and it will operate this tab for you. Every page
-            it reaches is scanned for hidden instructions before it is allowed to act.
+            Give the agent a goal and it will operate this tab for you.
+            Use the toolbar Scan Page button to check any page for hidden instructions.
           </p>
-          {/* The page address is deliberately not printed here — it is already in
-              the address bar, and a long URL wrecked this panel's layout. */}
-          {/* `status` here is a refusal from a failed start (e.g. the view is not
-              attached yet) — without this it would never be seen. */}
           {status ? <p className="agent-intro-hint">{status}</p> : hasPage ? null : <p className="agent-intro-hint">Open a page to begin.</p>}
         </div>
       ) : (
@@ -192,11 +164,6 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
                 <span className="agent-step-tool">{entry.tool}</span>
                 {entry.detail ? <span className="agent-step-detail">{entry.detail}</span> : null}
               </div>
-              {entry.scanned ? (
-                <span className="agent-step-scan" title={entry.fromCache ? 'Page unchanged since the last scan' : 'Page scanned before this action'}>
-                  <ShieldIcon />
-                </span>
-              ) : null}
             </div>
           ))}
 
@@ -207,31 +174,10 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
             </div>
           ) : null}
 
-          {blockState ? (
-            <div className="agent-block" role="alert">
-              <strong>Blocked for your safety</strong>
-              <p>{blockState.message}</p>
-              {blockState.decision?.blocked_sources?.length ? (
-                <p className="agent-block-sources">
-                  Found in: {blockState.decision.blocked_sources.join(', ')}
-                </p>
-              ) : null}
-              {blockState.decision ? (
-                <button
-                  type="button"
-                  className="agent-block-details-button"
-                  onClick={() => setShowThreatDetails(true)}
-                >
-                  View details
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {result && !blockState ? (
+          {result ? (
             <div className={`agent-result ${resultTone}`} role="status">
               <strong>
-                {result.status === 'completed' ? 'Done' : result.status === 'blocked' ? 'Blocked' : 'Stopped'}
+                {result.status === 'completed' ? 'Done' : 'Stopped'}
               </strong>
               <p>{result.message}</p>
               <span className="agent-result-steps">{result.steps} step{result.steps === 1 ? '' : 's'}</span>
@@ -289,10 +235,6 @@ export function AgentModePanel({ targetId, currentUrl, onOpenTab, onOpenSettings
         </div>
       </form>
 
-
-      {showThreatDetails && blockState?.decision ? (
-        <AgentThreatDetailsModal decision={blockState.decision} onClose={() => setShowThreatDetails(false)} />
-      ) : null}
     </div>
   )
 }

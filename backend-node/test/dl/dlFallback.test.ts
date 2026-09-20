@@ -5,8 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { AGENT_SCAN_CHANNELS } from '../../src/routes/agent.routes.js'
-import { MANUAL_SCAN_CHANNELS } from '../../src/routes/security.routes.js'
 
 const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -51,13 +49,6 @@ ${stdout}`).toBeTruthy()
     expect(result.injection.analysis_details.model_precision).toBe('none')
     expect(result.benign.allowed).toBe(true)
   }, 180_000)
-})
-
-describe('scan-path parity', () => {
-  it('the agent and manual scans share one channel list, so neither can drift', () => {
-    expect(AGENT_SCAN_CHANNELS).toBe(MANUAL_SCAN_CHANNELS)
-    expect([...AGENT_SCAN_CHANNELS]).toEqual([...MANUAL_SCAN_CHANNELS])
-  })
 })
 
 describe('per-request inference failure', () => {

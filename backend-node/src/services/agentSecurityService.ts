@@ -14,6 +14,21 @@ import { settings } from '../config/env.js'
 import { promptClassifier, type DetectorSource } from './promptClassifierService.js'
 import { chunkingService } from './textChunkingService.js'
 
+/**
+ * Stop scanning once this many malicious chunks are found. The agent scan
+ * only needs to determine "blocked or allowed" — it doesn't need a complete
+ * catalogue of every finding. On a heavily malicious page with 30+ chunks,
+ * this avoids dozens of unnecessary DL forward passes.
+ */
+const MAX_FINDINGS_BEFORE_BAILOUT = 3
+
+/**
+ * Number of chunks to classify per incremental batch. Small enough to bail
+ * out early without wasting too many forward passes, large enough to benefit
+ * from the batched DL inference path.
+ */
+const INCREMENTAL_BATCH_SIZE = 8
+
 function riskLevel(confidence: number): 'low' | 'medium' | 'high' {
   if (confidence >= 0.85) return 'high'
   if (confidence >= settings.CLASSIFIER_THRESHOLD) return 'medium'
@@ -68,6 +83,11 @@ class AgentSecurityService {
    * as visible page text — the agent needs to know an injection was hidden,
    * since that is far stronger evidence of hostility than the same words in a
    * visible paragraph.
+   *
+   * Chunks are classified in incremental batches rather than all-at-once.
+   * Once enough malicious findings are collected, remaining chunks are
+   * skipped — the agent's decision is already "blocked" and scanning more
+   * only wastes CPU on DL inference.
    */
   async scanSources(sources: ReadonlyArray<readonly [string, string]>): Promise<AgentScanResult> {
     const chunkSize = settings.DEFAULT_CHUNK_SIZE
@@ -76,9 +96,7 @@ class AgentSecurityService {
     const findings: AgentThreatFinding[] = []
     const aggregatedPatterns: string[] = []
 
-    // Chunk every channel first, then classify the whole set in one batched
-    // call. This runs on every agent iteration, so N sequential transformer
-    // passes over a 14-channel page would dominate the loop's latency.
+    // Chunk every channel first.
     const chunks: Array<{ source: string; text: string }> = []
     for (const [sourceName, sourceText] of sources) {
       if (!sourceText || !sourceText.trim()) continue
@@ -88,26 +106,39 @@ class AgentSecurityService {
     }
 
     const scannedChunks = chunks.length
-    const results = await promptClassifier.classifyMany(chunks.map((chunk) => chunk.text))
 
-    for (const [index, chunk] of chunks.entries()) {
-      const result = results[index]!
-      if (!result.is_malicious) continue
+    // ── Incremental classification with early exit ──────────────────────
+    // Classify in small batches. Once MAX_FINDINGS_BEFORE_BAILOUT malicious
+    // chunks are found, stop — the page is already blocked.
+    let classifiedCount = 0
+    for (let offset = 0; offset < chunks.length; offset += INCREMENTAL_BATCH_SIZE) {
+      const batchChunks = chunks.slice(offset, offset + INCREMENTAL_BATCH_SIZE)
+      const batchTexts = batchChunks.map((chunk) => chunk.text)
+      const results = await promptClassifier.classifyMany(batchTexts)
 
-      const evidence = [...new Set(Object.values(result.pattern_evidence).flat())].sort()
-      for (const pattern of result.matched_patterns) {
-        if (!aggregatedPatterns.includes(pattern)) aggregatedPatterns.push(pattern)
+      for (const [batchIndex, result] of results.entries()) {
+        classifiedCount++
+        if (!result.is_malicious) continue
+
+        const chunk = batchChunks[batchIndex]!
+        const evidence = [...new Set(Object.values(result.pattern_evidence).flat())].sort()
+        for (const pattern of result.matched_patterns) {
+          if (!aggregatedPatterns.includes(pattern)) aggregatedPatterns.push(pattern)
+        }
+
+        findings.push({
+          source: chunk.source,
+          confidence: result.confidence,
+          matched_patterns: [...result.matched_patterns],
+          matched_evidence: evidence,
+          excerpt: excerpt(chunk.text, evidence),
+          detector_source: result.detector_source,
+          malicious_score: result.dl.available ? result.dl.malicious_score : null,
+        })
       }
 
-      findings.push({
-        source: chunk.source,
-        confidence: result.confidence,
-        matched_patterns: [...result.matched_patterns],
-        matched_evidence: evidence,
-        excerpt: excerpt(chunk.text, evidence),
-        detector_source: result.detector_source,
-        malicious_score: result.dl.available ? result.dl.malicious_score : null,
-      })
+      // Early exit: enough evidence to block — skip remaining chunks.
+      if (findings.length >= MAX_FINDINGS_BEFORE_BAILOUT) break
     }
 
     const allowed = findings.length === 0
