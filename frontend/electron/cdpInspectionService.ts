@@ -1,6 +1,6 @@
 import type { CdpParams, CdpSession } from './browserRuntime/cdpSession.js'
 
-const MAX_TEXT_PER_SOURCE = 24_000
+const MAX_TEXT_PER_SOURCE = 60_000
 const MAX_NETWORK_BODIES = 40
 const MAX_EVENTS_PER_SOURCE = 100
 
@@ -91,7 +91,7 @@ function collectFrameIds(tree: FrameTree, ids: string[] = []): string[] {
 }
 
 const FRAME_COLLECTOR = `(() => {
-  const cap = (value, limit = 12000) => String(value || '').slice(0, limit);
+  const cap = (value, limit = 30000) => String(value || '').slice(0, limit);
   const unique = values => [...new Set(values.filter(Boolean))];
   const text = node => (node && node.textContent ? node.textContent.trim() : '');
   const comments = [];

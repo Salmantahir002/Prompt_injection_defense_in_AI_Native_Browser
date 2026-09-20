@@ -20,6 +20,29 @@ const MAX_COMPLETED_STEPS = 12
 const MAX_FAILURES = 5
 const MAX_PENDING_STEPS = 8
 
+/**
+ * Detect Roman Urdu / transliterated script or heavy non-ASCII content that
+ * the planner's English-only prompt handles poorly.
+ *
+ * Strategy: if the goal contains significant non-ASCII characters (Arabic,
+ * Devanagari, CJK, etc.) OR looks like Roman Urdu (common Urdu romanisations
+ * such as "mojy", "kay", "karo", "dhoondh", "chahiye", "mujhe", "aur",
+ * "mein", "hai", "nahi", "kya") we normalise it before planning.
+ *
+ * ponytail: a dedicated language-detection library (e.g. franc-min) would
+ * be more accurate; add when false-positive rate becomes a problem.
+ */
+const ROMAN_URDU_TOKENS = /\b(mojy|mujhe|mujhy|mojhe|aur|kay|ke|ki|ka|ko|se|mein|mai|nahi|nahin|chahiye|chahie|karo|karna|karo|dhoondh|dhundh|dhund|btao|batao|likho|kya|hai|hain|tha|thi|thy|ho|hoga|hogi|wala|wali|ap|aap|hum|tum|yahan|wahan|kuch|sab|sirf|phir|abhi|liye|lye|zaroor|zaruri|pehle|baad|upar|neeche|saath|bhi|jo|jab|tak|lekin|magar|ya|agar|toh|tou|to)\b/i
+const NON_ASCII_RATIO_THRESHOLD = 0.15
+
+function looksLikeNonEnglish(goal: string): boolean {
+  // High non-ASCII ratio → non-Latin script (Arabic, Urdu, CJK, etc.)
+  const nonAscii = (goal.match(/[^\u0000-\u007F]/g) ?? []).length
+  if (nonAscii / goal.length >= NON_ASCII_RATIO_THRESHOLD) return true
+  // Roman Urdu: Latin letters but Urdu vocabulary
+  return ROMAN_URDU_TOKENS.test(goal)
+}
+
 const PLANNER_SYSTEM_PROMPT = `You are the planning component of an autonomous browser agent.
 
 You decide the next browser action(s) that make progress toward the user's goal.
@@ -45,6 +68,8 @@ Rules:
    reason the page needs more time. Never queue two "wait" actions back to back.
 
 CROSS-WEBSITE AUTOMATION GUIDELINES:
+- Direct Navigation for Known Sites: When the goal names a specific well-known website, service, or resource type (e.g. scholarships, jobs, news, maps, YouTube, Wikipedia, LinkedIn, government portals), navigate DIRECTLY to the most relevant URL — do NOT route through Google as an intermediary unless the goal explicitly asks to "search on Google". Example: goal "find scholarships in Islamabad for students" → navigate directly to a known scholarship portal or HEC Pakistan website, NOT google.com. Routing through Google wastes steps and risks losing the result to pagination or ads.
+- Parallel-site Strategy: For broad research tasks (finding multiple sources), open the most authoritative domain first, extract what is needed, then move to the next. Do not spend more than 3 steps on a single site before deciding to move on.
 - Searching: Always find the editable input field (role 'textbox', 'searchbox', 'combobox', 'input') and use "fill" with the search term. Then submit via "press_key" ("Enter") or clicking the search button. NEVER click a search button while the search box is empty.
 - Input vs Button Disambiguation: Elements with role 'textbox', 'searchbox', 'combobox' are input fields where text must be entered; elements with role 'button' only trigger actions. When both exist with similar names (e.g. "Search"), fill the input field first.
 - Filters, Price Ranges, and Settings Fields: Range and price filter fields (Min/Max price) are NOT search boxes and pressing "Enter" will NOT submit them on most e-commerce sites (e.g. Daraz, Amazon, AliExpress).
@@ -298,8 +323,42 @@ class AgentPlannerService {
 
   // -------------------------------------------------------------------- call
 
+  /**
+   * Translate a Roman-Urdu / non-English goal to English so the planner
+   * prompt works effectively. Uses a single low-cost LLM call (128 tokens max).
+   * Returns the original goal unchanged on any failure so the agent always
+   * has something to work with.
+   */
+  private async normalizeGoal(goal: string): Promise<string> {
+    if (!looksLikeNonEnglish(goal)) return goal
+    try {
+      const translated = await llmProviderManager.planChat({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a translator. Translate the user message to clear, concise English. ' +
+              'Output ONLY the English translation — no explanation, no quotes, no extra text.',
+          },
+          { role: 'user', content: goal },
+        ],
+        temperature: 0.0,
+        maxTokens: 128,
+      })
+      const cleaned = translated.trim()
+      // Guard: if the model returned something absurdly short or identical, skip
+      if (cleaned.length >= 4 && cleaned.toLowerCase() !== goal.toLowerCase()) {
+        return `${cleaned} [original: ${goal}]`
+      }
+    } catch {
+      // non-critical — fall through to original goal
+    }
+    return goal
+  }
+
   async requestPlan(goal: string, memory: AgentWorkingMemory, state: AgentPageState): Promise<[PlannedAction[], number, string]> {
-    const messages = this.buildMessages(goal, memory, state)
+    const normalizedGoal = await this.normalizeGoal(goal)
+    const messages = this.buildMessages(normalizedGoal, memory, state)
     const knownElementIds = [
       ...(state.elements ?? []).map((element) => element.id),
       ...(state.dialogs ?? []).map((dialog) => dialog.id),
@@ -310,7 +369,7 @@ class AgentPlannerService {
   }
 
   private async callModel(messages: Array<{ role: string; content: string }>): Promise<string> {
-    return llmProviderManager.planChat({ messages, temperature: 0.1, maxTokens: 1536 })
+    return llmProviderManager.planChat({ messages, temperature: 0.1, maxTokens: 2048 })
   }
 }
 

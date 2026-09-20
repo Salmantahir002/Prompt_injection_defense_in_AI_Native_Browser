@@ -1317,13 +1317,13 @@
 }
 
 .homepage-start-button:focus-visible,
-.homepage-search-popup input:focus-visible,
 .homepage-search-submit:focus-visible,
 .homepage-suggestions button:focus-visible {
   outline: 2px solid #fcd34d;
   outline-offset: 3px;
 }
 
+/* ponytail: native :focus-within on container; add JS focus management if complex multi-input subcomponents arrive */
 .homepage-search-popup {
   position: absolute;
   top: clamp(74px, 27%, 205px);
@@ -1331,12 +1331,20 @@
   z-index: 2;
   width: min(760px, calc(100% - 48px));
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  background: rgba(26, 29, 29, 0.96);
-  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(24, 27, 27, 0.94);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translate(-50%, -50%);
   animation: search-popup-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.homepage-search-popup:focus-within {
+  border-color: rgba(251, 191, 36, 0.6);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2), 0 28px 72px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .homepage-search-backdrop {
@@ -1345,9 +1353,10 @@
   z-index: 1;
   padding: 0;
   border: 0;
-  background: rgba(3, 8, 6, 0.35);
+  background: rgba(3, 8, 6, 0.45);
   cursor: default;
-  backdrop-filter: blur(9px) saturate(0.78);
+  backdrop-filter: blur(12px) saturate(0.85);
+  -webkit-backdrop-filter: blur(12px) saturate(0.85);
   animation: homepage-backdrop-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -1361,25 +1370,37 @@
 }
 
 .homepage-search-popup form > svg {
-  width: 19px;
-  height: 19px;
-  color: rgba(255, 255, 255, 0.58);
+  width: 20px;
+  height: 20px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 160ms ease;
+}
+
+.homepage-search-popup:focus-within form > svg {
+  color: rgba(251, 191, 36, 0.85);
 }
 
 .homepage-search-popup input {
   width: 100%;
   min-width: 0;
   border: 0;
-  outline: 0;
+  outline: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.96);
-  font-family: 'Trebuchet MS', sans-serif;
-  font-size: 17px;
+  font-family: inherit;
+  font-size: 16px;
   letter-spacing: -0.015em;
+  padding: 14px 0;
+}
+
+.homepage-search-popup input:focus,
+.homepage-search-popup input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .homepage-search-popup input::placeholder {
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .homepage-search-submit {
@@ -1388,21 +1409,27 @@
   height: 42px;
   place-items: center;
   border: 0;
-  border-radius: 10px;
-  background: rgba(251, 191, 36, 0.94);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.96), rgba(245, 158, 11, 0.9));
   color: #1b1709;
   cursor: pointer;
-  transition: transform 150ms ease, background 150ms ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
 }
 
 .homepage-search-submit:hover {
-  background: #fcd34d;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   transform: scale(1.04);
+}
+
+.homepage-search-submit:active {
+  transform: scale(0.96);
 }
 
 .homepage-suggestions {
   padding: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .homepage-suggestions button {
@@ -1411,14 +1438,14 @@
   align-items: center;
   gap: 11px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   color: rgba(255, 255, 255, 0.76);
   cursor: pointer;
-  font-family: 'Trebuchet MS', sans-serif;
-  font-size: 13px;
+  font-family: inherit;
+  font-size: 14px;
   text-align: left;
   transition: background 130ms ease, color 130ms ease;
 }
@@ -4257,10 +4284,12 @@
 }
 
 .agent-mode {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .agent-intro {
@@ -4456,39 +4485,267 @@
 .webpage-scan-chunk-explanations { margin-top: 4px; }
 
 .agent-result {
-  padding: 11px 12px;
+  padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.agent-result--clickable {
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+  user-select: none;
+}
+
+.agent-result--clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.agent-result--clickable:focus-visible {
+  outline: 2px solid #8fe9c8;
+  outline-offset: 2px;
+}
+
+.agent-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
 .agent-result strong {
   display: block;
-  font-size: 12.5px;
-  margin-bottom: 4px;
+  font-size: 13px;
   color: #e9eef5;
+}
+
+.agent-result-expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: rgba(233, 238, 245, 0.45);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.agent-result--clickable:hover .agent-result-expand-icon {
+  color: #8fe9c8;
+  background: rgba(111, 224, 184, 0.12);
 }
 
 .agent-result p {
   margin: 0;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: rgba(233, 238, 245, 0.68);
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(233, 238, 245, 0.88);
+  word-break: break-word;
 }
 
 .agent-result-steps {
   display: inline-block;
-  margin-top: 6px;
-  font-size: 10.5px;
-  color: rgba(233, 238, 245, 0.42);
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(233, 238, 245, 0.52);
 }
 
 .agent-result--ok { border-color: rgba(111, 224, 184, 0.3); background: rgba(111, 224, 184, 0.07); }
+.agent-result--ok:hover { border-color: rgba(111, 224, 184, 0.45); background: rgba(111, 224, 184, 0.11); }
 .agent-result--ok strong { color: #8fe9c8; }
 .agent-result--blocked { border-color: rgba(255, 107, 107, 0.3); background: rgba(255, 107, 107, 0.07); }
+.agent-result--blocked:hover { border-color: rgba(255, 107, 107, 0.45); background: rgba(255, 107, 107, 0.11); }
 .agent-result--blocked strong { color: #ffb4b4; }
 .agent-result--failed { border-color: rgba(255, 200, 120, 0.26); background: rgba(255, 200, 120, 0.06); }
+.agent-result--failed:hover { border-color: rgba(255, 200, 120, 0.4); background: rgba(255, 200, 120, 0.1); }
 .agent-result--failed strong { color: #ffd699; }
+
+/* Done / Result Message Modal Popup (In-Panel) */
+.agent-result-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 18, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 12px;
+  animation: agentModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.agent-result-modal-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100% - 20px);
+  background: #141820;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: agentModalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes agentModalFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+@keyframes agentModalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.agent-result-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #161c26;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.agent-result-modal-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-result-modal-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+.agent-result-modal-badge--ok {
+  background: rgba(111, 224, 184, 0.16);
+  color: #8fe9c8;
+  border: 1px solid rgba(111, 224, 184, 0.35);
+}
+
+.agent-result-modal-badge--failed {
+  background: rgba(255, 107, 107, 0.16);
+  color: #ff9d9d;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+}
+
+.agent-result-modal-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.agent-result-modal-meta {
+  display: block;
+  font-size: 11px;
+  color: rgba(233, 238, 245, 0.5);
+  margin-top: 1px;
+}
+
+.agent-result-modal-close-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(233, 238, 245, 0.6);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.agent-result-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.agent-result-modal-body {
+  padding: 14px;
+  overflow-y: auto;
+  max-height: 52vh;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.agent-result-modal-markdown {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #f1f5f9;
+}
+
+.agent-result-modal-markdown .md-p {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #f1f5f9;
+  word-break: break-word;
+}
+
+.agent-result-modal-markdown .md-p:last-child {
+  margin-bottom: 0;
+}
+
+.agent-result-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: #161c26;
+  flex-shrink: 0;
+}
+
+.agent-result-modal-hint {
+  font-size: 11px;
+  color: rgba(233, 238, 245, 0.42);
+}
+
+.agent-result-modal-action-btn {
+  padding: 6px 15px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transition: all 0.15s ease;
+}
+
+.agent-result-modal-action-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
 
 /* Approval sits directly above the composer so the decision is unmissable. */
 .agent-approval {

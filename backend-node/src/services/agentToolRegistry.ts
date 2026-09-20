@@ -239,6 +239,19 @@ function validateElementId(name: string, value: unknown, knownElementIds?: reado
 }
 
 /**
+ * Tools whose sole required string argument can be auto-filled when the
+ * planner omits it, rather than burning a planning-failure streak on a
+ * pure formatting mistake. The fallback value is intentionally generic so
+ * the working memory log still conveys something meaningful.
+ *
+ * ponytail: expand this map if new record-only tools are added.
+ */
+const ARGUMENT_FALLBACKS: Record<string, Record<string, string>> = {
+  extract: { note: 'Recorded a finding from the current page.' },
+  finish:  { summary: 'Goal completed.' },
+}
+
+/**
  * Validate a raw planner tool call. Returns [toolName, cleanedArguments].
  * Unknown arguments are rejected rather than dropped.
  */
@@ -276,6 +289,12 @@ export function validateToolCall(
   for (const p of toolSpec.parameters) {
     if (!(p.name in rawArgs)) {
       if (p.required) {
+        const fallback = ARGUMENT_FALLBACKS[toolName]?.[p.name]
+        if (fallback !== undefined) {
+          console.warn(`[planner] '${toolName}' missing required arg '${p.name}' — using fallback: "${fallback}"`)
+          cleaned[p.name] = fallback
+          continue
+        }
         throw new ToolValidationError(`Tool '${toolName}' requires argument '${p.name}'.`)
       }
       continue
