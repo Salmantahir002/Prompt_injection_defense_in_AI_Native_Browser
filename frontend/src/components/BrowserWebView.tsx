@@ -131,7 +131,7 @@ function HomePage({ onSearch }: HomePageProps) {
       <div className="homepage-content">
         <div className="homepage-hero">
           <div className="homepage-hero-icon-wrap">
-            <BrowserLogo size={46} className="homepage-hero-logo" />
+            <BrowserLogo size={70} className="homepage-hero-logo" />
           </div>
           <h1 className="homepage-hero-title">orbit</h1>
           <p className="homepage-hero-subtitle">A BROWSER FOR AGENTIC SEARCH WITH PROMPT DEFENSE</p>
