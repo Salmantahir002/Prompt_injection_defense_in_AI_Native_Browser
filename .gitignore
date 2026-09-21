@@ -6,4 +6,4 @@ build/
 # Model weights — ~1.1 GB, far past any sensible git limit. Re-fetch with the
 # commands in backend-node/dl_models/prompt_injection_model/SOURCE.md.
 backend-node/dl_models/**/*.onnx
-backend-node/dl_models/**/tokenizer.json
+backend-node/dl_models/**/tokenizer.js
