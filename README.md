@@ -109,9 +109,9 @@ Prompt_injection_defense_in_AI_Native_Browser/
 │   │   ├── services/                     # Frontend client services
 │   │   │   ├── backendApiClient.ts       # HTTP client for backend security & chat endpoints
 │   │   │   ├── agentApiClient.ts         # HTTP client for agent planning & tool catalog
-│   │   │   ├── agentRuntimeCore.ts       # Decoupled high-speed agent execution loop
-│   │   │   ├── agentApprovalPolicy.ts    # User confirmation policy for sensitive/low-confidence actions
-│   │   │   └── browserMemory.ts          # Agent working memory and context store
+│   │   │   ├── agentRuntimeCore.ts       # Decoupled high-speed agent execution loop with loop & stagnation detection
+│   │   │   ├── agentApprovalPolicy.ts    # Risk-weighted confirmation policy with per-tool confidence gating
+│   │   │   └── browserMemory.ts          # Agent working memory, per-origin knowledge, and blocklist store
 │   │   └── styles/                       # CSS design tokens, layouts, and animations
 │   ├── e2e/                              # Playwright integration & E2E tests
 │   │   ├── agentMode.spec.ts             # End-to-end agent CDP actions and safety tests
@@ -155,7 +155,7 @@ Prompt_injection_defense_in_AI_Native_Browser/
     │   │   ├── promptPreprocessingService.ts # Unicode NFKC normalization and HTML stripping
     │   │   ├── textChunkingService.ts    # Sliding window chunker with boundary overlap
     │   │   ├── agentPlannerService.ts    # Multilingual/Roman Urdu goal translation & multi-action planner
-    │   │   ├── agentToolRegistry.ts      # Validated catalogue of 11 safe browser tools with fallbacks
+    │   │   ├── agentToolRegistry.ts      # Validated catalogue of 11 safe browser tools with queue coherence & order checks
     │   │   ├── securityEventStore.ts     # Scan audit event log store
     │   │   ├── llmProviderManager.ts     # Active provider routing, token tracking, and chat proxy
     │   │   └── llmGateways/              # Provider adapters (OpenAI, Anthropic, Gemini, OpenRouter, etc.)
@@ -170,7 +170,11 @@ Prompt_injection_defense_in_AI_Native_Browser/
 
 - **Multi-Channel Webpage Inspection (22 Channels)**: Scans 14 core DOM channels (visible text, hidden content, HTML comments, ARIA labels, meta tags, attributes, inputs, iframe content, shadow DOM, inline scripts, styles) plus 8 extended telemetry channels (external scripts, source maps, HTTP redirects, third-party resources, suspicious hostnames, frame navigation, runtime script activity, loaded resources).
 - **Dual-Detector Security Pipeline**: Combines high-precision regex detection across 5 distinct attack vectors (role override, jailbreaks, hidden webpage directions, system prompt reveal, exfiltration) with a local deep-learning transformer (`Llama Prompt Guard 2 22M` via ONNX Runtime in full `fp32` precision). Automatic 512-token sliding sub-chunking prevents truncation-based evasion.
-- **Decoupled, High-Speed Autonomous Agent**: The autonomous agent loop is engineered for high responsiveness without CPU-bound inference lag on every iteration. Actions are planned directly from Chromium Accessibility Tree (AXTree) semantic states and executed via native CDP hardware-level events. High-risk operations trigger interactive user confirmation gates.
+- **Decoupled, High-Speed Autonomous Agent**: The autonomous agent loop is engineered for high responsiveness without CPU-bound inference lag on every iteration. Actions are planned directly from Chromium Accessibility Tree (AXTree) semantic states and executed via native CDP hardware-level events.
+- **Risk-Weighted Approval Policy**: Enforces tool-specific confidence thresholds rather than a single global cutoff. High-consequence actions (`click`: 70%, `navigate`: 65%, `finish`: 75%) and sensitive transactions (`financial`, `destructive`, `irreversible`: 85%+ or mandatory consent) require strong confidence, whereas harmless actions (`scroll`, `wait`, `extract`) proceed without nuisance user confirmation.
+- **Loop & Stagnation Detector**: Inspects action history within a rolling 9-action window. If the agent repeats the identical action 3 or more times on the same page without forward progress, it automatically flags stagnation (`LOOP_DETECTED`) and replans an alternative path.
+- **Resilient Side-Page Handling**: Mid-task navigations or redirects to blocked/untrusted origins no longer crash the entire task. The agent records the navigation block in working memory and guides the planner to take an alternative route or continue on the active page.
+- **Action Order Sanity Checks**: Validates queue coherence on the backend before execution, catching planner sequence mistakes such as `fill` followed immediately by `navigate` without pressing Enter or submitting, duplicate inputs on the same target, or keypresses immediately following a navigation.
 - **Multilingual & Roman Urdu Goal Normalization**: Automatically detects Roman Urdu transliterations and non-English scripts in user goals, performing a lightweight LLM translation normalization pass before planning to ensure accurate element matching and navigation.
 - **Agent Result Modal & Task Observability**: Interactive expandable modal in the agent panel enables users to review complete task execution summaries, structured markdown results, and step-by-step logs.
 - **Universal Multimodal Attachment Staging**: Chat interface allows users to stage images, PDFs, Word documents (.docx), and text files freely, with real-time model capability detection and friendly warnings if the selected model lacks vision/multimodal support.

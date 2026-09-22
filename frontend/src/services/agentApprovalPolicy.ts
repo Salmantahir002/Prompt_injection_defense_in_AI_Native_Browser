@@ -53,6 +53,30 @@ const RULES: readonly Rule[] = [
   },
 ]
 
+/**
+ * Risk-weighted minimum confidence thresholds per tool.
+ * High-consequence or disruptive tools demand higher planner confidence before running
+ * autonomously. Passive or easily reversible actions have low or zero thresholds so they
+ * never trigger nuisance prompts.
+ */
+export const TOOL_CONFIDENCE_THRESHOLDS: Readonly<Record<string, number>> = {
+  click: 0.70,
+  fill: 0.60,
+  type: 0.60,
+  press_key: 0.65,
+  navigate: 0.65,
+  open_tab: 0.70,
+  scroll: 0.0,
+  wait: 0.0,
+  extract: 0.0,
+  finish: 0.75,
+  upload: 1.0,
+}
+
+export function getToolConfidenceThreshold(tool: string): number {
+  return TOOL_CONFIDENCE_THRESHOLDS[tool] ?? 0.60
+}
+
 function describeElement(element: SemanticElement | undefined, fallback: string): string {
   if (!element) return fallback
   return `${element.role} "${element.name}"`
@@ -60,6 +84,8 @@ function describeElement(element: SemanticElement | undefined, fallback: string)
 
 /**
  * Returns an approval request when consent is required, or null to proceed.
+ * Applies risk-weighted confidence thresholds: high-impact tools demand higher certainty,
+ * while harmless tools (scroll, wait, extract) proceed without user interruptions.
  */
 export function approvalFor(
   toolCall: AgentToolCall,
@@ -97,13 +123,24 @@ export function approvalFor(
     }
   }
 
-  if (options.lowConfidence) {
-    const percent = Math.round((options.confidence ?? 0) * 100)
-    return {
-      toolCall,
-      summary: `${toolCall.tool} ${describeElement(target, '')}`.trim(),
-      reason: `The planner was only ${percent}% confident this is the right action.`,
-      risk: 'low_confidence',
+  // Risk-weighted confidence gating:
+  const threshold = getToolConfidenceThreshold(toolCall.tool)
+  // Reversible, passive actions with a 0 threshold never pause for low confidence
+  if (threshold > 0) {
+    const confidence = typeof options.confidence === 'number' ? options.confidence : undefined
+    const isBelowThreshold = confidence !== undefined
+      ? confidence < threshold
+      : Boolean(options.lowConfidence)
+
+    if (isBelowThreshold) {
+      const percent = Math.round((confidence ?? 0) * 100)
+      const thresholdPercent = Math.round(threshold * 100)
+      return {
+        toolCall,
+        summary: `${toolCall.tool} ${describeElement(target, '')}`.trim(),
+        reason: `Planner confidence (${percent}%) is below the ${thresholdPercent}% threshold required for ${toolCall.tool}.`,
+        risk: 'low_confidence',
+      }
     }
   }
 

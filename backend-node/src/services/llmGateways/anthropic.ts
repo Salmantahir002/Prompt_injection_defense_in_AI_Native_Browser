@@ -41,7 +41,7 @@ export class AnthropicGateway extends ProviderGateway {
 
     let response: Response
     try {
-      response = await fetch(url, { headers })
+      response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) })
     } catch (exc) {
       throw new Error(`Connection error to Anthropic (${exc instanceof Error ? exc.constructor.name : 'RequestError'}): ${exc}`)
     }
@@ -145,7 +145,12 @@ export class AnthropicGateway extends ProviderGateway {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       let response: Response
       try {
-        response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) })
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(40_000),
+        })
       } catch (exc) {
         if (attempt < maxRetries - 1) {
           await sleep(1500 * 2 ** attempt)

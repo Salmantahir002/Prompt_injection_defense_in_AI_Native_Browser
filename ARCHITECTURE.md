@@ -77,8 +77,10 @@ The frontend is built as a hardened desktop application using **Electron 42**, *
 | `frontend/src/components/BrowserToolbar.tsx` | Toolbar | Navigation controls, normalized URL bar, and the **"🛡️ Scan Page"** button. |
 | `frontend/src/components/Sidebar.tsx` | Sidebar Hub | Host for the **"Kimo" AI Chat Assistant** and **Autonomous Agent Console**. |
 | `frontend/src/components/AnalysisPanel.tsx` | Explainability | Displays security verdict badges, chunk-by-chunk confidence scores, and matched indicators. |
-| `frontend/src/services/backendApiClient.ts` | REST Client | Sole HTTP client communicating with the FastAPI backend server on port 8000. |
-| `frontend/src/services/agentRuntimeCore.ts` | Agent Loop | Client-side autonomous agent orchestrator running planning and parallel security checks. |
+| `frontend/src/services/backendApiClient.ts` | REST Client | HTTP client communicating with the backend server on port 8000. |
+| `frontend/src/services/agentRuntimeCore.ts` | Agent Loop | Client-side autonomous agent orchestrator featuring loop/stagnation detection and resilient side-page navigation. |
+| `frontend/src/services/agentApprovalPolicy.ts` | Approval Policy | Risk-weighted human consent gate enforcing tool-specific and sensitivity-based confidence thresholds. |
+| `frontend/src/services/agentBrowserMemory.ts` | Browser Memory | Persistent per-origin learned patterns and security blocklist storage. |
 
 ## 1.3 14-Channel Webpage Content Extraction (CDP)
 
@@ -138,7 +140,7 @@ The backend is an asynchronous **FastAPI** service running in Python 3.12+. It c
 | `backend/app/services/prompt_classifier_service.py` | ML Classifier | Inference service that loads `.joblib` model pipelines with automatic rule-based fallback. |
 | `backend/app/services/feature_explanation_service.py` | Explainability | Generates evidence summaries, matched patterns, and risk reasons for the UI drawer. |
 | `backend/app/services/agent_planner_service.py` | Agent Planner | Generates structured JSON tool calls from user goals and semantic page states. |
-| `backend/app/services/agent_tool_registry.py` | Tool Registry | Defines and validates the agent's permitted tool set (`click`, `fill`, `navigate`, etc.). |
+| `backend-node/src/services/agentToolRegistry.ts` | Tool Registry | Defines and validates permitted agent tools, parameter types, and enforces queue coherence / action order checks. |
 | `backend/app/services/llm_opencode_zen_service.py` | LLM Gateway | Asynchronous client connecting to OpenCode Zen API (`https://opencode.ai/zen/v1`). |
 
 ## 2.3 AI Model & LLM Integration (OpenCode Zen)
@@ -364,13 +366,13 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 
 ---
 
-## 3.7 Endpoint 7 — Scan Agent Active Page (`POST /agent/scan-active-page`)
+## 3.7 Endpoint 7 — Scan Agent Active Page (`POST /agent/scan-active-page`) [Decoupled / Retired from Loop]
 
 - **URL:** `POST /api/v1/agent/scan-active-page`
-- **What It Does:** Deeply scans the page the agent is about to interact with. **Agent only.**
-- **Who Calls It:** `agentSecurityPipeline.ts` in parallel with planning.
+- **What It Does:** Previously scanned the page before agent actions. Decoupled from the agent loop to eliminate per-iteration deep-learning classifier latency.
+- **Status:** Retired from agent execution path. Manual on-demand webpage scanning is maintained via `POST /security/check-webpage`.
 
-**Request Body:**
+**Historical Request Body:**
 ```json
 {
   "task_id": "task-883",
@@ -382,7 +384,7 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 }
 ```
 
-**Response Body:**
+**Historical Response Body:**
 ```json
 {
   "task_id": "task-883",
@@ -395,19 +397,26 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 
 ---
 
-## 3.8 Endpoint 8 — Get Agent Security Events (`GET /agent/security/events`)
+## 3.8 Endpoint 8 — Get Agent Security Events (`GET /agent/security/events`) [Retired from Loop]
 
 - **URL:** `GET /api/v1/agent/security/events?task_id=task-883`
-- **What It Does:** Returns the security scan history for autonomous agent iterations.
-- **Who Calls It:** Agent Console UI (kept strictly isolated from manual scan logs).
+- **What It Does:** Previously retrieved security scan logs for agent iterations.
+- **Status:** Retired alongside the per-iteration scan. Task milestones and failures are tracked natively in Working Memory and the Agent Result Modal, while manual scan audit logs remain accessible at `GET /security/events`.
 
 ---
 
 ## 3.9 Endpoint 9 — Get Permitted Agent Tools (`GET /agent/tools`)
 
 - **URL:** `GET /api/v1/agent/tools`
-- **What It Does:** Introspects the agent's permitted action tool definitions and schema parameters.
+- **What It Does:** Introspects the agent's permitted action tool definitions, parameter types, and schema validations.
 - **Supported Tools:** `click`, `fill`, `type`, `press_key`, `navigate`, `open_tab`, `scroll`, `upload`, `wait`, `extract`, `finish`.
+- **Queue Coherence Rules:** The tool registry enforces semantic sanity checks across queued actions (`validateToolQueue`):
+  1. No action may follow `finish`.
+  2. Element-dependent actions cannot be queued after `navigate`.
+  3. `navigate` cannot immediately follow `fill` or `type` without submitting via `press_key` (Enter) or submit `click`.
+  4. Duplicate consecutive `fill` calls on the same target are rejected.
+  5. `press_key` cannot immediately follow `navigate` before elements are loaded.
+  6. Actions requiring explicit human approval must be planned standalone.
 
 ---
 
@@ -429,9 +438,9 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 | **4** | `GET` | `/api/v1/security/events` | Manual scan audit history | Security Event log |
 | **5** | `POST` | `/api/v1/llm/chat` | Proxy safe message to LLM | AI Assistant Chat |
 | **6** | `POST` | `/api/v1/agent/plan` | Decide next agent tool action | Agent iteration loop |
-| **7** | `POST` | `/api/v1/agent/scan-active-page` | Pre-action agent page scan | Agent security pipeline |
-| **8** | `GET` | `/api/v1/agent/security/events` | Agent-specific scan events | Agent Console |
-| **9** | `GET` | `/api/v1/agent/tools` | List allowed agent tools | Agent startup / debug |
+| **7** | `POST` | `/api/v1/agent/scan-active-page` | Retired from agent loop | N/A (Decoupled) |
+| **8** | `GET` | `/api/v1/agent/security/events` | Retired from agent loop | N/A (Decoupled) |
+| **9** | `GET` | `/api/v1/agent/tools` | List allowed agent tools & schemas | Agent startup / debug |
 | **10** | `POST` | `/api/v1/crawler/render-url` | Headless Playwright crawler | Backend crawler service |
 
 ---
@@ -443,7 +452,8 @@ All backend endpoints live under the base URL: `http://127.0.0.1:8000/api/v1`
 Browser Automation in PromptGuard allows an AI agent to operate the desktop browser autonomously:
 1. The user provides a plain-English goal (e.g., *"Search for flight prices from JFK to LHR"*).
 2. The agent perceives the page structure using **Chrome DevTools Protocol Accessibility Trees (AXTree)**.
-3. The agent plans an action, verifies security in parallel, and executes real hardware-level mouse clicks and keystrokes.
+3. The agent plans multi-step action queues, enforces backend action order sanity checks, checks rolling stagnation, and executes real hardware-level mouse clicks and keystrokes.
+4. If the agent visits an untrusted or blocked side page, it gracefully recovers and replans rather than crashing the task.
 
 ## 4.2 Key Technologies in Browser Automation
 
@@ -454,7 +464,10 @@ Browser Automation in PromptGuard allows an AI agent to operate the desktop brow
 | **Native Input Dispatcher** | Hardware-Level Interaction | Uses `Input.dispatchMouseEvent` and `Input.dispatchKeyEvent` (never uses `element.click()`). |
 | **State Builder** | Semantic State Formatter | Translates raw accessibility nodes into a compact JSON element map with coordinates. |
 | **Verification Engine** | Action Validation | Compares DOM signatures before and after an action to confirm success. |
-| **Circuit Breaker** | Execution Guardrail | Halts execution immediately if the security scanner detects an indirect injection. |
+| **Risk-Weighted Approval Engine** | Per-Tool Confidence Gating | Enforces confidence thresholds by tool risk (click: 70%, finish: 75%, financial/destructive: 85%+ or mandatory prompt), avoiding interruptions on harmless actions (scroll: 0%, wait: 0%). |
+| **Loop / Stagnation Detector** | Repetition Breaker | Rolling 9-action window detecting when the same action repeats 3+ times without progress, forcing an automatic replan. |
+| **Action Order Sanity Validator** | Queue Coherence Enforcer | Validates tool queue sequences on the backend before execution (rejects fill followed by navigate without submission, duplicate fills, etc.). |
+| **Resilient Navigation Handler** | Side-Page Fault Tolerance | Prevents mid-task crashes when encountering blocked origins; records failure in working memory and replans an alternative route. |
 
 ## 4.3 Key Files in the Automation Subsystem
 
@@ -463,8 +476,11 @@ Browser Automation in PromptGuard allows an AI agent to operate the desktop brow
 - `frontend/electron/browserRuntime/stateBuilder.ts`: Converts raw accessibility trees into clean semantic states.
 - `frontend/electron/browserRuntime/nativeInput.ts`: Dispatches true OS mouse clicks and key presses.
 - `frontend/electron/browserRuntime/verificationEngine.ts`: Verifies whether actions updated the page.
-- `frontend/src/services/agentRuntimeCore.ts`: Orchestrates the main agent step loop.
-- `frontend/src/services/agentSecurityPipeline.ts`: Gathers 14-channel snapshots and requests security clearance.
+- `frontend/src/services/agentRuntimeCore.ts`: Orchestrates the main agent step loop with rolling stagnation detection and resilient navigation.
+- `frontend/src/services/agentApprovalPolicy.ts`: Decides user approval requests using risk-weighted confidence thresholds and keyword rules.
+- `frontend/src/services/agentBrowserMemory.ts`: Persistent storage for per-origin interaction patterns and blocked host origins.
+- `backend-node/src/services/agentToolRegistry.ts`: Defines permitted tools, schemas, and validates queue coherence / action ordering.
+- `frontend/src/services/agentRecoveryEngine.ts`: 5-step recovery ladder mapping blocked navigations to replan.
 
 ## 4.4 Step-by-Step Agent Execution Loop
 
@@ -480,26 +496,31 @@ Browser Automation in PromptGuard allows an AI agent to operate the desktop brow
 • Queries CDP for Accessibility Tree; builds semantic map of interactive elements (e0, e1, e2...).
          │
          ▼
-[ STEP 3: PARALLEL PLANNING & SECURITY SCAN ]
-┌────────────────────────────────────────┴────────────────────────────────────────┐
-│  TRACK A: PLANNING                             TRACK B: SECURITY SCAN           │
-│  • Sends semantic state to /agent/plan         • Captures 14-channel CDP snapshot│
-│  • LLM returns JSON tool action (click/fill)   • Sends to /agent/scan-active-page│
-└────────────────────────────────────────┬────────────────────────────────────────┘
-                                         │
-                                         ▼
-[ STEP 4: CIRCUIT BREAKER GATE ]
-• If Security = UNSAFE ──► Abort task, alert user, discard action.
-• If Security = SAFE   ──► Proceed to Step 5.
-                                         │
-                                         ▼
-[ STEP 5: NATIVE HARDWARE EXECUTION ]
+[ STEP 3: LLM PLANNING & ACTION ORDER SANITY CHECKS ]
+• Sends semantic state to POST /api/v1/agent/plan.
+• Backend validateToolQueue enforces coherence rules (no fill followed by navigate, no duplicate fills).
+         │
+         ▼
+[ STEP 4: LOOP & STAGNATION DETECTOR ]
+• Inspects action signature across rolling 9-action window.
+• If same action repeated 3+ times without progress ──► Trigger replan with LOOP_DETECTED.
+         │
+         ▼
+[ STEP 5: RISK-WEIGHTED APPROVAL GATE ]
+• Evaluates planner confidence against tool threshold (click: 70%, finish: 75%, financial: 85%+).
+• If confidence < threshold or sensitive rule matched ──► Prompt user for explicit consent.
+• Passive actions (scroll, wait, extract) proceed without interruption.
+         │
+         ▼
+[ STEP 6: NATIVE HARDWARE EXECUTION ]
 • Resolves target element coordinates.
 • Dispatches native mouse click / keystrokes over CDP.
-                                         │
-                                         ▼
-[ STEP 6: VERIFICATION & RECOVERY ]
-• Confirms page state updated. If stuck, runs 5-step recovery ladder.
+         │
+         ▼
+[ STEP 7: VERIFICATION & RESILIENT RECOVERY ]
+• Confirms page state updated.
+• If intermediate navigation hit a blocked side page ──► Record in memory, replan alternative path (don't crash).
+• If action unverified, runs 5-step recovery ladder.
 • Repeats loop until LLM triggers "finish" tool.
 ```
 
@@ -512,6 +533,8 @@ If an element is temporarily covered, not rendered, or an action fails to change
 3. **`Wait for Page`**: Waits for network idle and DOM stabilization events.
 4. **`Rebuild State`**: Re-extracts the full AXTree to map updated layout changes.
 5. **`Replan`**: Sends failure feedback to the LLM to choose an alternative strategy.
+
+> 🛡️ **Graceful Side-Page Handling:** When an intermediate navigation encounters a `NAVIGATION_BLOCKED` security verdict or an origin in the memory blocklist, the recovery engine maps the error directly to **`Replan`** rather than terminating the task. The failure is recorded in Working Memory with instructions to pick an alternative route or remain on the active page, allowing multi-page research tasks to proceed uninterrupted.
 
 ---
 
@@ -589,24 +612,24 @@ backend/app/ml_models/prompt_injection_model/
 | Pipeline | Model Role | Execution Frequency |
 | :--- | :--- | :--- |
 | **Direct User Prompts** | Evaluates user chat input | Once per chat message submitted |
-| **Manual "Scan Page"** | Scores all 14-channel webpage chunks | Once per manual scan click |
-| **Agent Active Page Scan** | Scores live page content before action | Once per agent iteration (parallel) |
+| **Manual "Scan Page"** | Scores all 22-channel webpage chunks | Once per manual scan click |
+| **Agent Active Page Scan** | Decoupled from agent loop to maximize execution speed | Available on-demand via toolbar scan |
 
 ---
 
 # 8. Endpoint Isolation — Manual Scan vs Agent Loop
 
-PromptGuard enforces strict **architectural isolation** between manual scans and autonomous agent scans:
+PromptGuard enforces strict **architectural isolation** between manual security scans and the autonomous agent execution loop:
 
 | Dimension | Manual "Scan Page" | Autonomous Agent Loop |
 | :--- | :--- | :--- |
-| **API Endpoint** | `POST /api/v1/security/check-webpage` | `POST /api/v1/agent/scan-active-page` |
-| **Schema Contract** | `WebpageCheckRequest` | `AgentPageSnapshot` |
-| **Event Logging** | `security_event_store.py` | `agent_security_event_store.py` |
-| **Trigger Mechanism** | User clicks header button | Automated before every agent step |
-| **UI Presentation** | Opens Detailed Explainability Drawer | Status toast / task abort banner |
+| **API Endpoint** | `POST /api/v1/security/check-webpage` | `POST /api/v1/agent/plan` |
+| **Execution Path** | Deep 22-channel DOM & telemetry inspection | High-speed AXTree semantic state planning |
+| **Safety Guardrails** | Dual-detector (Regex + Llama Prompt Guard 2) | Risk-weighted approvals, loop/stagnation detector, queue coherence |
+| **Trigger Mechanism** | User clicks header "Scan Page" button | User submits autonomous task goal |
+| **UI Presentation** | Opens Detailed Explainability Drawer | Agent Result Modal & real-time execution steps |
 
-> 🔒 **Isolation Rule:** The agent never calls the manual endpoint, and the manual button never calls the agent endpoint. Neither system can pollute the state or logs of the other.
+> 🔒 **Isolation Rule:** Manual scanning is completely decoupled from the agent execution path to eliminate latency overhead during multi-step browser automation. The agent never calls the manual scan endpoint, ensuring instant hardware-level execution while keeping forensic page scanning fully available to the user on demand.
 
 ---
 
@@ -622,35 +645,47 @@ PromptGuard enforces strict **architectural isolation** between manual scans and
         ▼                                  ▼                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           FRONTEND (Electron + React)                           │
-│ • Browser Shell (Tabs & Toolbar) • AI Assistant (Kimo) • Agent Console Drawer   │
+│ • Browser Shell (Tabs & Toolbar) • AI Assistant (Kimo) • Agent Console & Modal  │
 └───────┬──────────────────────────────────┬──────────────────────────────────┬───┘
         │ (HTTP Port 8000)                 │ (HTTP Port 8000)                 │
-        ▼                                  ▼                                  ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                             BACKEND (FastAPI /api/v1)                           │
+        ▼                                  ▼                                  │
+┌─────────────────────────────────────────────────────────────┐               │
+│                  SECURITY BACKEND (Fastify 5)               │               │
+│                                                             │               │
+│ 1. Direct Prompt Stream         2. Webpage Scan Stream      │               │
+│    POST /security/check-prompt     POST /security/check-web │               │
+│          │                               │                  │               │
+│          └───────────────────────┬───────┘                  │               │
+│                                  ▼                          │               │
+│               ┌──────────────────────────────────────┐      │               │
+│               │     SECURITY EVALUATION PIPELINE     │      │               │
+│               │ • Text Preprocessing & Sanitization  │      │               │
+│               │ • 800-char Sliding Window Chunking   │      │               │
+│               │ • Rule-Based Detector (Active)       │      │               │
+│               │ • Llama Prompt Guard 2 (fp32 ONNX)   │      │               │
+│               └──────────────────┬───────────────────┘      │               │
+│                                  │                          │               │
+│                                  ▼                          │               │
+│                            [ DECISION ]                     │               │
+│                      ┌───────────┴───────────┐              │               │
+│                   [UNSAFE]                [SAFE]            │               │
+│                      │                       │              │               │
+│             Block & Alert User       POST /llm/chat proxy   │               │
+│             (Action Aborted)        (Chat Response Stream)  │               │
+└──────────────────────────────────────────────┬──────────────┘               │
+                                               │                              │
+                                               │ (HTTP Port 8000)             │
+                                               │ POST /agent/plan             │
+                                               ▼                              │
+┌─────────────────────────────────────────────────────────────────────────────┴───┐
+│                          AUTONOMOUS AGENT EXECUTION LOOP                        │
 │                                                                                 │
-│ 1. Direct Prompt Stream         2. Webpage Scan Stream      3. Agent Action Loop│
-│    POST /security/check-prompt     POST /security/check-web   POST /agent/plan  │
-│                                                               POST /agent/scan  │
-│          │                               │                          │           │
-│          └───────────────────────┬───────┴──────────────────────────┘           │
-│                                  ▼                                              │
-│               ┌──────────────────────────────────────┐                          │
-│               │     SECURITY EVALUATION PIPELINE     │                          │
-│               │ • Text Preprocessing & Sanitization  │                          │
-│               │ • 800-char Sliding Window Chunking   │                          │
-│               │ • Rule-Based Detector (Active)       │                          │
-│               │ • Machine Learning Pipeline (Slot)   │                          │
-│               └──────────────────┬───────────────────┘                          │
-│                                  │                                              │
-│                                  ▼                                              │
-│                            [ DECISION ]                                         │
-│                      ┌───────────┴───────────┐                                  │
-│                   [UNSAFE]                [SAFE]                                │
-│                      │                       │                                  │
-│             Block & Alert User               ├─► POST /llm/chat (OpenCode Zen)  │
-│             (Action Aborted)                 └─► CDP Native Input (Click/Type)  │
-└─────────────────────────────────────────────────────────────────────────────────┘
+│ 1. Plan Next Actions: Backend validateToolQueue enforces Action Order Sanity   │
+│ 2. Stagnation Check: Rolling 9-step window detects 3+ loops and replans         │
+│ 3. Risk-Weighted Approval: Per-tool threshold check (click: 70%, finish: 75%)   │
+│ 4. Native Hardware Execution: Mouse, clicks, keystrokes dispatched via CDP      │
+│ 5. Resilient Side-Page Handling: Navigation blocks trigger replan (don't crash) │
+└──────────────────────────────────────┬──────────────────────────────────────────┘
                                        │
                                        ▼
                               [ RESULT BACK TO YOU ]

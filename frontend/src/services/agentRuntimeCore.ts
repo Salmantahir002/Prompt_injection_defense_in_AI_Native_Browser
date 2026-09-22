@@ -10,6 +10,7 @@ import { AgentWorkingMemory } from './agentWorkingMemory'
 import { AgentPlanError, requestPlan } from './agentApiClient'
 import { extractPageState, invokeRuntime, isBrowserRuntimeAvailable, setAgentOverlay } from './browserRuntime'
 import { isTerminalTool, resolveToolCall } from './agentToolRegistry'
+import { agentBrowserMemory } from './agentBrowserMemory'
 
 /**
  * The agent loop.
@@ -97,6 +98,33 @@ export class AgentTask {
    */
   private plannerFailureStreak = 0
   private static readonly MAX_PLANNER_FAILURES = 12
+  private readonly actionHistory: string[] = []
+  private static readonly STAGNATION_WINDOW = 9
+  private static readonly STAGNATION_THRESHOLD = 3
+
+  /** Builds an action signature to detect repetitive non-progressing actions. */
+  private buildActionSignature(toolCall: AgentToolCall, pageState: PageStateSnapshot): string {
+    const args = toolCall.arguments ?? {}
+    const target = typeof args.target === 'string' ? args.target : ''
+    const key = typeof args.key === 'string' ? args.key : ''
+    const url = typeof args.url === 'string' ? args.url : ''
+    return `${pageState.url}|${toolCall.tool}|${target}|${key}|${url}`
+  }
+
+  /**
+   * Tracks actions in a rolling window. Returns true if the same action
+   * repeats 3 or more times without forward progress.
+   */
+  private detectStagnation(toolCall: AgentToolCall, pageState: PageStateSnapshot): boolean {
+    const signature = this.buildActionSignature(toolCall, pageState)
+    this.actionHistory.push(signature)
+    if (this.actionHistory.length > AgentTask.STAGNATION_WINDOW) {
+      this.actionHistory.shift()
+    }
+
+    const count = this.actionHistory.filter((sig) => sig === signature).length
+    return count >= AgentTask.STAGNATION_THRESHOLD
+  }
 
   constructor(options: AgentTaskOptions) {
     this.taskId = options.taskId
@@ -163,6 +191,9 @@ export class AgentTask {
         }
 
         this.plannerFailureStreak = 0
+        if (plan.thought) {
+          this.memory.setLastThought(plan.thought)
+        }
 
         const outcome = await this.executeQueue(plan, pageState)
         if (outcome) return outcome
@@ -185,6 +216,51 @@ export class AgentTask {
       if (this.stepCount >= this.maxSteps) return null // outer loop reports the limit
       if (this.signal?.aborted) {
         return this.finalResult('failed', 'Task was stopped by the user.', 'cancelled')
+      }
+
+      const targetIdArg = typeof toolCall.arguments?.target === 'string' ? toolCall.arguments.target : ''
+
+      // Loop/Stagnation Detector: prevent repeating identical actions 3+ times
+      if (!isTerminalTool(toolCall) && this.detectStagnation(toolCall, pageState)) {
+        const desc = describeToolCall(toolCall)
+        if (targetIdArg) {
+          this.memory.recordInvalidElement(targetIdArg)
+        }
+        this.memory.recordFailure(
+          toolCall.tool,
+          `Loop / stagnation detected: '${desc}' was repeated 3+ times without forward progress. Try an alternative control or strategy.`,
+          'LOOP_DETECTED',
+        )
+        this.memory.incrementRetries()
+        this.events.onStatus?.(`Loop detected on '${toolCall.tool}'. Replanning alternative action...`)
+        return null
+      }
+
+      // Pre-execution guard: fast microsecond check against blacklisted or disabled elements
+      if (targetIdArg) {
+        if (this.memory.isElementInvalid(targetIdArg)) {
+          this.memory.recordFailure(
+            toolCall.tool,
+            `Target element '${targetIdArg}' was previously non-responsive or failed. Skipping dead element to replan.`,
+            'ELEMENT_NOT_INTERACTABLE',
+          )
+          this.memory.incrementRetries()
+          this.events.onStatus?.(`Skipping dead element '${targetIdArg}'. Replanning...`)
+          return null
+        }
+
+        const knownElement = pageState.elements.find((el) => el.id === targetIdArg)
+        if (knownElement?.disabled && (toolCall.tool === 'click' || toolCall.tool === 'fill')) {
+          this.memory.recordInvalidElement(targetIdArg)
+          this.memory.recordFailure(
+            toolCall.tool,
+            `Element '${targetIdArg}' ("${knownElement.name || knownElement.role}") is disabled and cannot be interacted with.`,
+            'ELEMENT_NOT_INTERACTABLE',
+          )
+          this.memory.incrementRetries()
+          this.events.onStatus?.(`Element '${targetIdArg}' is disabled. Replanning...`)
+          return null
+        }
       }
 
       const approvalRequest = approvalFor(toolCall, pageState, {
@@ -227,8 +303,25 @@ export class AgentTask {
           ? toolCall.arguments.note
           : 'Recorded a finding.'
         this.recordStep(toolCall)
+        this.memory.recordFinding(note)
         this.memory.recordStep('extract', note, true)
         continue
+      }
+
+      // Graceful handling of blocked side pages prior to runtime dispatch:
+      if (toolCall.tool === 'navigate') {
+        const targetUrl = typeof toolCall.arguments?.url === 'string' ? toolCall.arguments.url : ''
+        if (targetUrl && agentBrowserMemory.isBlocked(targetUrl)) {
+          this.recordStep(toolCall)
+          this.memory.recordFailure(
+            'navigate',
+            `Navigation to '${targetUrl}' was prevented because the origin is blocked/untrusted. Find an alternative route or proceed with current page content.`,
+            'NAVIGATION_BLOCKED',
+          )
+          this.memory.incrementRetries()
+          this.events.onStatus?.(`Navigation to blocked origin '${targetUrl}' was prevented. Replanning alternative path...`)
+          return null
+        }
       }
 
       const resolved = resolveToolCall(toolCall)
@@ -249,6 +342,24 @@ export class AgentTask {
       if (!execResult.ok) {
         const errorMsg = 'error' in execResult && execResult.error ? execResult.error.message : 'Action failed'
         const errorCode = 'error' in execResult && execResult.error ? execResult.error.code : undefined
+
+        if (targetIdArg) {
+          this.memory.recordInvalidElement(targetIdArg)
+        }
+
+        // Graceful handling of blocked navigation mid-task:
+        if (toolCall.tool === 'navigate' && errorCode === 'NAVIGATION_BLOCKED') {
+          const navUrl = typeof toolCall.arguments?.url === 'string' ? toolCall.arguments.url : 'url'
+          this.memory.recordFailure(
+            'navigate',
+            `Navigation to '${navUrl}' was blocked by browser security policy. Continuing with alternative action.`,
+            'NAVIGATION_BLOCKED',
+          )
+          this.memory.incrementRetries()
+          this.events.onStatus?.(`Navigation to '${navUrl}' was blocked. Replanning alternative action...`)
+          return null
+        }
+
         this.memory.recordFailure(
           toolCall.tool,
           `${describeToolCall(toolCall)} — ${errorMsg}`,
@@ -260,6 +371,9 @@ export class AgentTask {
 
       const verification = 'verification' in execResult.data ? execResult.data.verification : undefined
       if (verification && !verification.verified) {
+        if (targetIdArg) {
+          this.memory.recordInvalidElement(targetIdArg)
+        }
         let hint = verification.reason
         if (toolCall.tool === 'press_key' && toolCall.arguments?.key === 'Enter') {
           hint += ' (If submitting a filter or setting, find and click the nearby apply/submit button instead)'
@@ -286,6 +400,18 @@ export class AgentTask {
 
   private async runOpenTab(toolCall: AgentToolCall): Promise<AgentTaskResult | null> {
     const url = typeof toolCall.arguments?.url === 'string' ? toolCall.arguments.url : undefined
+
+    if (url && agentBrowserMemory.isBlocked(url)) {
+      this.recordStep(toolCall)
+      this.memory.recordFailure(
+        'open_tab',
+        `Opening tab to '${url}' was prevented because this origin is blocked/untrusted.`,
+        'NAVIGATION_BLOCKED',
+      )
+      this.memory.incrementRetries()
+      this.events.onStatus?.(`Blocked tab open was prevented for '${url}'. Replanning...`)
+      return null
+    }
 
     if (!this.onOpenTab) {
       this.recordStep(toolCall)

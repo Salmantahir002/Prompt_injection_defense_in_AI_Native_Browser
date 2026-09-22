@@ -353,6 +353,34 @@ export function validateToolQueue(
       )
     }
 
+    if (navigated && toolName === 'press_key') {
+      throw new ToolValidationError(
+        `'press_key' cannot be queued after 'navigate': wait for the new page to load and interact with an element first.`,
+      )
+    }
+
+    if (index > 0) {
+      const prevTool = validated[index - 1]![0]
+      const prevArgs = validated[index - 1]![1]
+
+      if ((prevTool === 'fill' || prevTool === 'type') && toolName === 'navigate') {
+        throw new ToolValidationError(
+          `'navigate' cannot immediately follow '${prevTool}': inputs must be submitted via 'press_key' (Enter) or a submit 'click' before navigating away.`,
+        )
+      }
+
+      if (
+        (prevTool === 'fill' || prevTool === 'type') &&
+        (toolName === 'fill' || toolName === 'type') &&
+        args.target &&
+        args.target === prevArgs.target
+      ) {
+        throw new ToolValidationError(
+          `Duplicate input on target '${args.target}' in the same queue. Combine inputs into a single step.`,
+        )
+      }
+    }
+
     if (requiresApproval(toolName) && payloads.length > 1) {
       throw new ToolValidationError(`'${toolName}' needs user approval and must be planned on its own, not queued.`)
     }

@@ -148,7 +148,7 @@ export class OpenAICompatibleGateway extends ProviderGateway {
 
     for (const url of candidateUrls) {
       try {
-        const response = await fetch(url, { headers })
+        const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) })
         if (response.status === 401 || response.status === 403) {
           const detail = await extractErrorMessage(response)
           throw new Error(`Authentication failed (${response.status}): ${detail}`)
@@ -304,7 +304,12 @@ export class OpenAICompatibleGateway extends ProviderGateway {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       let response: Response
       try {
-        response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) })
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(40_000),
+        })
       } catch (exc) {
         if (attempt < maxRetries - 1) {
           await sleep(backoff * 1000)

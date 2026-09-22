@@ -55,8 +55,9 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       let actions: Array<[string, Record<string, unknown>]>
       let confidence: number
       let reason: string
+      let thought: string | undefined
       try {
-        ;[actions, confidence, reason] = await agentPlannerService.requestPlan(goal, memory, pageState)
+        ;[actions, confidence, reason, thought] = await agentPlannerService.requestPlan(goal, memory, pageState)
       } catch (exc) {
         if (exc instanceof ToolValidationError) {
           // The model produced something we will not execute. Surfaced as 422
@@ -81,6 +82,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         confidence,
         needs_user_confirmation: confidence < settings.AGENT_MIN_CONFIDENCE,
         reason,
+        thought,
         model: agentPlannerService.model,
         planner_mode: 'llm' as const,
       }

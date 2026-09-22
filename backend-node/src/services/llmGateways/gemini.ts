@@ -26,7 +26,7 @@ export class GeminiGateway extends ProviderGateway {
 
     let response: Response
     try {
-      response = await fetch(url)
+      response = await fetch(url, { signal: AbortSignal.timeout(15_000) })
     } catch (exc) {
       throw new Error(`Connection error to Google Gemini: ${exc}`)
     }
@@ -139,6 +139,7 @@ export class GeminiGateway extends ProviderGateway {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(40_000),
         })
       } catch (exc) {
         if (attempt < maxRetries - 1) {

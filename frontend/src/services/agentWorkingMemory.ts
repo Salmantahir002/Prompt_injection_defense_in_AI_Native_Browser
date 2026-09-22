@@ -26,6 +26,9 @@ export class AgentWorkingMemory {
   private failures: AgentFailureRecord[] = []
   private retries = 0
   private currentPage = ''
+  private extractedKnowledge: string[] = []
+  private invalidElements = new Set<string>()
+  private lastThought = ''
 
   constructor(goal: string) {
     this.goal = goal.trim()
@@ -46,6 +49,34 @@ export class AgentWorkingMemory {
     }
   }
 
+  recordFinding(note: string): void {
+    const trimmed = (note ?? '').trim()
+    if (trimmed && !this.extractedKnowledge.includes(trimmed)) {
+      this.extractedKnowledge.push(trimmed)
+      if (this.extractedKnowledge.length > 20) {
+        this.extractedKnowledge = this.extractedKnowledge.slice(-20)
+      }
+    }
+  }
+
+  recordInvalidElement(elementId: string): void {
+    if (elementId && typeof elementId === 'string') {
+      this.invalidElements.add(elementId.trim())
+    }
+  }
+
+  isElementInvalid(elementId: string): boolean {
+    return Boolean(elementId && this.invalidElements.has(elementId.trim()))
+  }
+
+  setLastThought(thought: string): void {
+    this.lastThought = (thought ?? '').trim().slice(0, 500)
+  }
+
+  get findings(): readonly string[] {
+    return this.extractedKnowledge
+  }
+
   setPendingSteps(steps: string[]): void {
     this.pendingSteps = [...steps]
   }
@@ -64,11 +95,12 @@ export class AgentWorkingMemory {
     return this.retries
   }
 
-  /** Navigating away invalidates outstanding retry state for the old page. */
+  /** Navigating away invalidates outstanding retry state and invalid element IDs for the old page. */
   setCurrentPage(url: string): void {
     if (url !== this.currentPage) {
       this.currentPage = url
       this.retries = 0
+      this.invalidElements.clear()
     }
   }
 
@@ -89,6 +121,9 @@ export class AgentWorkingMemory {
       failures: [...this.failures],
       retries: this.retries,
       current_page: this.currentPage,
+      extracted_knowledge: [...this.extractedKnowledge],
+      invalid_elements: Array.from(this.invalidElements),
+      last_thought: this.lastThought || undefined,
     }
   }
 }

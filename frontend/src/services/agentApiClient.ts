@@ -64,15 +64,24 @@ export async function requestPlan(
     page_state: pageState,
   }
 
+  const timeoutSignal = AbortSignal.timeout(45_000)
+  const combinedSignal = signal
+    ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal)
+    : timeoutSignal
+
   let response: Response
   try {
     response = await fetch(`${AGENT_API_BASE_URL}/agent/plan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal,
+      signal: combinedSignal,
     })
   } catch (error) {
+    if (signal?.aborted) throw error
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new AgentPlanError('network', 'Agent planner request timed out after 45s. Backend or AI provider is unresponsive.')
+    }
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new AgentPlanError('network', 'Agent backend is not reachable. Ensure the Node.js backend is running on port 8000.')
   }

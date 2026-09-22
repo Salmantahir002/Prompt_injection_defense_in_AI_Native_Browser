@@ -109,6 +109,52 @@ describe('queue validation', () => {
       ),
     ).toThrow(ToolValidationError)
   })
+
+  it('rejects navigate immediately following fill or type', () => {
+    expect(() =>
+      validateToolQueue(
+        [
+          { tool: 'fill', arguments: { target: 'e1', value: 'query' } },
+          { tool: 'navigate', arguments: { url: 'https://example.test' } },
+        ],
+        KNOWN_IDS,
+      ),
+    ).toThrow(/cannot immediately follow 'fill'/)
+
+    expect(() =>
+      validateToolQueue(
+        [
+          { tool: 'type', arguments: { text: 'query' } },
+          { tool: 'navigate', arguments: { url: 'https://example.test' } },
+        ],
+        KNOWN_IDS,
+      ),
+    ).toThrow(/cannot immediately follow 'type'/)
+  })
+
+  it('rejects duplicate input on the same target in one queue', () => {
+    expect(() =>
+      validateToolQueue(
+        [
+          { tool: 'fill', arguments: { target: 'e1', value: 'first' } },
+          { tool: 'fill', arguments: { target: 'e1', value: 'second' } },
+        ],
+        KNOWN_IDS,
+      ),
+    ).toThrow(/Duplicate input on target 'e1'/)
+  })
+
+  it('rejects press_key immediately after navigate', () => {
+    expect(() =>
+      validateToolQueue(
+        [
+          { tool: 'navigate', arguments: { url: 'https://example.test' } },
+          { tool: 'press_key', arguments: { key: 'Enter' } },
+        ],
+        KNOWN_IDS,
+      ),
+    ).toThrow(/'press_key' cannot be queued after 'navigate'/)
+  })
 })
 
 describe('registry', () => {

@@ -43,7 +43,6 @@ export type RecoveryPlan = {
 
 /** Failures where retrying is pointless or unsafe. */
 const TERMINAL_CODES: ReadonlySet<BrowserRuntimeErrorCode> = new Set<BrowserRuntimeErrorCode>([
-  'NAVIGATION_BLOCKED',
   'APPROVAL_REQUIRED',
   'TARGET_DETACHED',
   'NO_TARGET',
@@ -54,7 +53,7 @@ const TERMINAL_CODES: ReadonlySet<BrowserRuntimeErrorCode> = new Set<BrowserRunt
 /**
  * Where each failure enters the ladder. A stale element id is not fixed by
  * repeating the same call, so it starts at `refind`; a timeout usually means
- * the page was still working, so it starts at `wait`.
+ * the page was still working, so it starts at `wait`; blocked side navigations replan.
  */
 const ENTRY_STRATEGY: Partial<Record<BrowserRuntimeErrorCode, RecoveryStrategy>> = {
   ELEMENT_NOT_FOUND: 'refind',
@@ -62,6 +61,7 @@ const ENTRY_STRATEGY: Partial<Record<BrowserRuntimeErrorCode, RecoveryStrategy>>
   TIMEOUT: 'wait',
   CDP_ERROR: 'retry',
   INVALID_ARGUMENT: 'replan',
+  NAVIGATION_BLOCKED: 'replan',
 }
 
 const LADDER: readonly RecoveryStrategy[] = ['retry', 'refind', 'wait', 'rebuild', 'replan']

@@ -28,6 +28,7 @@ export type AgentPlanResponse = {
   /** True when confidence fell below the backend threshold — pause for the user. */
   needs_user_confirmation: boolean
   reason: string
+  thought?: string
   model: string
   planner_mode: 'llm'
 }
@@ -55,6 +56,9 @@ export type AgentWorkingMemorySnapshot = {
   failures: AgentFailureRecord[]
   retries: number
   current_page: string
+  extracted_knowledge?: string[]
+  invalid_elements?: string[]
+  last_thought?: string
 }
 
 export type AgentPlanRequest = {

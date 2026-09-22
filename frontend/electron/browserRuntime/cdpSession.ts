@@ -100,17 +100,28 @@ export class CdpSession {
     return this.contents.isDestroyed() ? '' : this.contents.getTitle()
   }
 
-  async send(method: string, params?: CdpParams): Promise<CdpParams> {
+  async send(method: string, params?: CdpParams, timeoutMs = 15_000): Promise<CdpParams> {
     const attached = await this.ensureAttached()
     if (!attached || this.contents.isDestroyed()) {
       throw new BrowserRuntimeError('TARGET_DETACHED', `CDP session for target ${this.targetId} is no longer attached`)
     }
 
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      const result = await this.contents.debugger.sendCommand(method, params)
+      const commandPromise = this.contents.debugger.sendCommand(method, params)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new BrowserRuntimeError('TIMEOUT', `CDP command ${method} timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+      })
+
+      const result = await Promise.race([commandPromise, timeoutPromise])
       return (result ?? {}) as CdpParams
     } catch (error) {
+      if (error instanceof BrowserRuntimeError) throw error
       throw new BrowserRuntimeError('CDP_ERROR', `${method} failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      if (timer) clearTimeout(timer)
     }
   }
 

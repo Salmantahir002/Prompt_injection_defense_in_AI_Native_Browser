@@ -152,6 +152,9 @@ export const AgentWorkingMemorySchema = Type.Object({
   failures: Type.Optional(Type.Array(AgentFailureRecordSchema)),
   retries: Type.Optional(Type.Integer()),
   current_page: Type.Optional(Type.String()),
+  extracted_knowledge: Type.Optional(Type.Array(Type.String())),
+  invalid_elements: Type.Optional(Type.Array(Type.String())),
+  last_thought: Type.Optional(Type.String()),
 })
 
 export const AgentPlanRequestSchema = Type.Object({
@@ -173,6 +176,7 @@ export const AgentPlanResponseSchema = Type.Object({
   confidence: Type.Number({ minimum: 0, maximum: 1 }),
   needs_user_confirmation: Type.Boolean(),
   reason: Type.String(),
+  thought: Type.Optional(Type.String()),
   model: Type.String(),
   planner_mode: Type.Literal('llm'),
 })

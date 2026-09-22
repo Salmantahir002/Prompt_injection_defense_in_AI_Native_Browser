@@ -50,25 +50,35 @@ You decide the next browser action(s) that make progress toward the user's goal.
 Rules:
 1. Reply with exactly one JSON object and nothing else. No prose, no explanation, no markdown fences.
 2. The object has this shape:
-   {"actions": [{"tool": <name>, "arguments": {...}}, ...], "confidence": <0.0-1.0>, "reason": <short string>}
-3. Queue multiple actions (up to {max_queue}) for certain, deterministic sequences to make automation FAST:
+   {"thought": "<concise 1-2 sentence thinking: status & verification & strategy>", "actions": [{"tool": <name>, "arguments": {...}}, ...], "confidence": <0.0-1.0>, "reason": <short string>}
+3. FAST THINKING PROCESS (Always fill "thought" first before choosing actions):
+   - Status & Progress: What page is this and has the user's primary goal already been satisfied?
+   - Validation & Prerequisite Check: Do target element IDs exist in CURRENT PAGE STATE and are they free from recent failures/blacklisted elements?
+   - Strategy: What is the cleanest, fastest action sequence to advance the goal?
+4. Queue multiple actions (up to {max_queue}) for certain, deterministic sequences to make automation FAST:
    - Example 1 (Search): [{"tool": "fill", "arguments": {"target": "<input_id>", "value": "<query>"}}, {"tool": "press_key", "arguments": {"key": "Enter"}}]
    - Example 2 (Form filling): [{"tool": "fill", "arguments": {"target": "e1", "value": "user"}}, {"tool": "fill", "arguments": {"target": "e2", "value": "pass"}}, {"tool": "click", "arguments": {"target": "e3"}}]
    - Example 3 (Filter/setting field): [{"tool": "fill", "arguments": {"target": "<input_id>", "value": "50000"}}, {"tool": "click", "arguments": {"target": "<apply_button_id>"}}]
-4. Never queue anything after "navigate" or "open_tab" — the page will be different
+5. Never queue anything after "navigate" or "open_tab" — the page will be different
    and every element id will be invalid. Plan the new page in the next step.
-5. Only use element ids that appear in the CURRENT PAGE STATE. Never invent an id.
-6. Goal Completion & Persistence: Only use the "finish" tool when the user's entire goal has been fully achieved and confirmed against CURRENT PAGE STATE, or when all plausible interaction paths have been exhausted. Never call "finish" prematurely when required steps (e.g. searching, selecting, filling all fields, submitting) are still incomplete.
-7. If you are unsure which action is correct, still answer, but report a lower confidence.
-8. Set confidence honestly: it decides whether a human is asked to confirm.
-9. "click", "fill", "type", and "press_key" already wait for the page to settle before
-   they return — do not follow one of them with a bare "wait" just to be safe. Only queue
-   "wait" when the page is doing something no action of yours triggered (e.g. it was already
-   loading when you arrived), or after a "wait" already timed out and you have a specific
-   reason the page needs more time. Never queue two "wait" actions back to back.
+6. Only use element ids that appear in the CURRENT PAGE STATE. Never invent an id.
+7. Goal Completion & Persistence: Only use the "finish" tool when the user's entire goal has been fully achieved and confirmed against CURRENT PAGE STATE, or when all plausible interaction paths have been exhausted. Never call "finish" prematurely when required steps (e.g. searching, selecting, filling all fields, submitting) are still incomplete.
+8. If you are unsure which action is correct, still answer, but report a lower confidence.
+9. Set confidence honestly: it decides whether a human is asked to confirm.
+10. "click", "fill", "type", and "press_key" already wait for the page to settle before
+    they return — do not follow one of them with a bare "wait" just to be safe. Only queue
+    "wait" when the page is doing something no action of yours triggered (e.g. it was already
+    loading when you arrived), or after a "wait" already timed out and you have a specific
+    reason the page needs more time. Never queue two "wait" actions back to back.
 
-CROSS-WEBSITE AUTOMATION GUIDELINES:
-- Direct Navigation for Known Sites: When the goal names a specific well-known website, service, or resource type (e.g. scholarships, jobs, news, maps, YouTube, Wikipedia, LinkedIn, government portals), navigate DIRECTLY to the most relevant URL — do NOT route through Google as an intermediary unless the goal explicitly asks to "search on Google". Example: goal "find scholarships in Islamabad for students" → navigate directly to a known scholarship portal or HEC Pakistan website, NOT google.com. Routing through Google wastes steps and risks losing the result to pagination or ads.
+CROSS-WEBSITE AUTOMATION GUIDELINES (Universal across all websites):
+- Navigation & Opening Goals ("Open X Channel / Page / Profile / Repo / Website"):
+  When the user's goal is to open, navigate to, visit, or view a specific channel, profile, video, repository, or webpage (e.g. "open Vocal Peaks channel", "open YouTube and go to X channel", "open GitHub repo Y", "go to Wikipedia page Z"):
+  As soon as you have clicked the link or navigated and CURRENT PAGE STATE shows you are on the target channel or page (verified by the URL, page title, or heading name matching the target), the goal is 100% COMPLETE. Immediately call the "finish" tool with a summary (e.g. {"tool": "finish", "arguments": {"summary": "Successfully opened the target channel/page."}}). Do NOT continue clicking videos, subscribing, or exploring elements unless the user explicitly requested further actions!
+- Information Retrieval & Questions (Universal):
+  When the user's goal is to find, look up, or answer a question from the web (e.g. "who is...", "what is the date/price/spec of...", "summarize..."):
+  Navigate or search, locate the answer in the page state or search results, use the "extract" tool to record the finding into working memory, and then immediately call "finish".
+- Direct Navigation for Known Sites: When the goal names a specific well-known website, service, or resource type (e.g. scholarships, jobs, news, maps, YouTube, Wikipedia, LinkedIn, GitHub, government portals), navigate DIRECTLY to the most relevant URL — do NOT route through Google as an intermediary unless the goal explicitly asks to "search on Google". Example: goal "find scholarships in Islamabad for students" → navigate directly to a known scholarship portal or HEC Pakistan website, NOT google.com. Routing through Google wastes steps and risks losing the result to pagination or ads.
 - Parallel-site Strategy: For broad research tasks (finding multiple sources), open the most authoritative domain first, extract what is needed, then move to the next. Do not spend more than 3 steps on a single site before deciding to move on.
 - Searching: Always find the editable input field (role 'textbox', 'searchbox', 'combobox', 'input') and use "fill" with the search term. Then submit via "press_key" ("Enter") or clicking the search button. NEVER click a search button while the search box is empty.
 - Input vs Button Disambiguation: Elements with role 'textbox', 'searchbox', 'combobox' are input fields where text must be entered; elements with role 'button' only trigger actions. When both exist with similar names (e.g. "Search"), fill the input field first.
@@ -209,6 +219,23 @@ class AgentPlannerService {
       }
     }
 
+    const extracted = memory.extracted_knowledge ?? []
+    if (extracted.length > 0) {
+      lines.push('known findings / facts:')
+      for (const item of extracted.slice(-8)) {
+        lines.push(`  - ${item}`)
+      }
+    }
+
+    const invalidElements = memory.invalid_elements ?? []
+    if (invalidElements.length > 0) {
+      lines.push(`blacklisted / non-responsive elements (DO NOT TARGET): ${invalidElements.join(', ')}`)
+    }
+
+    if (memory.last_thought) {
+      lines.push(`previous deduction: ${memory.last_thought}`)
+    }
+
     if (memory.retries) lines.push(`retries so far: ${memory.retries}`)
 
     return lines.length > 0 ? lines.join('\n') : '(nothing yet — this is the first step)'
@@ -304,7 +331,7 @@ class AgentPlannerService {
   }
 
   /** Parse and fully validate a planner reply. Throws ToolValidationError. */
-  parsePlan(raw: string, knownElementIds?: readonly string[]): [PlannedAction[], number, string] {
+  parsePlan(raw: string, knownElementIds?: readonly string[]): [PlannedAction[], number, string, string?] {
     const payload = AgentPlannerService.extractJsonObject(raw)
     const actions = validateToolQueue(AgentPlannerService.extractActions(payload), knownElementIds) as PlannedAction[]
 
@@ -316,21 +343,34 @@ class AgentPlannerService {
       confidence = Math.min(Math.max(rawConfidence, 0.0), 1.0)
     }
 
-    const reason = typeof payload.reason === 'string' ? payload.reason : ''
+    const thought = typeof payload.thought === 'string'
+      ? payload.thought.slice(0, 500)
+      : typeof payload.reason === 'string'
+        ? payload.reason.slice(0, 500)
+        : undefined
 
-    return [actions, confidence, reason.slice(0, 500)]
+    const reason = typeof payload.reason === 'string'
+      ? payload.reason.slice(0, 500)
+      : (thought ?? '')
+
+    return [actions, confidence, reason, thought]
   }
 
-  // -------------------------------------------------------------------- call
+  private readonly goalTranslationCache = new Map<string, string>()
 
   /**
    * Translate a Roman-Urdu / non-English goal to English so the planner
    * prompt works effectively. Uses a single low-cost LLM call (128 tokens max).
-   * Returns the original goal unchanged on any failure so the agent always
-   * has something to work with.
+   * Cached in-memory so subsequent steps in the same task reuse the translation
+   * without burning an extra LLM call.
    */
   private async normalizeGoal(goal: string): Promise<string> {
-    if (!looksLikeNonEnglish(goal)) return goal
+    const trimmed = goal.trim()
+    if (!looksLikeNonEnglish(trimmed)) return trimmed
+
+    const cached = this.goalTranslationCache.get(trimmed)
+    if (cached) return cached
+
     try {
       const translated = await llmProviderManager.planChat({
         messages: [
@@ -340,23 +380,30 @@ class AgentPlannerService {
               'You are a translator. Translate the user message to clear, concise English. ' +
               'Output ONLY the English translation — no explanation, no quotes, no extra text.',
           },
-          { role: 'user', content: goal },
+          { role: 'user', content: trimmed },
         ],
         temperature: 0.0,
         maxTokens: 128,
       })
       const cleaned = translated.trim()
       // Guard: if the model returned something absurdly short or identical, skip
-      if (cleaned.length >= 4 && cleaned.toLowerCase() !== goal.toLowerCase()) {
-        return `${cleaned} [original: ${goal}]`
+      if (cleaned.length >= 4 && cleaned.toLowerCase() !== trimmed.toLowerCase()) {
+        const result = `${cleaned} [original: ${trimmed}]`
+        if (this.goalTranslationCache.size > 100) {
+          const first = this.goalTranslationCache.keys().next().value
+          if (first) this.goalTranslationCache.delete(first)
+        }
+        this.goalTranslationCache.set(trimmed, result)
+        return result
       }
     } catch {
       // non-critical — fall through to original goal
     }
-    return goal
+    this.goalTranslationCache.set(trimmed, trimmed)
+    return trimmed
   }
 
-  async requestPlan(goal: string, memory: AgentWorkingMemory, state: AgentPageState): Promise<[PlannedAction[], number, string]> {
+  async requestPlan(goal: string, memory: AgentWorkingMemory, state: AgentPageState): Promise<[PlannedAction[], number, string, string?]> {
     const normalizedGoal = await this.normalizeGoal(goal)
     const messages = this.buildMessages(normalizedGoal, memory, state)
     const knownElementIds = [

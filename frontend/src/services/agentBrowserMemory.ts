@@ -53,18 +53,21 @@ function originOf(url: string): string {
 
 type MemoryFile = Record<string, OriginMemory>
 
+let memoryStoreFallback: MemoryFile = {}
+
 function readStore(): MemoryFile {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
-    if (!raw) return {}
+    if (!raw) return memoryStoreFallback
     const parsed: unknown = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? (parsed as MemoryFile) : {}
+    return parsed && typeof parsed === 'object' ? (parsed as MemoryFile) : memoryStoreFallback
   } catch {
-    return {}
+    return memoryStoreFallback
   }
 }
 
 function writeStore(store: MemoryFile): void {
+  memoryStoreFallback = store
   try {
     const origins = Object.values(store)
       .sort((left, right) => right.lastVisitedAt - left.lastVisitedAt)
