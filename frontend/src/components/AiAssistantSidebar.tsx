@@ -591,9 +591,6 @@ export function AiAssistantSidebar({
                       {msg.securityResult.allowed ? <ShieldCheckIcon /> : <ShieldXIcon />}
                       {msg.securityResult.allowed ? 'Safe' : 'Blocked'}
                     </span>
-                    <span className="security-card-confidence">
-                      {Math.round(msg.securityResult.confidence * 100)}%
-                    </span>
                   </div>
                   <div className="security-card-body">
                     <div className="security-card-risk">

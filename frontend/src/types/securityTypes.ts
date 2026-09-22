@@ -64,15 +64,6 @@ export type WebpageContent = {
   inline_javascript: string
   css_content: string
   css_generated_content: string
-  network_responses: string
-  websocket_messages: string
-  service_worker_activity: string
   source_maps: string
-  redirects: string
-  third_party_resources: string
-  suspicious_domains: string
-  frame_navigation: string
-  runtime_script_activity: string
-  loaded_resources: string
   dom_snapshot_content: string
 }

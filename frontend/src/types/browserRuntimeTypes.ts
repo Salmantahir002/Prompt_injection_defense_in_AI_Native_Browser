@@ -127,9 +127,6 @@ export type AgentSecuritySnapshot = {
   external_javascript: string
   css_content: string
   css_generated_content: string
-  network_responses: string
-  websocket_messages: string
-  service_worker_activity: string
   dom_snapshot_content: string
   page_title: string
   url: string

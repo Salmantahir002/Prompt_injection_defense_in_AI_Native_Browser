@@ -224,12 +224,14 @@ To reduce false positives, some short/common terms (like "dan" or "jailbreak") a
 
 ### 6.4 Webpage Scan Channels
 
-When the user clicks "Scan Page", the frontend captures the page through 22 separate content channels and sends each one separately, so the report can say exactly where a match was found.
+When the user clicks "Scan Page", the frontend captures the page through 13 separate content channels and sends each one separately, so the report can say exactly where a match was found.
 
 | Group | Channels |
 |---|---|
-| Core (14, original set) | visible_text, hidden_text, html_comments, meta_tags, input_values, aria_text, iframe_content, shadow_dom_content, inline_javascript, css_content, css_generated_content, network_responses, websocket_messages, service_worker_activity |
-| Extended (8, telemetry) | external_javascript, source_maps, redirects, third_party_resources, suspicious_domains, frame_navigation, runtime_script_activity, loaded_resources |
+| Core (11, original set) | visible_text, hidden_text, html_comments, meta_tags, input_values, aria_text, iframe_content, shadow_dom_content, inline_javascript, css_content, css_generated_content |
+| Extended (2, telemetry) | external_javascript, source_maps |
+
+The network/telemetry channels (`network_responses`, `websocket_messages`, `service_worker_activity`, `redirects`, `third_party_resources`, `suspicious_domains`, `frame_navigation`, `runtime_script_activity`, `loaded_resources`) were removed. They were URL- and JSON-dense, which produced a disproportionate share of chunks overflowing the DL classifier's 512-token window (see 6.2) on network-heavy pages, multiplying re-split/re-tokenize work and pushing scans well past the UI's minimum scan duration.
 
 Note: the raw DOM snapshot string table (`dom_snapshot_content`) is deliberately **excluded**. It is unstructured internal data (every tag name, class, and attribute value on the page) and scanning it in the past caused false positives — for example, the word "dan" matched inside "guidance" in an unrelated configuration blob. Its readable text is already covered by the other channels.
 

@@ -29,29 +29,16 @@ const CORE_CHANNELS = [
   'inline_javascript',
   'css_content',
   'css_generated_content',
-  'network_responses',
-  'websocket_messages',
-  'service_worker_activity',
 ] as const
 
 // Node-only enhancement: cdpInspectionService.ts (Electron) has always captured
-// these 8 extra telemetry channels and sent them in every check-webpage request
+// these extra telemetry channels and sent them in every check-webpage request
 // — WebpageCheckRequestSchema already accepts them — but nothing classified them.
 // Wiring them in is pure reuse: zero frontend/schema changes, same detector,
-// same chunking/aggregation path. Each is structured telemetry (URLs, hostnames,
-// console/script activity) rather than free text, so legitimate pages rarely
-// contain instruction-shaped phrases here — low false-positive risk — while an
-// injection smuggled into a redirect chain, an external script URL, or a
-// console/exception dump is now caught instead of silently skipped.
+// same chunking/aggregation path.
 const EXTENDED_CHANNELS = [
   'external_javascript',
   'source_maps',
-  'redirects',
-  'third_party_resources',
-  'suspicious_domains',
-  'frame_navigation',
-  'runtime_script_activity',
-  'loaded_resources',
 ] as const
 
 // `dom_snapshot_content` stays deliberately excluded from both lists: it is the

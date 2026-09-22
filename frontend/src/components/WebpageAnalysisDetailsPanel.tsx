@@ -30,7 +30,7 @@ function ScanProgress({ content }: { content: WebpageContent }) {
     : progress < 58
       ? 'Inspecting shadow DOM, hidden CSS, and accessibility text'
     : progress < 82
-        ? 'Reviewing scripts, resources, and network activity'
+        ? 'Reviewing scripts and stylesheets'
         : 'Classifying captured content for injection patterns'
 
   return (
@@ -50,7 +50,7 @@ function ScanProgress({ content }: { content: WebpageContent }) {
 
 function ShieldIcon({ blocked = false }: { blocked?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       {blocked ? <><line x1="9" y1="9" x2="15" y2="15" /><line x1="15" y1="9" x2="9" y2="15" /></> : <polyline points="9 12 12 15 16 10" />}
     </svg>
@@ -75,15 +75,6 @@ function WarningIcon() {
   )
 }
 
-function SourceStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="webpage-scan-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
 const CONTENT_CHANNELS: Array<{ key: keyof WebpageContent; label: string }> = [
   { key: 'visible_text', label: 'Visible page text' },
   { key: 'hidden_text', label: 'Hidden content' },
@@ -96,9 +87,6 @@ const CONTENT_CHANNELS: Array<{ key: keyof WebpageContent; label: string }> = [
   { key: 'inline_javascript', label: 'Inline JavaScript' },
   { key: 'css_content', label: 'CSS content' },
   { key: 'css_generated_content', label: 'CSS-generated content' },
-  { key: 'network_responses', label: 'Network responses' },
-  { key: 'websocket_messages', label: 'WebSocket messages' },
-  { key: 'service_worker_activity', label: 'Service-worker activity' },
 ]
 
 function SuspiciousChunk({ chunk }: { chunk: ChunkResult }) {
@@ -131,7 +119,7 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
           <header className="drawer-header">
             <div>
               <h3>Webpage Scan Report</h3>
-              <p className="webpage-scan-subtitle">Indirect prompt-injection analysis</p>
+              <p className="drawer-subtitle">Indirect prompt-injection analysis</p>
             </div>
             <button className="drawer-close-btn" type="button" onClick={onClose} aria-label="Close webpage scan report">✕</button>
           </header>
@@ -146,8 +134,12 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
   const details = result.analysis_details
   const suspiciousChunks = details.chunk_results.filter((chunk) => chunk.label === 'malicious')
   const maliciousSources = new Set(suspiciousChunks.map((chunk) => chunk.source))
-  const scannedChannels = CONTENT_CHANNELS.filter(({ key }) => content[key].trim().length > 0)
   const isBlocked = !result.allowed
+
+  const channelRows = CONTENT_CHANNELS
+    .filter(({ key }) => content[key].trim().length > 0)
+    .map(({ key, label }) => ({ key, label, chars: content[key].length, flagged: maliciousSources.has(key) }))
+    .sort((a, b) => Number(b.flagged) - Number(a.flagged))
 
   return (
     <>
@@ -156,13 +148,13 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
         <header className="drawer-header">
           <div>
             <h3>Webpage Scan Report</h3>
-            <p className="webpage-scan-subtitle">Indirect prompt-injection analysis</p>
+            <p className="drawer-subtitle">Indirect prompt-injection analysis</p>
           </div>
           <button className="drawer-close-btn" type="button" onClick={onClose} aria-label="Close webpage scan report">✕</button>
         </header>
 
         <div className="drawer-content">
-          <div className={`drawer-decision ${isBlocked ? 'drawer-decision--blocked' : 'drawer-decision--safe'}`}>
+          <div className={`drawer-decision decision-compact ${isBlocked ? 'drawer-decision--blocked' : 'drawer-decision--safe'}`}>
             <div className="drawer-decision-label">
               <ShieldIcon blocked={isBlocked} />
               <div>
@@ -170,6 +162,11 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
                 <div className="webpage-decision-copy">{result.summary_reason}</div>
               </div>
             </div>
+          </div>
+
+          <div className="webpage-scan-page">
+            <strong>{content.page_title || 'Untitled page'}</strong>
+            <code>{content.url}</code>
           </div>
 
           <div className={`webpage-credential-notice ${isBlocked ? 'webpage-credential-notice--blocked' : ''}`}>
@@ -183,41 +180,35 @@ export function WebpageAnalysisDetailsPanel({ content, isOpen, isScanning, resul
           </div>
 
           <section className="drawer-section">
-            <div className="drawer-section-header"><ScanIcon /> Scanned webpage</div>
-            <div className="drawer-section-body webpage-scan-page">
-              <span className="webpage-scan-page__label">Page title</span>
-              <strong>{content.page_title || 'Untitled page'}</strong>
-              <span className="webpage-scan-page__label">URL scanned</span>
-              <code>{content.url}</code>
+            <div className="drawer-section-header">
+              <ScanIcon /> Content channels scanned
+              <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.38)', fontSize: 10, marginLeft: 4, textTransform: 'none', letterSpacing: 'normal' }}>
+                ({details.chunking.chunk_count} chunks · {details.classifier_mode === 'dl_model' ? 'DL model + rules' : 'rule based'})
+              </span>
             </div>
-          </section>
-
-          <section className="drawer-section">
-            <div className="drawer-section-header"><ScanIcon /> Scan coverage</div>
-            <div className="drawer-section-body webpage-scan-stats">
-              <SourceStat label="Visible page text" value={`${content.visible_text.length.toLocaleString()} chars`} />
-              <SourceStat label="Hidden content" value={`${content.hidden_text.length.toLocaleString()} chars`} />
-              <SourceStat label="HTML comments" value={`${content.html_comments.length.toLocaleString()} chars`} />
-              <SourceStat label="Metadata" value={`${content.meta_tags.length.toLocaleString()} chars`} />
-              <SourceStat label="Frames & Shadow DOM" value={`${(content.iframe_content.length + content.shadow_dom_content.length).toLocaleString()} chars`} />
-              <SourceStat label="Accessibility text" value={`${content.aria_text.length.toLocaleString()} chars`} />
-              <SourceStat label="Network & sockets" value={`${(content.network_responses.length + content.websocket_messages.length).toLocaleString()} chars`} />
-              <SourceStat label="Scripts & CSS" value={`${(content.external_javascript.length + content.inline_javascript.length + content.css_content.length).toLocaleString()} chars`} />
-              <SourceStat label="Content chunks" value={String(details.chunking.chunk_count)} />
-              <SourceStat label="Classifier" value={details.classifier_mode === 'dl_model' ? 'DL model + rules' : 'Rule based'} />
-            </div>
-          </section>
-
-          <section className="drawer-section">
-            <div className="drawer-section-header"><ScanIcon /> Channel results</div>
-            <div className="drawer-section-body webpage-scan-stats">
-              {scannedChannels.map(({ key, label }) => (
-                <SourceStat
-                  key={key}
-                  label={label}
-                  value={maliciousSources.has(key) ? 'Threat signal detected' : 'No injection detected'}
-                />
-              ))}
+            <div className="drawer-section-body" style={{ padding: 0 }}>
+              {channelRows.length > 0 ? (
+                <table className="chunk-table">
+                  <thead>
+                    <tr><th>Channel</th><th>Characters</th><th>Result</th></tr>
+                  </thead>
+                  <tbody>
+                    {channelRows.map((row) => (
+                      <tr key={row.key}>
+                        <td>{row.label}</td>
+                        <td style={{ fontFamily: "'JetBrains Mono', monospace", color: 'rgba(255,255,255,0.55)' }}>
+                          {row.chars.toLocaleString()}
+                        </td>
+                        <td>
+                          <span className={`chunk-label ${row.flagged ? 'chunk-label--malicious' : 'chunk-label--safe'}`}>
+                            {row.flagged ? 'Flagged' : 'Clear'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : <p className="webpage-scan-empty" style={{ padding: '14px 16px' }}>No page content was available to scan.</p>}
             </div>
           </section>
 

@@ -27,19 +27,6 @@ function ShieldXIcon() {
   )
 }
 
-function CpuIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="4" width="16" height="16" rx="2" />
-      <rect x="9" y="9" width="6" height="6" />
-      <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-      <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-      <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-      <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-    </svg>
-  )
-}
-
 function AlertTriangleIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -59,37 +46,6 @@ function ScanIcon() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function ThreatMeter({ value, label }: { value: number; label: string }) {
-  const pct = Math.min(Math.round(value * 100), 100)
-  const color =
-    pct > 70
-      ? 'linear-gradient(90deg, #dc2626, #f87171)'
-      : pct > 40
-      ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-      : 'linear-gradient(90deg, #059669, #34d399)'
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ minWidth: 170, fontSize: 12, color: 'rgba(255,255,255,0.52)', fontWeight: 500 }}>
-        {label}
-      </span>
-      <div style={{ flex: 1, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-        <div
-          style={{
-            height: '100%',
-            width: `${pct}%`,
-            background: color,
-            borderRadius: 99,
-            transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)',
-          }}
-        />
-      </div>
-      <span style={{ minWidth: 36, textAlign: 'right', fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: 'rgba(255,255,255,0.85)' }}>
-        {pct}%
-      </span>
-    </div>
-  )
-}
 
 function CountBadge({ count, label, danger = false }: { count: number; label: string; danger?: boolean }) {
   const isAlert = danger && count > 0
@@ -138,7 +94,6 @@ function CountBadge({ count, label, danger = false }: { count: number; label: st
 
 function ChunkRow({ chunk }: { chunk: ChunkResult }) {
   const isMalicious = chunk.label === 'malicious'
-  const pct = Math.round(chunk.confidence * 100)
   const riskColor =
     chunk.risk_level === 'high'
       ? { bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.18)', text: '#f87171' }
@@ -183,17 +138,6 @@ function ChunkRow({ chunk }: { chunk: ChunkResult }) {
         >
           {chunk.risk_level} risk
         </span>
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: 11,
-            fontWeight: 700,
-            color: isMalicious ? '#f87171' : '#34d399',
-            fontFamily: "'JetBrains Mono', monospace",
-          }}
-        >
-          {pct}%
-        </span>
       </div>
 
       {/* Only show reason + patterns for malicious chunks — keeps it concise */}
@@ -227,9 +171,8 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
   const maliciousChunks = details.chunk_results.filter((c) => c.label === 'malicious')
   const safeChunks = details.chunk_results.filter((c) => c.label !== 'malicious')
   const isSafe = maliciousChunks.length === 0
-  const highestConfidence = Math.max(...details.chunk_results.map((c) => c.confidence))
-  const isDLModel = details.classifier_mode === 'dl_model'
   const fe = details.feature_evidence
+  const hasSignals = fe.role_override_count > 0 || fe.data_exfiltration_count > 0 || fe.top_terms.length > 0
 
   return (
     <>
@@ -242,7 +185,10 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
       {/* Drawer */}
       <div className={`analysis-drawer ${isOpen ? 'analysis-drawer--open' : ''}`}>
         <div className="drawer-header">
-          <h3>Prompt Safety Analysis</h3>
+          <div>
+            <h3>Direct Prompt Analysis Report</h3>
+            <p className="drawer-subtitle">Direct prompt-injection analysis</p>
+          </div>
           <button className="drawer-close-btn" type="button" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -251,137 +197,61 @@ export function PromptAnalysisDetailsPanel({ details, isOpen, onClose }: Props) 
         <div className="drawer-content">
 
           {/* ── 1. VERDICT BANNER ─────────────────────────────────────── */}
-          <div className={`drawer-decision ${isSafe ? 'drawer-decision--safe' : 'drawer-decision--blocked'}`}>
+          <div className={`drawer-decision decision-compact ${isSafe ? 'drawer-decision--safe' : 'drawer-decision--blocked'}`}>
             <div className="drawer-decision-label">
               {isSafe ? <ShieldCheckIcon /> : <ShieldXIcon />}
               <div>
-              <div>{isSafe ? 'Prompt Safe — Allowed' : 'Malicious Prompt — Blocked'}</div>
-                <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.6, marginTop: 2 }}>
-                  {isSafe
-                    ? `All ${details.chunk_results.length} prompt chunks passed the safety threshold`
-                    : `${maliciousChunks.length} of ${details.chunk_results.length} chunks flagged`}
-                </div>
-              </div>
-            </div>
-            <div className="drawer-decision-meta">
-              <strong>{Math.round(highestConfidence * 100)}%</strong>
-              confidence
-            </div>
-          </div>
-
-          {/* ── 2. CLASSIFIER DECISION ────────────────────────────────── */}
-          <div className="drawer-section">
-            <div className="drawer-section-header">
-              <CpuIcon />
-              Classifier Decision
-            </div>
-            <div className="drawer-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* Mode card + threshold badge */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: '11px 14px',
-                    borderRadius: 9,
-                    background: isDLModel ? 'rgba(52,211,153,0.06)' : 'rgba(251,191,36,0.06)',
-                    border: `1px solid ${isDLModel ? 'rgba(52,211,153,0.18)' : 'rgba(251,191,36,0.18)'}`,
-                  }}
-                >
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    Mode
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: isDLModel ? '#34d399' : '#fbbf24' }}>
-                    {isDLModel ? '🤖  DL Model + Rules' : '📏  Rule-Based Fallback'}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    padding: '11px 14px',
-                    borderRadius: 9,
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                    textAlign: 'center',
-                    minWidth: 82,
-                  }}
-                >
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    Threshold
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'rgba(255,255,255,0.88)' }}>
-                    {(details.threshold_used * 100).toFixed(0)}%
-                  </div>
-                </div>
-              </div>
-
-              {/* Decision rationale */}
-              <div
-                style={{
-                  padding: '11px 14px',
-                  borderRadius: 9,
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                }}
-              >
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(251,191,36,0.50)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                  Decision Rationale
-                </div>
-                <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.68)', lineHeight: 1.7 }}>
+                <div>{isSafe ? 'Prompt Safe — Allowed' : 'Malicious Prompt — Blocked'}</div>
+                <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.7, marginTop: 2 }}>
                   {details.final_rationale}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── 3. THREAT SIGNALS ─────────────────────────────────────── */}
-          <div className="drawer-section">
-            <div className="drawer-section-header">
-              <AlertTriangleIcon />
-              Prompt-Injection Signals Detected
-            </div>
-            <div className="drawer-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Count badges */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <CountBadge count={fe.role_override_count} label="Role Override Attempts" danger />
-                <CountBadge count={fe.data_exfiltration_count} label="Data Exfiltration Signals" danger />
-                <CountBadge count={maliciousChunks.length} label="Malicious Chunks" danger />
-              </div>
-
-              {/* Metric bars */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                <ThreatMeter value={fe.instruction_density} label="Instruction Density" />
-                <ThreatMeter value={fe.semantic_similarity_to_malicious_patterns} label="Similarity to Known Attacks" />
-              </div>
-
-              {/* Top suspicious terms */}
-              {fe.top_terms.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(251,191,36,0.50)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Top Suspicious Terms
-                  </div>
-                  <div className="feature-tags">
-                    {fe.top_terms.map((term) => (
-                      <span key={term} className="feature-tag">
-                        {term}
-                      </span>
-                    ))}
-                  </div>
                 </div>
-              )}
-
-              {/* Vectorizer note */}
-              <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.28)', fontFamily: "'JetBrains Mono', monospace" }}>
-                Vectorizer: {fe.embedding_or_vectorizer_used}
               </div>
             </div>
           </div>
 
-          {/* ── 4. CHUNK SCAN RESULTS ─────────────────────────────────── */}
+          {/* ── 2. THREAT SIGNALS ─────────────────────────────────────── */}
+          {!isSafe || hasSignals ? (
+            <div className="drawer-section">
+              <div className="drawer-section-header">
+                <AlertTriangleIcon />
+                What Was Flagged
+              </div>
+              <div className="drawer-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <CountBadge count={fe.role_override_count} label="Suspicious Instructions" danger />
+                  <CountBadge count={fe.data_exfiltration_count} label="Data Leak Attempts" danger />
+                  <CountBadge count={maliciousChunks.length} label="Flagged Sections" danger />
+                </div>
+
+                {fe.top_terms.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(251,191,36,0.50)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Suspicious Terms Found
+                    </div>
+                    <div className="feature-tags">
+                      {fe.top_terms.map((term) => (
+                        <span key={term} className="feature-tag">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, padding: '0 2px' }}>
+              No suspicious instructions, data-leak attempts, or flagged sections were found in this prompt.
+            </p>
+          )}
+
+          {/* ── 3. SECTIONS REVIEWED ─────────────────────────────────── */}
           <div className="drawer-section">
             <div className="drawer-section-header">
               <ScanIcon />
-              Chunk Scan Results
+              Prompt Sections Reviewed
               <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.38)', fontSize: 10, marginLeft: 4 }}>
-                ({details.chunk_results.length} chunks · size {details.chunking.chunk_size} · overlap {details.chunking.overlap})
+                ({details.chunk_results.length})
               </span>
             </div>
             <div className="drawer-section-body" style={{ padding: 0 }}>

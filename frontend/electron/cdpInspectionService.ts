@@ -1,22 +1,9 @@
 import type { CdpParams, CdpSession } from './browserRuntime/cdpSession.js'
 
 const MAX_TEXT_PER_SOURCE = 60_000
-const MAX_NETWORK_BODIES = 40
 const MAX_EVENTS_PER_SOURCE = 100
 
 type CdpResponse = Record<string, unknown>
-
-type NetworkRecord = {
-  requestId: string
-  url: string
-  method: string
-  resourceType: string
-  mimeType: string
-  status?: number
-  body?: string
-  redirect?: string
-  fromServiceWorker?: string
-}
 
 type FrameTree = {
   frame: { id: string; url?: string }
@@ -38,38 +25,19 @@ export type DevToolsPageContent = {
   inline_javascript: string
   css_content: string
   css_generated_content: string
-  network_responses: string
-  websocket_messages: string
-  service_worker_activity: string
   source_maps: string
-  redirects: string
-  third_party_resources: string
-  suspicious_domains: string
-  frame_navigation: string
-  runtime_script_activity: string
-  loaded_resources: string
   dom_snapshot_content: string
 }
 
 type InspectionState = {
   session: CdpSession
-  requests: Map<string, NetworkRecord>
-  responseBodies: Map<string, string>
-  websocketMessages: string[]
-  serviceWorkerActivity: string[]
   sourceMaps: string[]
-  redirects: string[]
-  frameNavigation: string[]
-  runtimeActivity: string[]
-  loadedResources: string[]
 }
 
 const emptyContent = (url = ''): DevToolsPageContent => ({
   visible_text: '', hidden_text: '', html_comments: '', meta_tags: '', input_values: '', page_title: '', url,
   aria_text: '', iframe_content: '', shadow_dom_content: '', external_javascript: '', inline_javascript: '',
-  css_content: '', css_generated_content: '', network_responses: '', websocket_messages: '',
-  service_worker_activity: '', source_maps: '', redirects: '', third_party_resources: '', suspicious_domains: '',
-  frame_navigation: '', runtime_script_activity: '', loaded_resources: '', dom_snapshot_content: '',
+  css_content: '', css_generated_content: '', source_maps: '', dom_snapshot_content: '',
 })
 
 function clip(value: string, limit = MAX_TEXT_PER_SOURCE): string {
@@ -139,10 +107,8 @@ const FRAME_COLLECTOR = `(() => {
   };
 })()`
 
-const INSPECTION_DOMAINS = ['Network', 'Page', 'Runtime', 'Debugger', 'DOMSnapshot', 'Accessibility'] as const
-const INSPECTION_DOMAIN_PARAMS: Record<string, CdpParams> = {
-  Network: { maxResourceBufferSize: 1_000_000, maxTotalBufferSize: 10_000_000 },
-}
+const INSPECTION_DOMAINS = ['Page', 'Runtime', 'Debugger', 'DOMSnapshot', 'Accessibility'] as const
+const INSPECTION_DOMAIN_PARAMS: Record<string, CdpParams> = {}
 
 /**
  * Backs the user-initiated "Scan Page" workflow. It observes each guest
@@ -158,10 +124,7 @@ export class CdpInspectionService {
 
   watch(session: CdpSession) {
     if (this.states.has(session.targetId)) return
-    const state: InspectionState = {
-      session, requests: new Map(), responseBodies: new Map(), websocketMessages: [], serviceWorkerActivity: [],
-      sourceMaps: [], redirects: [], frameNavigation: [], runtimeActivity: [], loadedResources: [],
-    }
+    const state: InspectionState = { session, sourceMaps: [] }
     this.states.set(session.targetId, state)
 
     this.enableCollection(state)
@@ -182,61 +145,11 @@ export class CdpInspectionService {
   }
 
   private onDebuggerMessage(state: InspectionState, method: string, params: CdpResponse) {
-    if (method === 'Network.requestWillBeSent') {
-      const request = params.request as CdpResponse | undefined
-      const requestId = asString(params.requestId)
-      const redirect = params.redirectResponse as CdpResponse | undefined
-      const url = asString(request?.url)
-      state.requests.set(requestId, { requestId, url, method: asString(request?.method), resourceType: asString(params.type), mimeType: '' })
-      boundedPush(state.loadedResources, `${asString(params.type)} ${url}`)
-      if (redirect) boundedPush(state.redirects, `${asString(redirect.url)} -> ${url} (${String(redirect.status ?? '')})`)
-      return
-    }
-    if (method === 'Network.responseReceived') {
-      const response = params.response as CdpResponse | undefined
-      const record = state.requests.get(asString(params.requestId))
-      if (!record || !response) return
-      record.status = typeof response.status === 'number' ? response.status : undefined
-      record.mimeType = asString(response.mimeType)
-      const source = asString(response.serviceWorkerResponseSource)
-      if (source) { record.fromServiceWorker = source; boundedPush(state.serviceWorkerActivity, `${source}: ${record.url}`) }
-      return
-    }
-    if (method === 'Network.loadingFinished') {
-      const requestId = asString(params.requestId)
-      const record = state.requests.get(requestId)
-      if (!record || state.responseBodies.size >= MAX_NETWORK_BODIES || !this.shouldReadBody(record)) return
-      void this.command(state, 'Network.getResponseBody', { requestId }).then((body) => {
-        const text = asString(body.body)
-        if (text) state.responseBodies.set(requestId, clip(text))
-      }).catch(() => undefined)
-      return
-    }
-    if (method === 'Network.webSocketFrameReceived' || method === 'Network.webSocketFrameSent') {
-      const frame = params.response as CdpResponse | undefined
-      boundedPush(state.websocketMessages, `${method.endsWith('Received') ? 'received' : 'sent'}: ${asString(frame?.payloadData)}`)
-      return
-    }
-    if (method === 'Page.frameNavigated') {
-      const frame = params.frame as CdpResponse | undefined
-      boundedPush(state.frameNavigation, `${asString(frame?.id)} ${asString(frame?.url)}`)
-      return
-    }
     if (method === 'Debugger.scriptParsed') {
       const url = asString(params.url)
       const sourceMapURL = asString(params.sourceMapURL)
-      boundedPush(state.runtimeActivity, `script: ${url || '[inline]'}`)
       if (sourceMapURL) boundedPush(state.sourceMaps, `${url} -> ${sourceMapURL}`)
-      return
     }
-    if (method === 'Runtime.consoleAPICalled' || method === 'Runtime.exceptionThrown') {
-      boundedPush(state.runtimeActivity, `${method}: ${JSON.stringify(params).slice(0, 1_500)}`)
-    }
-  }
-
-  private shouldReadBody(record: NetworkRecord): boolean {
-    return ['Document', 'XHR', 'Fetch', 'Script', 'Stylesheet'].includes(record.resourceType)
-      || /(?:json|xml|javascript|ecmascript|css|graphql|text)/i.test(record.mimeType)
   }
 
   async capture(webContentsId: number): Promise<DevToolsPageContent | null> {
@@ -252,26 +165,12 @@ export class CdpInspectionService {
     const additionalFrames = frameResults.slice(1)
     const snapshot = await this.command(state, 'DOMSnapshot.captureSnapshot', { computedStyles: ['display', 'visibility', 'content'] }).catch((): CdpResponse => ({}))
     const accessibility = await this.command(state, 'Accessibility.getFullAXTree').catch((): CdpResponse => ({}))
-    const serviceWorkers = await this.command(state, 'Runtime.evaluate', { expression: "navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(rs => rs.map(r => r.scope + ' [' + r.active?.state + ']').join('\\n')) : ''", awaitPromise: true, returnByValue: true }).catch((): CdpResponse => ({}))
 
     if (mainFrame) Object.assign(base, mainFrame)
     base.iframe_content = clip(additionalFrames.map((frame, index) => `Frame ${index + 1}:\n${frame?.visible_text ?? ''}\n${frame?.hidden_text ?? ''}\n${frame?.shadow_dom_content ?? ''}`).join('\n'))
     base.aria_text = clip([base.aria_text, this.axText(accessibility)].filter(Boolean).join('\n'))
     base.dom_snapshot_content = clip(this.snapshotText(snapshot))
-    base.network_responses = clip([...state.requests.values()].map((record) => {
-      const body = state.responseBodies.get(record.requestId) ?? ''
-      return `${record.resourceType} ${record.status ?? ''} ${record.url}\n${body}`
-    }).join('\n'))
-    base.websocket_messages = clip(state.websocketMessages.join('\n'))
-    base.service_worker_activity = clip([...state.serviceWorkerActivity, this.evaluationValue(serviceWorkers)].filter(Boolean).join('\n'))
     base.source_maps = clip(state.sourceMaps.join('\n'))
-    base.redirects = clip(state.redirects.join('\n'))
-    base.frame_navigation = clip(state.frameNavigation.join('\n'))
-    base.runtime_script_activity = clip(state.runtimeActivity.join('\n'))
-    base.loaded_resources = clip(state.loadedResources.join('\n'))
-    const domains = this.resourceDomains(state, base.url)
-    base.third_party_resources = domains.thirdParty.join('\n')
-    base.suspicious_domains = domains.suspicious.join('\n')
     return base
   }
 
@@ -307,11 +206,6 @@ export class CdpInspectionService {
     return value && typeof value === 'object' ? value as Partial<DevToolsPageContent> : null
   }
 
-  private evaluationValue(result: CdpResponse): string {
-    const remote = result.result as CdpResponse | undefined
-    return asString(remote?.value)
-  }
-
   private axText(result: CdpResponse): string {
     const nodes = Array.isArray(result.nodes) ? result.nodes as CdpResponse[] : []
     return clip(nodes.map((node) => {
@@ -325,17 +219,5 @@ export class CdpInspectionService {
   private snapshotText(result: CdpResponse): string {
     const strings = Array.isArray(result.strings) ? result.strings.filter((value): value is string => typeof value === 'string') : []
     return strings.join('\n')
-  }
-
-  private resourceDomains(state: InspectionState, pageUrl: string): { thirdParty: string[]; suspicious: string[] } {
-    const pageHost = this.hostname(pageUrl)
-    const domains = [...new Set([...state.requests.values()].map((record) => this.hostname(record.url)).filter(Boolean))]
-    const thirdParty = domains.filter((domain) => domain !== pageHost && !domain.endsWith(`.${pageHost}`))
-    const suspicious = domains.filter((domain) => /(^\d{1,3}(?:\.\d{1,3}){3}$|xn--|\.(zip|mov|top|xyz|click|gq)$)/i.test(domain) || domain.split('.').length > 5)
-    return { thirdParty, suspicious }
-  }
-
-  private hostname(url: string): string {
-    try { return new URL(url).hostname.toLowerCase() } catch { return '' }
   }
 }

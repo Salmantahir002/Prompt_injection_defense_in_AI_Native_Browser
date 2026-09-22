@@ -88,8 +88,7 @@ export type FilePickerProvider = () => Promise<string[]>
 const SNAPSHOT_FIELDS: readonly (keyof AgentSecuritySnapshot)[] = [
   'visible_text', 'hidden_text', 'html_comments', 'meta_tags', 'input_values', 'aria_text',
   'iframe_content', 'shadow_dom_content', 'inline_javascript', 'external_javascript', 'css_content',
-  'css_generated_content', 'network_responses', 'websocket_messages', 'service_worker_activity',
-  'dom_snapshot_content', 'page_title', 'url',
+  'css_generated_content', 'dom_snapshot_content', 'page_title', 'url',
 ]
 
 export class BrowserRuntime {

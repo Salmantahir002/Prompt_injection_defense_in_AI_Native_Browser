@@ -22,21 +22,12 @@ export const AgentPageSnapshotSchema = Type.Object({
   external_javascript: Type.Optional(Type.String()),
   css_content: Type.Optional(Type.String()),
   css_generated_content: Type.Optional(Type.String()),
-  network_responses: Type.Optional(Type.String()),
-  websocket_messages: Type.Optional(Type.String()),
-  service_worker_activity: Type.Optional(Type.String()),
   dom_snapshot_content: Type.Optional(Type.String()),
   page_title: Type.Optional(Type.String()),
   url: Type.Optional(Type.String()),
-  // Node-only extended channels (Phase 2) — see security.routes.ts. Accepted
+  // Node-only extended channel (Phase 2) — see security.routes.ts. Accepted
   // here too since the same CDP capture is reused for both scan paths.
   source_maps: Type.Optional(Type.String()),
-  redirects: Type.Optional(Type.String()),
-  third_party_resources: Type.Optional(Type.String()),
-  suspicious_domains: Type.Optional(Type.String()),
-  frame_navigation: Type.Optional(Type.String()),
-  runtime_script_activity: Type.Optional(Type.String()),
-  loaded_resources: Type.Optional(Type.String()),
 })
 
 export const AgentScanRequestSchema = Type.Object({
